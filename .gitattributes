@@ -7,12 +7,26 @@
 #   "./install.sh: line 1: 404:: command not found"
 #   (durch Carriage-Return \r am Ende der Shebang-Zeile).
 
-# Shell-Scripts: immer LF
+# Shell-Scripts: immer LF (sonst scheitert bash an Shebang \r)
 *.sh          text eol=lf
 *.bash        text eol=lf
 install.sh    text eol=lf
 
-# Andere Text-Files: ebenfalls LF (für Konsistenz)
+# Web-Quellcode: immer LF
+*.js          text eol=lf
+*.mjs         text eol=lf
+*.cjs         text eol=lf
+*.ts          text eol=lf
+*.tsx         text eol=lf
+*.jsx         text eol=lf
+*.html        text eol=lf
+*.htm         text eol=lf
+*.css         text eol=lf
+*.scss        text eol=lf
+*.sass        text eol=lf
+*.svg         text eol=lf
+
+# Konfig / Daten: immer LF
 *.md          text eol=lf
 *.txt         text eol=lf
 *.json        text eol=lf
@@ -21,6 +35,10 @@ install.sh    text eol=lf
 *.toml        text eol=lf
 *.cfg         text eol=lf
 *.ini         text eol=lf
+*.env         text eol=lf
+*.example     text eol=lf
+*.sql         text eol=lf
+LICENSE       text eol=lf
 
 # Binary-Files explizit markieren (keine Konvertierung)
 *.png         binary
