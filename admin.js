@@ -38,8 +38,14 @@
   const PBKDF2_HASH = 'SHA-256';
   const PBKDF2_KEYLEN = 32;
 
-  // PBKDF2 → SHA-256 (Web Crypto API, in jedem modernen Browser nativ)
-  async function pbkdf2(password, saltB64, iterations) {
+  // PBKDF2 → SHA-256 (Web Crypto API, in jedem modernen Browser nativ).
+// Wirft eine Fehlermeldung, wenn Web Crypto nicht verfuegbar ist (z.B.
+// Seite wurde ueber file:// oder nicht-HTTPS geladen — Browser
+// lassen crypto.subtle dann nicht zu).
+async function pbkdf2(password, saltB64, iterations) {
+    if (!window.crypto || !window.crypto.subtle) {
+        throw new Error('Web Crypto API nicht verfuegbar — Seite muss ueber HTTPS oder http://localhost geladen werden');
+    }
     const enc = new TextEncoder();
     const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
     const keyMaterial = await crypto.subtle.importKey(
@@ -98,6 +104,17 @@
   async function ensureDefaultHash() {
     // Wenn noch kein Hash existiert (Erstinstallation), lege Default an.
     if (!localStorage.getItem(STORAGE_PW_HASH)) {
+      // Web-Crypto-Check (Seite muss ueber HTTPS oder localhost laufen)
+      if (!window.crypto || !window.crypto.subtle) {
+        const hint = document.createElement('div');
+        hint.style.cssText = 'position:fixed;inset:0;background:#fee;color:#900;padding:30px;font-family:sans-serif;text-align:center;z-index:99999;';
+        hint.innerHTML = '<h2>⚠️ Web Crypto API nicht verfuegbar</h2>' +
+          '<p>Die Admin-Seite muss ueber <strong>HTTPS</strong> oder <strong>http://localhost</strong> geladen werden.</p>' +
+          '<p>Aktuelle URL: <code>' + window.location.href + '</code></p>' +
+          '<p>Browser blockieren <code>crypto.subtle</code> aus Sicherheitsgruenden auf unsicheren Origins.</p>';
+        document.body.appendChild(hint);
+        throw new Error('Web Crypto API nicht verfuegbar — HTTPS oder localhost erforderlich');
+      }
       const salt = randomSalt();
       const hash = await pbkdf2(DEFAULT_PASSWORD, salt, PBKDF2_ITERATIONS);
       localStorage.setItem(STORAGE_PW_SALT, salt);
@@ -1500,7 +1517,16 @@
   // =========================================================
   document.addEventListener('DOMContentLoaded', async () => {
     // Beim ersten Start wird das Default-Passwort als Hash persistiert.
-    try { await ensureDefaultHash(); } catch (e) { console.warn('hash init failed', e); }
+    // Falls Web Crypto nicht verfuegbar ist (z.B. file://-Origin), wird
+    // ein grosses Error-Overlay angezeigt und der Boot bricht ab.
+    try {
+      await ensureDefaultHash();
+    } catch (e) {
+      console.warn('hash init failed:', e.message);
+      // Login-Form nicht-anzeigen, damit der User die Meldung sieht
+      const overlay = document.getElementById('login-overlay');
+      if (overlay) overlay.style.display = 'none';
+    }
 
     // Defensive: Wenn die App via file:// (lokal) läuft, gib einen Warnhinweis
     if (location.protocol === 'file:') {
