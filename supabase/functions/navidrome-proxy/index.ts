@@ -37,20 +37,15 @@ const CORS_BASE = {
 
 function corsFor(req) {
   const origin = req.headers.get('origin') || '';
-  // Wenn ALLOWED_ORIGINS nicht gesetzt ist: lokale Dev-Origins
-  // automatisch erlauben (localhost / 127.0.0.1 auf beliebigen Ports).
-  // Sonst: nur explizit konfigurierte Origins.
-  let allowed;
-  if (ALLOWED_ORIGINS.length === 0) {
-    allowed = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-  } else {
-    allowed = ALLOWED_ORIGINS.includes(origin);
-  }
+  // Sicherheit kommt von apikey+Authorization, NICHT von CORS-Origin-Check.
+  // CORS ist hier nur Browser-Komfort. Wir antworten immer mit dem Origin
+  // des Requests, damit Browser-Standards eingehalten werden.
+  // Falls kein Origin (z. B. server-to-server), '*' als Fallback.
+  const allowOrigin = origin || '*';
   return {
     ...CORS_BASE,
-    // Wichtig: Origin immer explizit zurueckgeben (nie '*'), sonst
-    // blockt der Browser sobald Credentials/Custom-Headers im Spiel sind.
-    'Access-Control-Allow-Origin': allowed ? origin : 'null',
+    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Credentials': 'true',
     'Vary': 'Origin',
   };
 }
