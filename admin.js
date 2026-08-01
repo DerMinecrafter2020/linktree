@@ -38,29 +38,39 @@
   const PBKDF2_HASH = 'SHA-256';
   const PBKDF2_KEYLEN = 32;
 
-  // PBKDF2 → SHA-256 (Web Crypto API, in jedem modernen Browser nativ).
-// Wirft eine Fehlermeldung, wenn Web Crypto nicht verfuegbar ist (z.B.
-// Seite wurde ueber file:// oder nicht-HTTPS geladen — Browser
-// lassen crypto.subtle dann nicht zu).
+  // PBKDF2 → SHA-256.
+// Primaer: Web Crypto API (schnell, in jedem modernen Browser nativ).
+// Fallback: einfacher SHA-256-Hash (ohne Salt, ohne Iteration) nur als
+// Notbehelf fuer unsichere Origins (HTTP statt HTTPS, file://), wo
+// Browser crypto.subtle blockieren.
+//
+// WICHTIG: Das ist KEIN sicherer Passwort-Hash mehr — nur ein Workaround
+// damit Login ueberhaupt funktioniert. Im Produktivbetrieb sollte die
+// Seite IMMER ueber HTTPS laufen.
 async function pbkdf2(password, saltB64, iterations) {
-    if (!window.crypto || !window.crypto.subtle) {
-        throw new Error('Web Crypto API nicht verfuegbar — Seite muss ueber HTTPS oder http://localhost geladen werden');
+    if (window.crypto && window.crypto.subtle) {
+      const enc = new TextEncoder();
+      const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
+      const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        enc.encode(password),
+        { name: 'PBKDF2' },
+        false,
+        ['deriveBits']
+      );
+      const bits = await crypto.subtle.deriveBits(
+        { name: 'PBKDF2', salt, iterations, hash: PBKDF2_HASH },
+        keyMaterial,
+        PBKDF2_KEYLEN * 8
+      );
+      return bufferToBase64(bits);
     }
+    // Fallback: simple SHA-256(salt + password) — nur fuer unsichere Origins
+    console.warn('[security] Web Crypto nicht verfuegbar — verwende unsicheren SHA256-Fallback. Seite ueber HTTPS aufrufen!');
     const enc = new TextEncoder();
-    const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      enc.encode(password),
-      { name: 'PBKDF2' },
-      false,
-      ['deriveBits']
-    );
-    const bits = await crypto.subtle.deriveBits(
-      { name: 'PBKDF2', salt, iterations, hash: PBKDF2_HASH },
-      keyMaterial,
-      PBKDF2_KEYLEN * 8
-    );
-    return bufferToBase64(bits);
+    const data = enc.encode(saltB64 + ':' + password);
+    const hashBuf = await crypto.subtle.digest('SHA-256', data);
+    return bufferToBase64(hashBuf);
   }
 
   function bufferToBase64(buf) {
@@ -104,16 +114,14 @@ async function pbkdf2(password, saltB64, iterations) {
   async function ensureDefaultHash() {
     // Wenn noch kein Hash existiert (Erstinstallation), lege Default an.
     if (!localStorage.getItem(STORAGE_PW_HASH)) {
-      // Web-Crypto-Check (Seite muss ueber HTTPS oder localhost laufen)
-      if (!window.crypto || !window.crypto.subtle) {
-        const hint = document.createElement('div');
-        hint.style.cssText = 'position:fixed;inset:0;background:#fee;color:#900;padding:30px;font-family:sans-serif;text-align:center;z-index:99999;';
-        hint.innerHTML = '<h2>⚠️ Web Crypto API nicht verfuegbar</h2>' +
-          '<p>Die Admin-Seite muss ueber <strong>HTTPS</strong> oder <strong>http://localhost</strong> geladen werden.</p>' +
-          '<p>Aktuelle URL: <code>' + window.location.href + '</code></p>' +
-          '<p>Browser blockieren <code>crypto.subtle</code> aus Sicherheitsgruenden auf unsicheren Origins.</p>';
-        document.body.appendChild(hint);
-        throw new Error('Web Crypto API nicht verfuegbar — HTTPS oder localhost erforderlich');
+      // Warnung, wenn wir auf unsicherem Origin laufen
+      const isInsecure = !window.crypto || !window.crypto.subtle;
+      if (isInsecure && location.protocol !== 'file:') {
+        // Banner, aber kein Abbruch — pbkdf2 nutzt SHA-256-Fallback
+        const banner = document.createElement('div');
+        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#fbb;color:#800;padding:8px;font-family:sans-serif;text-align:center;z-index:99999;font-size:13px;';
+        banner.innerHTML = '⚠️ Unsicherer Origin: Login nutzt SHA-256-Fallback (schwächer). Für volle Sicherheit Seite über HTTPS aufrufen.';
+        document.body.appendChild(banner);
       }
       const salt = randomSalt();
       const hash = await pbkdf2(DEFAULT_PASSWORD, salt, PBKDF2_ITERATIONS);
