@@ -29,6 +29,7 @@
   const STORAGE_PW_HASH = 'linktree-admin-pw-hash';
   const STORAGE_PW_SALT = 'linktree-admin-pw-salt';
   const STORAGE_PW_ITER = 'linktree-admin-pw-iter';
+  const STORAGE_PW_MUST_CHANGE = 'linktree-admin-pw-must-change';
   const DEFAULT_PASSWORD = 'admin123';
   const SESSION_KEY = 'linktree-admin-session';
   const SESSION_DURATION = 60 * 60 * 1000; // 1 Stunde
@@ -97,17 +98,13 @@
   async function ensureDefaultHash() {
     // Wenn noch kein Hash existiert (Erstinstallation), lege Default an.
     if (!localStorage.getItem(STORAGE_PW_HASH)) {
-      // Default-Passwort: zuerst aus config.js (vom Install-Skript gesetzt),
-      // sonst der klassische Default 'admin123' (fuer lokale Entwicklung)
-      const defaultPw = (typeof window.ADMIN_DEFAULT_PASSWORD === 'string'
-                       && window.ADMIN_DEFAULT_PASSWORD.length >= 4)
-                       ? window.ADMIN_DEFAULT_PASSWORD
-                       : DEFAULT_PASSWORD;
       const salt = randomSalt();
-      const hash = await pbkdf2(defaultPw, salt, PBKDF2_ITERATIONS);
+      const hash = await pbkdf2(DEFAULT_PASSWORD, salt, PBKDF2_ITERATIONS);
       localStorage.setItem(STORAGE_PW_SALT, salt);
       localStorage.setItem(STORAGE_PW_ITER, String(PBKDF2_ITERATIONS));
       localStorage.setItem(STORAGE_PW_HASH, hash);
+      // Beim ersten Login MUSS das Passwort geaendert werden
+      localStorage.setItem(STORAGE_PW_MUST_CHANGE, '1');
     }
   }
 
@@ -133,6 +130,12 @@
     localStorage.setItem(STORAGE_PW_SALT, salt);
     localStorage.setItem(STORAGE_PW_ITER, String(PBKDF2_ITERATIONS));
     localStorage.setItem(STORAGE_PW_HASH, hash);
+    // Nach Passwort-Aenderung ist der Force-Change-Flag weg
+    localStorage.removeItem(STORAGE_PW_MUST_CHANGE);
+  }
+
+  function mustChangePassword() {
+    return localStorage.getItem(STORAGE_PW_MUST_CHANGE) === '1';
   }
 
   const $  = (s, r = document) => r.querySelector(s);
@@ -243,6 +246,10 @@
         $('#login-overlay').hidden = true;
         $('#app').hidden = false;
         initApp();
+        // Wenn das Default-Passwort noch aktiv ist → User zum Ändern zwingen
+        if (mustChangePassword()) {
+          showForceChangePasswordDialog();
+        }
       } else {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Anmelden';
@@ -1193,6 +1200,92 @@
         toast('Fehler: ' + err.message, true);
       }
     });
+  }
+
+  // =========================================================
+  // FORCE-CHANGE-DIALOG (nach erstem Login)
+  // =========================================================
+  // Wenn STORAGE_PW_MUST_CHANGE gesetzt ist, MUSS der User beim ersten
+  // Login das Default-Passwort aendern, bevor er die Admin-Oberflaeche
+  // nutzen kann. Die Admin-Tabs sind solange gesperrt.
+  function showForceChangePasswordDialog() {
+    // Erstelle ein einfaches Modal als Overlay (falls noch nicht da)
+    let modal = document.getElementById('force-change-pw-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'force-change-pw-modal';
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;';
+      modal.innerHTML = `
+        <div style="background:var(--bg-1,#1a1a2e);color:var(--text,#fff);padding:30px;border-radius:14px;max-width:420px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.5);">
+          <h2 style="margin:0 0 12px;font-size:20px;color:var(--neon-pink,#ff2bd6);">🔑 Passwort ändern</h2>
+          <p style="margin:0 0 18px;font-size:14px;color:var(--text-dim,#aaa);line-height:1.5;">
+            Du loggst dich gerade mit dem <strong>Standard-Passwort</strong> ein.
+            Bitte ändere es jetzt auf ein eigenes, sicheres Passwort (min. 8 Zeichen).
+          </p>
+          <form id="force-change-pw-form">
+            <label style="display:block;margin-bottom:14px;font-size:13px;">
+              <span style="display:block;margin-bottom:6px;color:var(--text-dim,#aaa);">Aktuelles Passwort (admin123)</span>
+              <input type="password" name="old" required autocomplete="current-password"
+                style="width:100%;padding:10px;background:var(--bg-2,#0f0f1e);border:1px solid var(--border,#333);border-radius:6px;color:var(--text,#fff);font-size:14px;">
+            </label>
+            <label style="display:block;margin-bottom:14px;font-size:13px;">
+              <span style="display:block;margin-bottom:6px;color:var(--text-dim,#aaa);">Neues Passwort</span>
+              <input type="password" name="new" required minlength="8" autocomplete="new-password"
+                style="width:100%;padding:10px;background:var(--bg-2,#0f0f1e);border:1px solid var(--border,#333);border-radius:6px;color:var(--text,#fff);font-size:14px;">
+            </label>
+            <label style="display:block;margin-bottom:18px;font-size:13px;">
+              <span style="display:block;margin-bottom:6px;color:var(--text-dim,#aaa);">Neues Passwort bestätigen</span>
+              <input type="password" name="confirm" required minlength="8" autocomplete="new-password"
+                style="width:100%;padding:10px;background:var(--bg-2,#0f0f1e);border:1px solid var(--border,#333);border-radius:6px;color:var(--text,#fff);font-size:14px;">
+            </label>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+              <button type="submit" class="btn primary"
+                style="padding:10px 20px;background:var(--neon-cyan,#00f0ff);color:#000;border:none;border-radius:6px;font-weight:600;cursor:pointer;">
+                Passwort jetzt ändern
+              </button>
+            </div>
+            <p id="force-change-pw-error" style="margin:10px 0 0;color:#ff5050;font-size:12px;"></p>
+          </form>
+        </div>
+      `;
+      document.body.appendChild(modal);
+
+      // Admin-Inhalt waehrend des Wechsels nicht-interaktiv machen
+      const appEl = document.getElementById('app');
+      if (appEl) appEl.style.pointerEvents = 'none';
+
+      // Form-Handler
+      document.getElementById('force-change-pw-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const oldPw = form.old.value;
+        const newPw = form.new.value;
+        const confirmPw = form.confirm.value;
+        const errEl = document.getElementById('force-change-pw-error');
+
+        errEl.textContent = '';
+        if (newPw.length < 8) {
+          errEl.textContent = 'Neues Passwort muss mindestens 8 Zeichen haben';
+          return;
+        }
+        if (newPw !== confirmPw) {
+          errEl.textContent = 'Passwörter stimmen nicht überein';
+          return;
+        }
+        // Aktuelles PW muss 'admin123' sein (wir sind im Force-Change-Flow)
+        if (!(await verifyPassword(oldPw))) {
+          errEl.textContent = 'Aktuelles Passwort ist falsch';
+          return;
+        }
+        // PW aendern (setPassword entfernt das Must-Change-Flag automatisch)
+        await setPassword(newPw);
+        // Modal entfernen, Admin wieder interaktiv
+        modal.remove();
+        const appEl2 = document.getElementById('app');
+        if (appEl2) appEl2.style.pointerEvents = '';
+        toast('🔑 Passwort erfolgreich geändert!');
+      });
+    }
   }
 
   // =========================================================
