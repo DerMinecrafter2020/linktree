@@ -377,6 +377,13 @@ Deno.serve(async (req) => {
 
   const action = body.action;
 
+  if (action === 'testmd5') {
+    // Debug: berechne md5 eines Test-Strings und gib das Ergebnis zurueck
+    const testInput = String(body.input || 'test123abc');
+    const hash = md5(testInput);
+    return json({ ok: true, data: { input: testInput, hash: hash } }, 200, req);
+  }
+
   if (action === 'status') {
     const configured = !!(NAVIDROME_URL && NAVIDROME_USER && NAVIDROME_PASS);
     const serverUrl = NAVIDROME_URL.replace(/\/+$/, '') || '';
