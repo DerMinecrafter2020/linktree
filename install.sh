@@ -233,10 +233,22 @@ EOF
 rm -f /etc/nginx/sites-enabled/default
 ln -sf "$NGINX_CONF" "$NGINX_LINK"
 
+# WICHTIG: Wenn /etc/nginx/nginx.conf einen globalen 'root'-Eintrag
+# (z.B. /var/www/html) hat, ueberschreibt dieser unseren server-block-root.
+# Wir kommentieren ihn aus oder entfernen ihn, damit unsere root-Direktive greift.
+NGINX_MAIN="/etc/nginx/nginx.conf"
+if [[ -f "$NGINX_MAIN" ]] && grep -qE '^\s*root\s+/var/www/html' "$NGINX_MAIN"; then
+    log_warn "Globaler 'root /var/www/html' in nginx.conf gefunden — wird korrigiert..."
+    # Backup + Auskommentieren
+    cp -n "$NGINX_MAIN" "${NGINX_MAIN}.bak.$(date +%s)" 2>/dev/null || true
+    sed -i 's|^\(\s*\)root\s\+/var/www/html;|\1# root /var/www/html;  # disabled by openweb installer|' "$NGINX_MAIN"
+    log_ok "Globaler root in nginx.conf auskommentiert"
+fi
+
 # nginx testen + reload
 nginx -t
 systemctl reload nginx
-log_ok "nginx konfiguriert und geladen"
+log_ok "nginx konfiguriert und geladen (root = ${INSTALL_DIR})"
 
 # --- Schritt 6: Update-Skript + systemd-Timer ---
 log_info "Erstelle Auto-Update-Skript..."
@@ -345,31 +357,67 @@ else
 fi
 
 # --- Zusammenfassung ---
+# URL-Erkennung: lokale IP(s), öffentliche IP, und Domain-Hinweis
+LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+PRIMARY_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')
+# Oeffentliche IP via mehrere Dienste probieren (falls einer down ist)
+PUBLIC_IP=""
+for ip_service in "https://api.ipify.org" "https://ifconfig.me" "https://ipv4.icanhazip.com"; do
+    PUBLIC_IP=$(curl -s --max-time 5 "$ip_service" 2>/dev/null | tr -d '[:space:]')
+    [[ -n "$PUBLIC_IP" && "$PUBLIC_IP" =~ ^[0-9.]+$ ]] && break
+done
+HOSTNAME_FQDN=$(hostname -f 2>/dev/null || hostname)
+
 cat <<EOF
 
 ${GREEN}============================================================${NC}
 ${GREEN} Installation abgeschlossen!${NC}
 ${GREEN}============================================================${NC}
 
-  Webseite:        http://$(hostname -I | awk '{print $1}')/
   Install-Pfad:    ${INSTALL_DIR}
   nginx-Config:    ${NGINX_CONF}
   Update-Skript:   ${UPDATE_SCRIPT}
   Update-Log:      ${LOG_FILE}
   Update-Intervall: alle 5 Minuten
 
-  Nützliche Befehle:
-    systemctl status openweb-updater.timer
-    systemctl list-timers openweb-updater*
-    tail -f ${LOG_FILE}
-    sudo bash install.sh   (Re-Run für Updates/Re-Config)
+${BLUE}--- Webseite erreichbar unter: ---${NC}
+EOF
+
+# URL-Liste ausgeben
+if [[ -n "$PUBLIC_IP" ]]; then
+    echo -e "  ${GREEN}Öffentlich:${NC}  http://${PUBLIC_IP}/"
+fi
+if [[ -n "$LOCAL_IP" ]]; then
+    echo -e "  ${GREEN}Lokal:    ${NC}  http://${LOCAL_IP}/"
+fi
+if [[ "$LOCAL_IP" != "$PRIMARY_IP" && -n "$PRIMARY_IP" ]]; then
+    echo -e "  ${GREEN}Primär:   ${NC}  http://${PRIMARY_IP}/"
+fi
+echo -e "  ${GREEN}Hostname: ${NC}  http://${HOSTNAME_FQDN}/  (nur lokal erreichbar)"
+
+cat <<EOF
+
+  ${YELLOW}Test-Befehl:${NC}
+    curl -I http://localhost/         # sollte HTTP/1.1 200 OK liefern
+    curl http://localhost/ | head -5   # sollte <!DOCTYPE html> zeigen
 
 ${YELLOW}Wichtig:${NC}
   - Trage die echten Navidrome-Daten und Supabase-Keys in
     ${INSTALL_DIR}/config.js ein (oder setze sie als Supabase-Secrets).
-  - HTTPS via Let's Encrypt:
+  - Wenn du eine Domain hast, richte sie als A-Record auf die
+    öffentliche IP ein und nutze dann Certbot für HTTPS:
       sudo apt install certbot python3-certbot-nginx
       sudo certbot --nginx -d deine.domain.de
+
+  ${YELLOW}Firewall:${NC}  ufw muss Port 80 (und ggf. 443) offen haben:
+    sudo ufw status           # sollte 'Nginx Full' / '80,443/tcp' zeigen
+    sudo ufw allow 80/tcp     # falls nicht
+
+  Nützliche Befehle:
+    systemctl status openweb-updater.timer
+    systemctl list-timers openweb-updater*
+    tail -f ${LOG_FILE}
+    sudo bash install.sh      # Re-Run für Updates/Re-Config
 
 EOF
 
