@@ -325,8 +325,8 @@ WantedBy=timers.target
 EOF
 
 systemctl daemon-reload
-systemctl enable "${SYSTEMD_SERVICE##*/}.timer"
-systemctl start  "${SYSTEMD_SERVICE##*/}.timer"
+systemctl enable "openweb-updater.timer"
+systemctl start  "openweb-updater.timer"
 log_ok "systemd-Timer aktiv (alle 5 Min): systemctl list-timers openweb-updater*"
 
 # --- Schritt 7: Firewall (optional) ---
