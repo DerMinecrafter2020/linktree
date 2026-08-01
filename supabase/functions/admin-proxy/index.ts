@@ -134,6 +134,14 @@ function validateProfile(p) {
     }
     out.avatar_url = p.avatar_url;
   }
+  // Theme: Whitelist (verhindert beliebige Strings → würde sonst in
+  // data-theme="<user-input>" als HTML-Attribut landen)
+  if (typeof p.theme === 'string') {
+    if (!['neon', 'light', 'sunset', 'mono'].includes(p.theme)) {
+      throw new Error('invalid theme (allowed: neon, light, sunset, mono)');
+    }
+    out.theme = p.theme;
+  }
   return out;
 }
 

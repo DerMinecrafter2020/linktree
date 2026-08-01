@@ -120,6 +120,16 @@
             <span>Bio</span>
             <textarea name="bio" rows="3" placeholder="Azubi, 21 Jahre alt"></textarea>
           </label>
+
+          <!-- ===== Theme-Auswahl (Live-Vorschau) ===== -->
+          <fieldset class="theme-picker">
+            <legend>🎨 Theme</legend>
+            <div id="theme-grid" class="theme-grid" role="radiogroup" aria-label="Theme auswählen">
+              <!-- wird durch admin.js befuellt -->
+            </div>
+            <p class="hint">Die Vorschau ist sofort sichtbar. Beim Speichern wird das Theme dauerhaft angewendet.</p>
+          </fieldset>
+
           <div class="form-actions">
             <button type="submit" class="btn primary">Speichern</button>
           </div>
@@ -228,6 +238,7 @@
 
   <script src="config.js"></script>
   <script src="supabase-client.js"></script>
+  <script src="themes.js"></script>
   <script src="icons.js"></script>
   <script src="admin.js"></script>
 </body>

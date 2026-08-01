@@ -21,8 +21,22 @@ create table if not exists public.profile (
 alter table public.profile
   add column if not exists avatar_url text;
 
-insert into public.profile (id, name, handle, bio, avatar)
-values (1, '@corneliusahner', 'Cornelius Ahner', 'Azubi, 21 Jahre alt', 'CA')
+-- Theme-Auswahl (Whitelist in DB + Client)
+--   neon   = aktueller Dark & Neon Look (default)
+--   light  = heller, freundlicher Look
+--   sunset = warmer Sonnenuntergang
+--   mono   = minimalistisch schwarz/weiß
+alter table public.profile
+  add column if not exists theme text not null default 'neon';
+
+alter table public.profile
+  drop constraint if exists profile_theme_whitelist;
+alter table public.profile
+  add constraint profile_theme_whitelist
+    check (theme in ('neon','light','sunset','mono'));
+
+insert into public.profile (id, name, handle, bio, avatar, theme)
+values (1, '@corneliusahner', 'Cornelius Ahner', 'Azubi, 21 Jahre alt', 'CA', 'neon')
 on conflict (id) do nothing;
 
 -- 2) Tabelle für die Links
@@ -138,6 +152,7 @@ alter table public.profile
 
 alter table public.profile
   add constraint profile_name_len       check (char_length(name)       <= 80),
+  add constraint profile_theme_len       check (char_length(theme)       <= 16),
   add constraint profile_handle_len     check (char_length(handle)     <= 80),
   add constraint profile_bio_len        check (char_length(bio)        <= 280),
   add constraint profile_avatar_len     check (char_length(avatar)     <= 8),

@@ -74,6 +74,12 @@
     const profile = await window.db.getProfile();
     const links   = await window.db.listLinks();
 
+    // Theme aus DB anwenden (Whitelist geprüft, sonst Default 'neon')
+    if (window.THEMES) {
+      const id = window.THEMES.isValid(profile?.theme) ? profile.theme : 'neon';
+      window.THEMES.apply(id);
+    }
+
     // Profil
     if (profile) {
       const avatarEl = $('.avatar');
