@@ -229,38 +229,89 @@ async function navFetch(path, params) {
 async function getNowPlaying() {
   const serverUrl = NAVIDROME_URL.replace(/\/+$/, '');
   try {
-    // Nur getNowPlaying: zeigt aktuell laufende Tracks an, sonst nichts.
+    // 1) Versuche getNowPlaying (zeigt nur aktive Player, die gerade spielen)
     const params = await subsonicParams();
     const data   = await navFetch('getNowPlaying', params);
+    const resp   = data && data['subsonic-response'];
+    const entry  = resp && resp.nowPlaying && resp.nowPlaying.entry && resp.nowPlaying.entry[0];
+    if (entry) {
+      return buildPlayingEntry(entry, 'nowPlaying', serverUrl);
+    }
 
-    const resp  = data && data['subsonic-response'];
-    const entry = resp && resp.nowPlaying && resp.nowPlaying.entry && resp.nowPlaying.entry[0];
+    // 2) Fallback: getPlayQueue (eigene Play-Queue des Users — auch wenn
+    // kein Player gerade verbunden ist, weiss Navidrome was als naechstes
+    // abgespielt werden soll und welcher Track als letzter lief)
+    const queue = await getPlayQueueForUser();
+    if (queue) return queue;
 
-    if (!entry) return { playing: false, url: serverUrl };
-
-    const coverUrl = entry.coverArt ? await getCoverArt(entry.coverArt, 220) : '';
-    const player   = entry.player || {};
-    const minutesAgoNum = Number(entry.minutesAgo || 0) || 0;
-    const durationNum   = Number(entry.duration   || 0) || 0;
-    const positionNum   = Number(player.position  || minutesAgoNum) || 0;
-
-    return {
-      playing:    true,
-      source:     'nowPlaying',
-      title:      String(entry.title  || ''),
-      artist:     String(entry.artist || ''),
-      album:      String(entry.album  || ''),
-      duration:   durationNum,
-      position:   positionNum,
-      coverUrl:   coverUrl,
-      player:     String(player.name  || ''),
-      minutesAgo: minutesAgoNum,
-      url:        serverUrl,
-    };
+    return { playing: false, url: serverUrl };
   } catch (err) {
     console.error('nowPlaying failed:', err && err.message);
     return { playing: false, error: err && err.message, url: serverUrl };
   }
+}
+
+// Liest die eigene Play-Queue des Users aus.
+// Enthaelt: current (gerade spielender Song), entry-Liste, position.
+async function getPlayQueueForUser() {
+  try {
+    const params = await subsonicParams();
+    const data   = await navFetch('getPlayQueue', params);
+    const resp   = data && data['subsonic-response'];
+    const queue  = resp && resp.playQueue;
+    if (!queue) return null;
+
+    const currentId = queue.current;
+    const entries   = Array.isArray(queue.entry) ? queue.entry : (queue.entry ? [queue.entry] : []);
+    if (!currentId || entries.length === 0) return null;
+
+    const current = entries.find((e) => String(e.id) === String(currentId)) || entries[0];
+    if (!current) return null;
+
+    const serverUrl = NAVIDROME_URL.replace(/\/+$/, '');
+    const positionNum = Number(queue.position || 0) || 0;
+    const durationNum = Number(current.duration || 0) || 0;
+    const coverUrl    = current.coverArt ? await getCoverArt(current.coverArt, 220) : '';
+
+    return {
+      playing:    true,
+      source:     'playQueue',
+      title:      String(current.title  || ''),
+      artist:     String(current.artist || ''),
+      album:      String(current.album  || ''),
+      duration:   durationNum,
+      position:   Math.floor(positionNum / 1000), // ms -> s
+      coverUrl:   coverUrl,
+      player:     String(current.username || ''),
+      minutesAgo: 0,
+      url:        serverUrl,
+    };
+  } catch (e) {
+    console.error('getPlayQueue failed:', e && e.message);
+    return null;
+  }
+}
+
+// Mappt einen nowPlaying-Eintrag auf unser Standard-Schema.
+async function buildPlayingEntry(entry, source, serverUrl) {
+  const coverUrl = entry.coverArt ? await getCoverArt(entry.coverArt, 220) : '';
+  const player   = entry.player || {};
+  const minutesAgoNum = Number(entry.minutesAgo || 0) || 0;
+  const durationNum   = Number(entry.duration   || 0) || 0;
+  const positionNum   = Number(player.position  || minutesAgoNum) || 0;
+  return {
+    playing:    true,
+    source:     source,
+    title:      String(entry.title  || ''),
+    artist:     String(entry.artist || ''),
+    album:      String(entry.album  || ''),
+    duration:   durationNum,
+    position:   positionNum,
+    coverUrl:   coverUrl,
+    player:     String(player.name  || ''),
+    minutesAgo: minutesAgoNum,
+    url:        serverUrl,
+  };
 }
 
 // ACTION: coverArt
