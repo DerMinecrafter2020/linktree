@@ -199,6 +199,10 @@ body {
 .np-player.playing .np-cover {
   animation: np-spin 12s linear infinite;
 }
+.np-player.paused .np-cover {
+  animation: none;
+  opacity: 0.85;
+}
 .np-player.idle .np-cover {
   animation: none;
   opacity: 0.6;

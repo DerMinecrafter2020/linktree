@@ -275,7 +275,12 @@ async function getNowPlaying() {
       if (state !== 'playing' && minutesAgoNum > 5) {
         return { playing: false, url: serverUrl, reason: 'state=' + state + ' minutesAgo=' + minutesAgoNum };
       }
-      return buildPlayingEntry(entry, 'nowPlaying', serverUrl);
+      // Wenn state='paused' (oder kein state) UND gerade erst gestoppt
+      // (< 5 Min): Track anzeigen mit paused=true
+      const result = await buildPlayingEntry(entry, 'nowPlaying', serverUrl);
+      result.paused = (state !== 'playing');
+      result.state = state || 'unknown';
+      return result;
     }
     // Falls kein Eintrag fuer unseren User, schauen wir in der eigenen
     // Play-Queue nach.

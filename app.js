@@ -402,20 +402,17 @@
           body: JSON.stringify({ action: 'nowPlaying' }),
         });
         const json = await r.json();
-        // Einfache Regel: Server sagt "playing" -> zeige Track.
-        // Sonst (kein Player, pausiert, gestoppt) -> Player ausblenden.
-        // Wir zeigen KEINEN pausierten Track an, da Navidrome
-        // bei Pause weiter playing:true sendet aber die Position nicht
-        // mehr vorwaerts geht. Der User moechte einfach nichts sehen.
-        if (!r.ok || !json.ok || !json.data?.playing) {
+        // Kein Track-Data -> Idle
+        if (!r.ok || !json.ok || !json.data) {
           this.currentTrack = null;
           localStorage.removeItem(NP_POS_STORAGE_KEY);
           this.renderIdle();
           return;
         }
-        // Track laeuft (playing=true) -> anzeigen
+        // Server hat einen Track-Eintrag (kann playing ODER paused sein)
         const newTrack = json.data;
         let newServerPos = Number(newTrack.position || 0);
+        const isPaused = !!newTrack.paused;
 
         // Fallback: Wenn Server-Position 0 ist (kurz nach Track-Start),
         // nutzen wir localStorage-Position als Schaetzung.
@@ -445,16 +442,25 @@
           this.initialPosition = newServerPos;
         } else {
           // Gleicher Track: nur Zeit-Basis neu setzen, wenn Server weiter ist
+          // ODER wenn gerade Pause aufgehoben wurde (isPaused=false jetzt, war vorher true)
           const elapsed = (Date.now() - this.progressStartedAt) / 1000;
           const localPos = this.initialPosition + elapsed;
-          if (newServerPos >= localPos - 2) {
+          const wasPaused = this.currentTrack?.paused;
+          if (isPaused) {
+            // Pause: Position einfrieren auf Server-Wert
+            this.progressStartedAt = Date.now();
+            this.initialPosition = newServerPos;
+          } else if (newServerPos >= localPos - 2 || wasPaused) {
+            // Normal fortschreitend ODER gerade aus Pause -> neue Zeit-Basis
             this.progressStartedAt = Date.now();
             this.initialPosition = newServerPos;
           }
-          // Wenn Server hinter localPos -> alte Werte beibehalten
+          // Wenn Server hinter localPos UND nicht aus Pause aufgehoben
+          // -> alte Werte beibehalten
         }
         this.currentTrack = Object.assign({}, newTrack, {
           position: newServerPos,
+          paused: isPaused,
         });
         // Position speichern
         if (newServerPos > 1) {
@@ -503,6 +509,11 @@
       if (!wrap) return;
       wrap.classList.remove('idle');
       wrap.classList.add('playing');
+      if (data.paused) {
+        wrap.classList.add('paused');
+      } else {
+        wrap.classList.remove('paused');
+      }
 
       // Cover (Base64-DataURL oder Emoji)
       const cover = wrap.querySelector('.np-cover');
@@ -522,7 +533,9 @@
 
       const titleEl = wrap.querySelector('.np-title');
       const artistEl = wrap.querySelector('.np-artist');
-      if (titleEl) titleEl.textContent = data.title || 'Unbekannt';
+      // Bei Pause zeigen wir Titel mit Pause-Praefix
+      const prefix = data.paused ? '⏸ ' : '';
+      if (titleEl) titleEl.textContent = prefix + (data.title || 'Unbekannt');
       if (artistEl) artistEl.textContent = data.artist || (data.album || '');
 
       // Zeitanzeige initial setzen (wird dann von updateProgress() jede Sekunde aktualisiert)
