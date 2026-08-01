@@ -371,34 +371,68 @@ Deno.serve(async (req) => {
   // status: gibt Auskunft ueber Server-Konfiguration (fuer die Hauptseite)
   if (action === 'status') {
     const configured = !!(NAVIDROME_URL && NAVIDROME_USER && NAVIDROME_PASS);
-    // Probe: versuche getAlbumList2 mit size=1, um zu wissen, ob ueberhaupt
-    // Songs in der Library sind.
-    let libraryInfo = null;
-    if (configured) {
-      try {
-        const params = await subsonicParams({ type: 'newest', size: 1 });
-        const data = await navFetch('getAlbumList2', params);
-        const resp = data && data['subsonic-response'];
-        const albums = resp && resp.albumList2 && resp.albumList2.album;
-        libraryInfo = {
-          albumsCount: Array.isArray(albums) ? albums.length : 0,
-          sample: Array.isArray(albums) && albums.length ? {
-            title:  String(albums[0].title  || ''),
-            artist: String(albums[0].artist || ''),
-            album:  String(albums[0].album  || ''),
-          } : null,
-        };
-      } catch (e) {
-        libraryInfo = { error: e.message };
-      }
+    const serverUrl = NAVIDROME_URL.replace(/\/+$/, '') || '';
+    const result = {
+      configured: configured,
+      url: serverUrl,
+    };
+
+    if (!configured) {
+      return json({ ok: true, data: result }, 200, req);
     }
+
+    // Probe: testen was die Library hergibt
+    const checks = {};
+
+    // 1) getAlbumList2 — hat die Library Alben?
+    try {
+      const params = await subsonicParams({ type: 'newest', size: 5 });
+      const data = await navFetch('getAlbumList2', params);
+      const resp = data && data['subsonic-response'];
+      const albums = resp && resp.albumList2 && resp.albumList2.album;
+      checks.albums = {
+        ok: resp && resp.status === 'ok',
+        count: Array.isArray(albums) ? albums.length : 0,
+        error: resp && resp.error ? resp.error.message : null,
+      };
+    } catch (e) {
+      checks.albums = { error: e.message };
+    }
+
+    // 2) getNowPlaying — gibt es aktive Player?
+    try {
+      const params = await subsonicParams();
+      const data = await navFetch('getNowPlaying', params);
+      const resp = data && data['subsonic-response'];
+      const entries = resp && resp.nowPlaying && resp.nowPlaying.entry;
+      checks.nowPlaying = {
+        ok: resp && resp.status === 'ok',
+        count: Array.isArray(entries) ? entries.length : 0,
+        error: resp && resp.error ? resp.error.message : null,
+      };
+    } catch (e) {
+      checks.nowPlaying = { error: e.message };
+    }
+
+    // 3) getPlayQueue — hat der User eine Queue?
+    try {
+      const params = await subsonicParams();
+      const data = await navFetch('getPlayQueue', params);
+      const resp = data && data['subsonic-response'];
+      const q = resp && resp.playQueue;
+      checks.playQueue = {
+        ok: resp && resp.status === 'ok',
+        hasCurrent: !!(q && q.current),
+        entryCount: q && q.entry ? (Array.isArray(q.entry) ? q.entry.length : 1) : 0,
+        error: resp && resp.error ? resp.error.message : null,
+      };
+    } catch (e) {
+      checks.playQueue = { error: e.message };
+    }
+
     return json({
       ok: true,
-      data: {
-        configured: configured,
-        url: NAVIDROME_URL ? NAVIDROME_URL.replace(/\/+$/, '') : '',
-        library: libraryInfo,
-      }
+      data: Object.assign({}, result, { checks: checks }),
     }, 200, req);
   }
 
