@@ -37,15 +37,18 @@ window.NavidromeAPI = (function () {
   }
 
   // POST-Wrapper. Wirft einen Error wenn die Response nicht ok ist.
+  // path = Edge-Function-Action (z.B. 'nowPlaying'), wird als action ins Body gemerged.
+  // body = zusaetzliche Felder (z.B. { controlAction: 'pause' })
   async function postJSON(path, body) {
     const cfg = getConfig();
     if (!cfg.proxyUrl) {
       throw new Error('NAVIDROME_CONFIG.proxyUrl not set');
     }
+    const merged = Object.assign({ action: path }, body || {});
     const r = await fetch(cfg.proxyUrl, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify(body),
+      body: JSON.stringify(merged),
     });
     const text = await r.text();
     let json;

@@ -150,14 +150,6 @@ body {
 .np-compact .np-artist {
   font-size: 12px;
 }
-.np-compact .np-progress {
-  height: 3px;
-  margin-top: 8px;
-}
-.np-compact .np-time {
-  font-size: 10px;
-  margin-top: 2px;
-}
 .np-player::before {
   content: '';
   position: absolute;
@@ -232,38 +224,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
-}
-
-.np-progress {
-  margin-top: 12px;
-  height: 4px;
-  background: var(--glass);
-  border-radius: 999px;
-  overflow: hidden;
-  width: 100%;
-  max-width: 320px;
-  margin-left: auto;
-  margin-right: auto;
-}
-.np-progress-bar {
-  height: 100%;
-  width: 0%;
-  background: linear-gradient(90deg, var(--neon-pink), var(--neon-cyan));
-  border-radius: 999px;
-  transition: width 0.4s linear;
-  box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
-}
-
-.np-time {
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-  max-width: 320px;
-  margin: 4px auto 0;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
 }
 
 .avatar-wrap {

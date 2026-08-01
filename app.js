@@ -180,10 +180,6 @@
   //   1. config.js (NAVIDROME_CONFIG)        — Defaults / Platzhalter
   //   2. localStorage 'openweb-navidrome-config' — vom Admin gespeichert
   const NP_STORAGE_KEY = 'openweb-navidrome-config';
-  // Persistenz der letzten bekannten Track-Position, damit beim Reload
-  // die Sekunden weiterlaufen (Navidrome liefert oft position=0 wenn
-  // gerade erst gestartet, obwohl wir schon 30s hoeren).
-  const NP_POS_STORAGE_KEY = 'openweb-navidrome-pos';
 
   function loadNavidromeFromStorage() {
     try {
@@ -196,32 +192,6 @@
         pollIntervalSec: Math.min(600, Math.max(10, parseInt(parsed.pollIntervalSec || 30, 10) || 30)),
       };
     } catch (_) { return null; }
-  }
-
-  // Liest die zuletzt bekannte Track-Position aus dem localStorage.
-  // Format: { title, artist, album, duration, position, savedAt }
-  function loadLastPosition() {
-    try {
-      const raw = localStorage.getItem(NP_POS_STORAGE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || !parsed.title) return null;
-      return parsed;
-    } catch (_) { return null; }
-  }
-
-  function saveLastPosition(track) {
-    if (!track) return;
-    try {
-      localStorage.setItem(NP_POS_STORAGE_KEY, JSON.stringify({
-        title: track.title || '',
-        artist: track.artist || '',
-        album: track.album || '',
-        duration: track.duration || 0,
-        position: track.position || 0,
-        savedAt: Date.now(),
-      }));
-    } catch (_) { /* ignore quota errors */ }
   }
 
   function mergeNavidromeConfig() {
@@ -239,10 +209,7 @@
   const np = {
     cfg: null,
     pollTimer: null,
-    progressTimer: null,
     currentTrack: null,    // letzter Track-Stand vom Server
-    progressStartedAt: 0, // Date.now() als Basis fuer lokale Interpolation
-    initialPosition: 0,   // Position vom Server beim letzten Tick
 
     init() {
       this.cfg = mergeNavidromeConfig();
@@ -264,200 +231,34 @@
       const wrap = $('#navidrome-player');
       if (!wrap) return;
       wrap.hidden = false;
-      // Sofort die letzte bekannte Position anzeigen (sonst springt die
-      // Bar beim Reload auf 0 zurueck, bis der erste Server-Tick kommt).
-      this.bootstrapFromLocalStorage();
       await this.tick();
       // Server-Polling: alle 5s fuer schnelle Track-Stop-Erkennung
-      // (unabhaengig vom konfigurierten Intervall)
       this.pollTimer = setInterval(() => this.tick(), 5000);
-      // Lokales Progress-Polling: jede Sekunde, fuer die Bar-Animation
-      this.progressTimer = setInterval(() => {
-        this.updateProgress();
-        this.checkTrackStale();
-      }, 1000);
-    },
-
-    // Prueft, ob der Track stale ist (Position bewegt sich nicht mehr)
-    // -> vermutlich pausiert oder gestoppt
-    checkTrackStale() {
-      if (!this.currentTrack) return;
-      const now = Date.now();
-      const elapsedSinceServer = (now - this.progressStartedAt) / 1000;
-      const localPos = this.initialPosition + elapsedSinceServer;
-      // Wenn die letzte Server-Position sehr jung war (< 5s) und wir
-      // lokal schon am Ende sind, nichts tun (Song koennte gerade enden).
-      const duration = Number(this.currentTrack.duration || 0);
-      if (duration > 0 && localPos > duration + 2) {
-        // Wir sind ueber das Ende hinaus -> Song fertig
-        console.log('[navidrome] track ended');
-        this.currentTrack = null;
-        localStorage.removeItem(NP_POS_STORAGE_KEY);
-        this.renderIdle();
-      }
-    },
-
-    // Beim Reload: sofort die letzte bekannte Track-Position anzeigen,
-    // damit der Balken nicht von 0 startet.
-    bootstrapFromLocalStorage() {
-      const last = loadLastPosition();
-      if (!last) return;
-      // Wenn die gespeicherte Position aelter als 10 Minuten ist,
-      // ist sie wahrscheinlich zu alt — wir zeigen sie trotzdem an,
-      // aber beim ersten Server-Tick wird sie ueberschrieben.
-      const minutesAgo = (Date.now() - (last.savedAt || 0)) / 60000;
-      const estimatedPos = (last.position || 0) + minutesAgo;
-      this.currentTrack = {
-        title:    last.title,
-        artist:   last.artist,
-        album:    last.album,
-        duration: last.duration || 0,
-        position: estimatedPos,
-      };
-      this.progressStartedAt = Date.now();
-      this.initialPosition = estimatedPos;
-      this.renderTrack(this.currentTrack);
-      this.updateProgress();
     },
 
     stop() {
       if (this.pollTimer) clearInterval(this.pollTimer);
-      if (this.progressTimer) clearInterval(this.progressTimer);
       this.pollTimer = null;
-      this.progressTimer = null;
-    },
-
-    // Aktualisiert nur den Progress-Balken lokal, ohne Server-Call.
-    // Interpoliert zwischen Server-Tick und jetzt.
-    // Im Pause-Modus wird die Position eingefroren.
-    updateProgress() {
-      if (!this.currentTrack) return;
-      const wrap = $('#navidrome-player');
-      if (!wrap) return;
-      // Im Pause-Modus: nichts machen, Position ist eingefroren
-      if (wrap.classList.contains('paused')) return;
-      const bar = wrap.querySelector('.np-progress-bar');
-      if (!bar) return;
-
-      const duration = Number(this.currentTrack.duration || 0);
-      let position;
-      if (duration <= 0) {
-        position = 0;
-        bar.style.width = '0%';
-      } else {
-        const elapsedSinceServer = (Date.now() - this.progressStartedAt) / 1000;
-        position = this.initialPosition + elapsedSinceServer;
-        const pct = Math.min(100, (position / duration) * 100);
-        bar.style.width = pct.toFixed(2) + '%';
-      }
-    },
-
-    // Prueft, ob der Track stale ist (lange keine Position-Aenderung)
-    // -> vermutlich pausiert oder gestoppt. Da das Server-Polling nur alle
-    // 5s tickt, warten wir bis 30s ohne Server-Aenderung.
-    checkTrackStale() {
-      if (!this.currentTrack) return;
-      const now = Date.now();
-      const sinceLastServer = (now - this.progressStartedAt) / 1000;
-      // Wenn wir 35s nichts vom Server gehoert haben UND wir die letzten 15s
-      // die gleiche Position haben (innerhalb 2s Toleranz), dann ist der
-      // Track wahrscheinlich gestoppt oder pausiert.
-      if (sinceLastServer > 35) {
-        const localPos = this.initialPosition + sinceLastServer;
-        const staleTime = (now - this.progressStartedAt) / 1000;
-        // Wenn die Position sich nicht signifikant weiterbewegt, Idle annehmen.
-        // Wir nutzen: wenn Position nach 35s Server-Stille unter Duration ist
-        // UND die letzte bekannte Server-Position + 35s nicht ueber Duration,
-        // ist es wahrscheinlich gestoppt (kein Player mehr aktiv).
-        // Aber: Navidrome gibt in getNowPlaying NUR aktive Player zurueck.
-        // Wenn unser Eintrag dort wegfaellt, kommt naechster Server-Tick mit
-        // playing=false. Wir verlassen uns also auf das 5s-Server-Polling.
-        // Hier nur: wenn die lokale Schaetzung das Track-Ende ueberschritten
-        // hat, wechsel auf Idle.
-        const duration = Number(this.currentTrack.duration || 0);
-        if (duration > 0 && localPos >= duration) {
-          console.log('[navidrome] track ended (local estimate past duration)');
-          this.currentTrack = null;
-          localStorage.removeItem(NP_POS_STORAGE_KEY);
-          this.renderIdle();
-        }
-      }
     },
 
     async tick() {
       try {
         const newTrack = await window.NavidromeAPI.nowPlaying();
-        // BINÄRE LOGIK:
-        //  - Server sagt playing=true (und nicht paused) -> Track anzeigen
-        //  - Server sagt playing=false / paused / stopped -> Player ausblenden
-        // Wir zeigen pausierte/stopped Tracks NICHT mehr an.
+        // Binäre Logik: Server sagt playing=true (und nicht paused) -> Track anzeigen,
+        // sonst Player ausblenden.
         if (!newTrack || newTrack.playing !== true || newTrack.paused === true) {
           this.currentTrack = null;
-          localStorage.removeItem(NP_POS_STORAGE_KEY);
           this.renderIdle();
           return;
         }
-        let newServerPos = Number(newTrack.position || 0);
-        const isPaused = !!newTrack.paused;
-
-        // Fallback: Wenn Server-Position 0 ist (kurz nach Track-Start),
-        // nutzen wir localStorage-Position als Schaetzung.
-        if (newServerPos <= 1) {
-          const last = loadLastPosition();
-          if (last
-              && last.title === newTrack.title
-              && last.album === newTrack.album
-              && last.position > 1
-              && (Date.now() - (last.savedAt || 0)) < 2 * 60 * 1000) {
-            const minutesAgo = (Date.now() - last.savedAt) / 1000;
-            const estimated = last.position + minutesAgo;
-            if (estimated < Number(newTrack.duration || 9999)) {
-              newServerPos = estimated;
-            }
-          }
-        }
-
         // Aktualisiere currentTrack mit dem neuen Server-Wert
         // (Titel/Artist/Album/Cover/Duration koennen sich auch aendern,
         // z. B. bei Tag-Korrektur)
-        const isNewTrack = !this.currentTrack
-          || this.currentTrack.title !== newTrack.title
-          || this.currentTrack.album !== newTrack.album;
-        if (isNewTrack) {
-          this.progressStartedAt = Date.now();
-          this.initialPosition = newServerPos;
-        } else {
-          // Gleicher Track: nur Zeit-Basis neu setzen, wenn Server weiter ist
-          // ODER wenn gerade Pause aufgehoben wurde (isPaused=false jetzt, war vorher true)
-          const elapsed = (Date.now() - this.progressStartedAt) / 1000;
-          const localPos = this.initialPosition + elapsed;
-          const wasPaused = this.currentTrack?.paused;
-          if (isPaused) {
-            // Pause: Position einfrieren auf Server-Wert
-            this.progressStartedAt = Date.now();
-            this.initialPosition = newServerPos;
-          } else if (newServerPos >= localPos - 2 || wasPaused) {
-            // Normal fortschreitend ODER gerade aus Pause -> neue Zeit-Basis
-            this.progressStartedAt = Date.now();
-            this.initialPosition = newServerPos;
-          }
-          // Wenn Server hinter localPos UND nicht aus Pause aufgehoben
-          // -> alte Werte beibehalten
-        }
-        this.currentTrack = Object.assign({}, newTrack, {
-          position: newServerPos,
-          paused: isPaused,
-        });
-        // Position speichern
-        if (newServerPos > 1) {
-          saveLastPosition(this.currentTrack);
-        }
+        this.currentTrack = newTrack;
         this.renderTrack(this.currentTrack);
-        this.updateProgress();
       } catch (err) {
         console.warn('[navidrome] poll failed:', err.message);
         this.currentTrack = null;
-        localStorage.removeItem(NP_POS_STORAGE_KEY);
         this.renderIdle();
       }
     },
@@ -476,14 +277,7 @@
         cover.replaceChildren(document.createTextNode('🎵'));
         cover.classList.add('placeholder');
       }
-      // Progress-Bar zuruecksetzen
-      const bar = wrap.querySelector('.np-progress-bar');
-      if (bar) bar.style.width = '0%';
     },
-
-    // renderPaused entfernt: wir zeigen pausierten Track nicht mehr an.
-    // Sobald der User pausiert, geht der Player in den Idle-Zustand.
-    // Beim erneuten Play startet ein neuer Tick und zeigt den Track.
 
 
     renderTrack(data) {
