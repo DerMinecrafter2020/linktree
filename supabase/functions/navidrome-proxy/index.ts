@@ -397,9 +397,34 @@ Deno.serve(async (req) => {
   // status: gibt Auskunft ueber Server-Konfiguration (fuer die Hauptseite)
   if (action === 'status') {
     const configured = !!(NAVIDROME_URL && NAVIDROME_USER && NAVIDROME_PASS);
+    // Probe: versuche getAlbumList2 mit size=1, um zu wissen, ob ueberhaupt
+    // Songs in der Library sind.
+    let libraryInfo = null;
+    if (configured) {
+      try {
+        const params = await subsonicParams({ type: 'newest', size: 1 });
+        const data = await navFetch('getAlbumList2', params);
+        const resp = data && data['subsonic-response'];
+        const albums = resp && resp.albumList2 && resp.albumList2.album;
+        libraryInfo = {
+          albumsCount: Array.isArray(albums) ? albums.length : 0,
+          sample: Array.isArray(albums) && albums.length ? {
+            title:  String(albums[0].title  || ''),
+            artist: String(albums[0].artist || ''),
+            album:  String(albums[0].album  || ''),
+          } : null,
+        };
+      } catch (e) {
+        libraryInfo = { error: e.message };
+      }
+    }
     return json({
       ok: true,
-      data: { configured: configured, url: NAVIDROME_URL ? NAVIDROME_URL.replace(/\/$/, '') : '' }
+      data: {
+        configured: configured,
+        url: NAVIDROME_URL ? NAVIDROME_URL.replace(/\/+$/, '') : '',
+        library: libraryInfo,
+      }
     }, 200, req);
   }
 
