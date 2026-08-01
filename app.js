@@ -512,11 +512,6 @@
       const artistEl = wrap.querySelector('.np-artist');
       if (titleEl) titleEl.textContent = data.title || 'Unbekannt';
       if (artistEl) artistEl.textContent = data.artist || (data.album || '');
-
-      // Titel verlinkt zur Navidrome-WebUI (oder wo der User es eingestellt hat)
-      if (titleEl) {
-        titleEl.href = data.streamUrl || data.webUrl || '#';
-      }
     },
 
     async control(action) {
