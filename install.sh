@@ -191,6 +191,61 @@ get_supabase_secret() {
     return 1
 }
 
+# Supabase CLI installieren (falls noch nicht da).
+# Verwendet das offizielle .deb-Paket (Debian/Ubuntu) statt einer kaputten
+# curl-Pipe-Installation.
+install_supabase_cli() {
+    if [[ -x "$SUPABASE_CLI" ]] || command -v supabase >/dev/null 2>&1; then
+        log_ok "supabase CLI bereits vorhanden"
+        return 0
+    fi
+    log_info "supabase CLI nicht gefunden — versuche Installation..."
+
+    # Architektur erkennen
+    local arch
+    arch=$(uname -m)
+    case "$arch" in
+        x86_64) arch="amd64" ;;
+        aarch64|arm64) arch="arm64" ;;
+        *)
+            log_warn "Unbekannte Architektur '$arch' — CLI-Installation wird uebersprungen"
+            return 1
+            ;;
+    esac
+
+    # 1) Versuch: .deb herunterladen und installieren
+    local deb_url="https://github.com/supabase/cli/releases/latest/download/supabase_linux_${arch}.deb"
+    local deb_file="/tmp/supabase-cli.deb"
+
+    if curl -fsSL -o "$deb_file" "$deb_url" 2>/dev/null; then
+        if dpkg -i "$deb_file" 2>/dev/null; then
+            log_ok "supabase CLI via .deb installiert"
+            rm -f "$deb_file"
+            return 0
+        fi
+        rm -f "$deb_file"
+    fi
+
+    # 2) Versuch: .tar.gz herunterladen und nach /usr/local/bin entpacken
+    log_info "  .deb fehlgeschlagen, versuche tar.gz..."
+    local tar_url="https://github.com/supabase/cli/releases/latest/download/supabase_linux_${arch}.tar.gz"
+    local tar_file="/tmp/supabase-cli.tar.gz"
+
+    if curl -fsSL -o "$tar_file" "$tar_url" 2>/dev/null; then
+        if tar -xzf "$tar_file" -C /tmp/ 2>/dev/null && [[ -x /tmp/supabase ]]; then
+            mv /tmp/supabase /usr/local/bin/supabase
+            chmod +x /usr/local/bin/supabase
+            log_ok "supabase CLI via tar.gz nach /usr/local/bin installiert"
+            rm -f "$tar_file"
+            return 0
+        fi
+    fi
+    rm -f "$tar_file"
+
+    log_warn "CLI-Installation fehlgeschlagen — Navidrome-Secrets koennen nicht aus Supabase geladen werden"
+    return 1
+}
+
 # Jetzt erst das Passwort-Prompt — es kennt jetzt die EXISTING_*-Werte
 prompt_admin_password
 
@@ -227,6 +282,21 @@ ADMIN_PASS_JSON=$(printf '%s' "$ADMIN_PASSWORD" | python3 -c 'import json,sys; p
 NAVIDROME_URL_FROM_SECRET=""
 NAVIDROME_USER_FROM_SECRET=""
 NAVIDROME_PASS_FROM_SECRET=""
+
+# Erst CLI installieren (falls noetig) — sonst kein Secret-Zugriff moeglich
+install_supabase_cli
+
+# Login-Hinweis, falls noch nicht eingeloggt
+if command -v supabase >/dev/null 2>&1; then
+    if ! supabase projects list 2>/dev/null | grep -q "$SUPABASE_PROJECT_REF"; then
+        log_warn "supabase CLI ist nicht eingeloggt oder Projekt nicht verlinkt"
+        log_warn "  Fuer Auto-Load der Secrets:"
+        log_warn "    supabase login"
+        log_warn "    supabase link --project-ref $SUPABASE_PROJECT_REF"
+        log_warn "  Sonst bleiben Navidrome-Werte Platzhalter."
+    fi
+fi
+
 if NAVIDROME_URL_FROM_SECRET=$(get_supabase_secret "NAVIDROME_URL" 2>/dev/null); then
     NAVIDROME_USER_FROM_SECRET=$(get_supabase_secret "NAVIDROME_USER" 2>/dev/null || true)
     NAVIDROME_PASS_FROM_SECRET=$(get_supabase_secret "NAVIDROME_PASS" 2>/dev/null || true)
