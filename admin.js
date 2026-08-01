@@ -1340,12 +1340,9 @@
       const raw = localStorage.getItem(NP_STORAGE_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
-      // Whitelist pro Feld
+      // Credentials (URL/User/Pass) werden NICHT mehr im Browser gespeichert.
       return {
         enabled: !!parsed.enabled,
-        url: typeof parsed.url === 'string' ? parsed.url : '',
-        user: typeof parsed.user === 'string' ? parsed.user : '',
-        pass: typeof parsed.pass === 'string' ? parsed.pass : '',
         proxyUrl: typeof parsed.proxyUrl === 'string' ? parsed.proxyUrl : '',
         pollIntervalSec: Math.min(600, Math.max(10, parseInt(parsed.pollIntervalSec || 30, 10) || 30)),
       };
@@ -1353,10 +1350,16 @@
   }
 
   function saveNavidromeConfig(cfg) {
-    localStorage.setItem(NP_STORAGE_KEY, JSON.stringify(cfg));
+    // Nur lokale Einstellungen speichern — Credentials bleiben in Supabase Secrets
+    const minimal = {
+      enabled: !!cfg.enabled,
+      proxyUrl: cfg.proxyUrl || '',
+      pollIntervalSec: cfg.pollIntervalSec || 30,
+    };
+    localStorage.setItem(NP_STORAGE_KEY, JSON.stringify(minimal));
     // Auch in window.NAVIDROME_CONFIG schreiben, damit die Hauptseite
     // bei Reload den gleichen Stand hat (wenn sie später geladen wird)
-    window.NAVIDROME_CONFIG = Object.assign({}, window.NAVIDROME_CONFIG || {}, cfg);
+    window.NAVIDROME_CONFIG = Object.assign({}, window.NAVIDROME_CONFIG || {}, minimal);
   }
 
   function renderNavidromeForm() {
@@ -1364,18 +1367,12 @@
     if (!form) return;
     const cfg = loadNavidromeConfig() || {
       enabled: false,
-      url: '',
-      user: '',
-      pass: '',
       proxyUrl: (window.SUPABASE_CONFIG?.url
         ? window.SUPABASE_CONFIG.url.replace(/\/$/, '') + '/functions/v1/navidrome-proxy'
         : ''),
       pollIntervalSec: 30,
     };
     form.enabled.checked        = !!cfg.enabled;
-    form.url.value              = cfg.url;
-    form.user.value             = cfg.user;
-    form.pass.value             = cfg.pass;
     form.proxyUrl.value         = cfg.proxyUrl;
     form.pollIntervalSec.value  = cfg.pollIntervalSec;
   }
@@ -1387,30 +1384,21 @@
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      // Validierung
-      const url = (form.url.value || '').trim();
-      const user = (form.user.value || '').trim();
-      const pass = form.pass.value || '';
       const proxyUrl = (form.proxyUrl.value || '').trim();
       const poll = parseInt(form.pollIntervalSec.value || '30', 10) || 30;
 
-      // Whitelist-URLs (kein javascript:/data:/file:)
-      if (url && !/^https?:\/\//i.test(url)) {
-        toast('Server-URL muss mit http(s) beginnen', true);
-        return;
-      }
       if (proxyUrl && !/^https?:\/\//i.test(proxyUrl)) {
         toast('Proxy-URL muss mit http(s) beginnen', true);
         return;
       }
-      if (form.enabled.checked && (!url || !user || !pass || !proxyUrl)) {
-        toast('Bitte alle Felder ausfüllen oder Player deaktivieren', true);
+      if (form.enabled.checked && !proxyUrl) {
+        toast('Bitte Proxy-URL eintragen oder Player deaktivieren', true);
         return;
       }
 
       saveNavidromeConfig({
         enabled: !!form.enabled.checked,
-        url, user, pass, proxyUrl,
+        proxyUrl,
         pollIntervalSec: Math.min(600, Math.max(10, poll)),
       });
       toast('🎵 Navidrome-Einstellungen gespeichert (lokal)');
@@ -1418,20 +1406,30 @@
 
     $('#navidrome-test-btn')?.addEventListener('click', async () => {
       const status = $('#navidrome-status');
-      status.textContent = 'Teste Verbindung…';
-      const cfg = {
-        enabled: form.enabled.checked,
-        url: form.url.value.trim(),
-        user: form.user.value.trim(),
-        pass: form.pass.value,
-        proxyUrl: form.proxyUrl.value.trim(),
-      };
-      if (!cfg.proxyUrl) {
+      const proxyUrl = (form.proxyUrl.value || '').trim();
+      if (!proxyUrl) {
         status.textContent = '❌ Proxy-URL fehlt';
         return;
       }
+      status.textContent = 'Prüfe…';
       try {
-        const r = await fetch(cfg.proxyUrl, {
+        // 1) Status (Secrets vorhanden?)
+        const r1 = await fetch(proxyUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: window.SUPABASE_CONFIG?.anonKey || '',
+            'Authorization': 'Bearer ' + (window.SUPABASE_CONFIG?.anonKey || ''),
+          },
+          body: JSON.stringify({ action: 'status' }),
+        });
+        const j1 = await r1.json().catch(() => ({}));
+        if (!r1.ok || !j1.ok || !j1.data?.configured) {
+          status.innerHTML = '❌ Secrets fehlen in Supabase.<br>Lege sie an mit:<br><code>supabase secrets set NAVIDROME_URL=…</code> etc.';
+          return;
+        }
+        // 2) NowPlaying (liefert echte Daten)
+        const r2 = await fetch(proxyUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1440,15 +1438,15 @@
           },
           body: JSON.stringify({ action: 'nowPlaying' }),
         });
-        const json = await r.json().catch(() => ({}));
-        if (!r.ok || json.ok === false) {
-          status.textContent = '❌ ' + (json.error || ('HTTP ' + r.status));
+        const j2 = await r2.json().catch(() => ({}));
+        if (!r2.ok || !j2.ok) {
+          status.textContent = '❌ ' + (j2.error || ('HTTP ' + r2.status));
           return;
         }
-        if (json.data?.playing) {
-          status.textContent = '✅ Verbindung OK — spielt gerade: ' + json.data.title + ' (' + json.data.artist + ')';
+        if (j2.data?.playing) {
+          status.textContent = '✅ ' + j2.data.url + ' — spielt: ' + j2.data.title + ' (' + j2.data.artist + ')';
         } else {
-          status.textContent = '✅ Verbindung OK — momentan läuft nichts auf dem Server';
+          status.textContent = '✅ ' + j2.data.url + ' — momentan läuft nichts';
         }
       } catch (err) {
         status.textContent = '❌ ' + (err.message || 'Netzwerkfehler');

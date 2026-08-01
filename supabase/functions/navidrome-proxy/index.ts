@@ -307,6 +307,16 @@ Deno.serve(async (req) => {
   }
 
   const action = body.action;
+
+  // status: gibt Auskunft ueber Server-Konfiguration (fuer die Hauptseite)
+  if (action === 'status') {
+    const configured = !!(NAVIDROME_URL && NAVIDROME_USER && NAVIDROME_PASS);
+    return json({
+      ok: true,
+      data: { configured: configured, url: NAVIDROME_URL ? NAVIDROME_URL.replace(/\/$/, '') : '' }
+    }, 200, req);
+  }
+
   try {
     let data;
     switch (action) {

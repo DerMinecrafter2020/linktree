@@ -194,9 +194,6 @@
       const parsed = JSON.parse(raw);
       return {
         enabled: !!parsed.enabled,
-        url:      typeof parsed.url === 'string' ? parsed.url : '',
-        user:     typeof parsed.user === 'string' ? parsed.user : '',
-        pass:     typeof parsed.pass === 'string' ? parsed.pass : '',
         proxyUrl: typeof parsed.proxyUrl === 'string' ? parsed.proxyUrl : '',
         pollIntervalSec: Math.min(600, Math.max(10, parseInt(parsed.pollIntervalSec || 30, 10) || 30)),
       };
@@ -207,12 +204,9 @@
     const base = window.NAVIDROME_CONFIG || {};
     const stored = loadNavidromeFromStorage();
     if (!stored) return base;
-    // localStorage ueberschreibt nur Felder, die dort wirklich gesetzt sind
+    // localStorage ueberschreibt Defaults; URL/User/Pass kommen NIE in den Browser
     return Object.assign({}, base, {
       enabled: stored.enabled || base.enabled,
-      url: stored.url || base.url,
-      user: stored.user || base.user,
-      pass: stored.pass || base.pass,
       proxyUrl: stored.proxyUrl || base.proxyUrl,
       pollIntervalSec: stored.pollIntervalSec || base.pollIntervalSec || 30,
     });
@@ -233,13 +227,8 @@
       if (!c) return false;
       if (!c.enabled) return false;
       if (!c.proxyUrl) return false;
-      // Platzhalter-Werte aus config.example.js rausfiltern
-      const placeholders = ['YOUR-PROJECT', 'YOUR_NAV_URL', 'YOUR_USER', 'YOUR_PASS'];
-      if (placeholders.some((p) => (c.url || '').includes(p))) return false;
-      if (placeholders.some((p) => (c.user || '').includes(p))) return false;
-      if (placeholders.some((p) => (c.pass || '').includes(p))) return false;
-      if (placeholders.some((p) => (c.proxyUrl || '').includes(p))) return false;
-      if (!c.url || !c.user || !c.pass) return false;
+      // Platzhalter rausfiltern
+      if ((c.proxyUrl || '').includes('YOUR-PROJECT')) return false;
       return true;
     },
 
