@@ -296,9 +296,17 @@ prompt_admin_password() {
     # ein neues gesetzt werden soll. So wird der User bei Re-Runs nicht
     # jedes Mal zur Passwort-Eingabe gezwungen.
     # Bei 'neuinstallieren' wird IMMER neu gefragt.
-    if [[ "$MODE" != "neuinstallieren" \
-       && -n "${EXISTING_ADMIN_PW:-}" \
-       && ! is_placeholder "${EXISTING_ADMIN_PW:-}" ]]; then
+    # HINWEIS: [[ ... ]] kann NICHT mit Backslash-Newline umbrochen werden
+    # (anders als [ ... ]), darum alles auf einer Zeile.
+    local keep_existing=0
+    if [[ "$MODE" != "neuinstallieren" ]]; then
+        if [[ -n "${EXISTING_ADMIN_PW:-}" ]]; then
+            if ! is_placeholder "${EXISTING_ADMIN_PW:-}"; then
+                keep_existing=1
+            fi
+        fi
+    fi
+    if [[ "$keep_existing" -eq 1 ]]; then
         echo -n "  Bestehendes Passwort erkannt. Neues Passwort setzen? (j/N): "
         read -r CHANGE_PW
         if [[ ! "$CHANGE_PW" =~ ^[jJyY]$ ]]; then
