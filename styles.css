@@ -125,16 +125,24 @@ body {
    ========================================================= */
 .np-player {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;            /* Mobile: Cover LINKS, Text RECHTS */
   align-items: center;
-  gap: 10px;
-  padding: 14px 14px 12px;
-  margin-bottom: 18px;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
   background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   position: relative;
   overflow: hidden;
+}
+
+/* Desktop: klassisches column-Layout (Cover oben, Text unten) */
+@media (min-width: 768px) {
+  .np-player {
+    flex-direction: column;
+    padding: 14px 14px 12px;
+  }
 }
 
 /* Compact mode (ohne Controls) ist jetzt der Standard */
@@ -329,7 +337,7 @@ body {
   flex-direction: column;
   align-items: stretch;
   gap: 0;
-  padding: 18px 20px;
+  padding: 14px 16px;
   background: var(--glass);
   border: 1px solid var(--border);
   border-radius: var(--radius-link);
@@ -337,6 +345,8 @@ body {
   text-decoration: none;
   font-size: 15px;
   font-weight: 500;
+  /* Mobile: Touch-Target min. 44px, hier Mindest-Padding 14px + Inhalt ~36px = ~64px */
+  min-height: 64px;
   transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
               padding 0.25s ease,
               background 0.2s ease,
@@ -351,6 +361,8 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex: 1;
+  min-height: 0;  /* kein Extra-Spacing im Link-Top */
 }
 
 .link-url {
@@ -406,23 +418,35 @@ body {
   transform: scale(1.03);
 }
 
+/* Link-Text-Container: Icon LINKS, Title/Sub vertical daneben */
 .link-text {
+  display: flex;
+  flex-direction: row;
+  align-items: center;       /* Icon + Title vertical zentriert */
+  gap: 12px;
+  flex: 1;
+  min-width: 0;               /* flexbox-overflow erlauben */
+}
+
+.link-text-main {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;               /* ellipsis in title/sub ermoeglichen */
+  flex: 1;
 }
 
 .link-icon {
   font-size: 22px;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;            /* verhindert Schrumpfen */
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);
-  margin-right: 12px;
   flex-shrink: 0;
   align-self: center;
 }
@@ -456,6 +480,10 @@ body {
   font-weight: 600;
   font-size: 15px;
   letter-spacing: -0.2px;
+  /* Bei langen Titeln: nicht den Container sprengen */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .link-sub {
@@ -463,12 +491,16 @@ body {
   font-size: 11px;
   color: var(--text-faint);
   letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .link-arrow {
   font-size: 20px;
   color: var(--text-dim);
   transition: transform 0.25s ease, color 0.25s ease;
+  flex-shrink: 0;
 }
 
 .link:hover .link-arrow {
@@ -510,16 +542,115 @@ body {
   50%      { opacity: 0.4; }
 }
 
-/* ---------- Mobile ---------- */
+/* ---------- Mobile (small phones, < 480px) ---------- */
 @media (max-width: 480px) {
-  .card {
-    padding: 32px 20px 20px;
-    border-radius: 22px;
+  body {
+    /* Weniger Padding rund um die Karte */
+    padding: 12px;
   }
-  .avatar-wrap { width: 96px; height: 96px; }
-  .avatar { font-size: 30px; }
-  .name { font-size: 20px; }
-  .link { padding: 16px 18px; }
+  .card {
+    padding: 28px 18px 18px;
+    border-radius: 20px;
+    max-width: 100%;
+  }
+  .avatar-wrap { width: 88px; height: 88px; margin-bottom: 14px; }
+  .avatar { font-size: 28px; }
+  .name { font-size: 19px; margin-bottom: 4px; }
+  .handle { font-size: 14px; margin-bottom: 2px; }
+  .bio { font-size: 13px; line-height: 1.4; }
+
+  .link {
+    padding: 12px 14px;
+    gap: 0;
+    min-height: 56px;        /* Touch-Target min 44px + etwas Padding */
+  }
+  .link-icon {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    font-size: 18px;
+  }
+  .link-text {
+    gap: 10px;
+  }
+  .link-title {
+    font-size: 14px;
+  }
+  .link-sub {
+    font-size: 10px;
+  }
+  .link-arrow {
+    font-size: 18px;
+  }
+  .link-url {
+    font-size: 10px;
+  }
+
+  /* Navidrome-Player kompakter */
+  .np-player {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .np-cover {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+  }
+  .np-title { font-size: 14px; }
+  .np-artist { font-size: 11px; }
+
+  /* Footer dichter */
+  .footer { font-size: 10px; margin-top: 22px; }
+}
+
+/* ---------- Mobile (medium phones, 480px - 768px) ---------- */
+@media (min-width: 481px) and (max-width: 768px) {
+  .card {
+    padding: 32px 24px 22px;
+  }
+  .avatar-wrap { width: 100px; height: 100px; }
+  .name { font-size: 21px; }
+  .link { padding: 14px 16px; }
+}
+
+/* ---------- Tablet portrait (768px - 1024px) ---------- */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .card {
+    max-width: 480px;
+  }
+}
+
+/* ---------- Landscape orientation (mobile gedreht) ---------- */
+@media (max-width: 896px) and (orientation: landscape) {
+  .card {
+    padding: 24px 22px 18px;
+  }
+  .avatar-wrap { width: 72px; height: 72px; margin-bottom: 10px; }
+  .name { font-size: 18px; }
+  .bio { font-size: 12px; margin-bottom: 12px; }
+  .link { padding: 10px 12px; min-height: 50px; }
+}
+
+/* ---------- Touch-Device Optimierungen ---------- */
+@media (hover: none) and (pointer: coarse) {
+  /* Touch-Devices: kein Hover-Effekt, stattdessen Tapped-State */
+  .link:hover {
+    transform: none;
+  }
+  .link:active {
+    transform: scale(0.98);
+    background: var(--glass-hover);
+  }
+  .link-url {
+    /* Auf Touch immer anzeigen, da kein Hover */
+    max-height: 0;
+    opacity: 0;
+  }
+  .link:active .link-url {
+    max-height: 24px;
+    opacity: 1;
+    margin-top: 8px;
+  }
 }
 
 /* ---------- Reduced motion ---------- */

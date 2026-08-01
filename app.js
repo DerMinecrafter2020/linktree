@@ -143,10 +143,12 @@
         a.innerHTML = `
           <span class="link-top">
             <span class="link-text">
-              <span class="link-title">${escapeHtml(link.title)}</span>
-              <span class="link-sub">${escapeHtml(link.subtitle || '')}</span>
+              <span class="link-text-main">
+                <span class="link-title">${escapeHtml(link.title)}</span>
+                <span class="link-sub">${escapeHtml(link.subtitle || '')}</span>
+              </span>
+              <span class="link-arrow" aria-hidden="true">→</span>
             </span>
-            <span class="link-arrow" aria-hidden="true">→</span>
           </span>
           <span class="link-url" aria-hidden="true">${escapeHtml(prettyUrl(link.url))}</span>
         `;
