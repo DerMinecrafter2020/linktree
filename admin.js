@@ -288,7 +288,7 @@
   // =========================================================
   // TABS
   // =========================================================
-  const TAB_TITLES = { links: 'Links', profile: 'Profil', data: 'Daten', settings: 'Einstellungen' };
+  const TAB_TITLES = { links: 'Links', profile: 'Profil', music: 'Musik', data: 'Daten', settings: 'Einstellungen' };
 
   function switchTab(name) {
     if (!TAB_TITLES[name]) name = 'links';
