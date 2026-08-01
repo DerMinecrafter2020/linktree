@@ -375,6 +375,15 @@ Deno.serve(async (req) => {
     const result = {
       configured: configured,
       url: serverUrl,
+      // Debug-Info (ohne Passwort)
+      debug: {
+        urlSet: !!NAVIDROME_URL,
+        urlValue: NAVIDROME_URL ? NAVIDROME_URL.replace(/\/+$/, '') : '(leer)',
+        userSet: !!NAVIDROME_USER,
+        userValue: NAVIDROME_USER || '(leer)',
+        passSet: !!NAVIDROME_PASS,
+        passLength: NAVIDROME_PASS ? NAVIDROME_PASS.length : 0,
+      }
     };
 
     if (!configured) {
