@@ -335,10 +335,13 @@
 
     // Aktualisiert nur den Progress-Balken lokal, ohne Server-Call.
     // Interpoliert zwischen Server-Tick und jetzt.
+    // Im Pause-Modus wird die Position eingefroren.
     updateProgress() {
       if (!this.currentTrack) return;
       const wrap = $('#navidrome-player');
       if (!wrap) return;
+      // Im Pause-Modus: nichts machen, Position ist eingefroren
+      if (wrap.classList.contains('paused')) return;
       const bar = wrap.querySelector('.np-progress-bar');
       if (!bar) return;
 
@@ -400,10 +403,26 @@
         });
         const json = await r.json();
         if (!r.ok || !json.ok || !json.data?.playing) {
-          this.currentTrack = null;
-          this.renderIdle();
+          // Server meldet: kein aktiver Player (kann Pause ODER Stop sein).
+          // Wir behalten den letzten Track sichtbar — mit Pause-Indikator.
+          // Erst nach 5 Minuten ohne Server-Update zeigen wir wirklich Idle.
+          if (this.currentTrack) {
+            const sinceLastServer = (Date.now() - this.progressStartedAt) / 1000;
+            if (sinceLastServer > 300) {  // 5 Minuten
+              this.currentTrack = null;
+              localStorage.removeItem(NP_POS_STORAGE_KEY);
+              this.renderIdle();
+            } else {
+              // Track bleibt sichtbar, aber wir markieren ihn als pausiert
+              this.currentTrack = Object.assign({}, this.currentTrack, { paused: true });
+              this.renderPaused();
+            }
+          } else {
+            this.renderIdle();
+          }
           return;
         }
+        // Track laeuft (playing=true) -> weiter
         // Wenn der gleiche Track noch laeuft, nur die Zeit-Basis neu setzen,
         // wenn die Server-Position groesser ist als unsere bisher berechnete.
         // Sonst waere ein Ruecksprung sichtbar (z. B. wenn Server langsamer tickt).
@@ -478,7 +497,7 @@
       const wrap = $('#navidrome-player');
       if (!wrap) return;
       wrap.classList.add('idle');
-      wrap.classList.remove('playing');
+      wrap.classList.remove('playing', 'paused');
       const titleEl = wrap.querySelector('.np-title');
       const artistEl = wrap.querySelector('.np-artist');
       if (titleEl) titleEl.textContent = 'Momentan läuft nichts';
@@ -488,6 +507,36 @@
         cover.replaceChildren(document.createTextNode('🎵'));
         cover.classList.add('placeholder');
       }
+      // Zeit zuruecksetzen
+      const bar = wrap.querySelector('.np-progress-bar');
+      if (bar) bar.style.width = '0%';
+      const timePos = wrap.querySelector('.np-time-pos');
+      const timeDur = wrap.querySelector('.np-time-dur');
+      if (timePos) timePos.textContent = '0:00';
+      if (timeDur) timeDur.textContent = '0:00';
+    },
+
+    // Zeigt den letzten Track weiter, aber mit Pause-Indikator
+    renderPaused() {
+      const wrap = $('#navidrome-player');
+      if (!wrap) return;
+      if (!this.currentTrack) {
+        this.renderIdle();
+        return;
+      }
+      wrap.classList.remove('idle');
+      wrap.classList.remove('playing');
+      wrap.classList.add('paused');
+      // Cover beibehalten (nicht zuruecksetzen)
+      // Position NICHT fortschalten (soll eingefroren sein)
+      const dur = Number(this.currentTrack.duration || 0);
+      const pos = Math.min(dur, Number(this.currentTrack.position || 0));
+      const bar = wrap.querySelector('.np-progress-bar');
+      if (bar && dur > 0) {
+        bar.style.width = ((pos / dur) * 100).toFixed(2) + '%';
+      }
+      const timePos = wrap.querySelector('.np-time-pos');
+      if (timePos) timePos.textContent = formatTime(pos);
     },
 
     renderTrack(data) {
