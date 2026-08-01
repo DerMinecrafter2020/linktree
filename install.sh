@@ -24,6 +24,8 @@ set -euo pipefail
 # --- Konstanten ---
 readonly REPO_URL="https://github.com/DerMinecrafter2020/linktree.git"
 readonly INSTALL_DIR="/var/html"
+readonly SUPABASE_PROJECT_REF="fxywervpqojpjwreymdp"
+readonly SUPABASE_CLI="${SUPABASE_CLI:-/usr/local/bin/supabase}"
 readonly NGINX_SITE_NAME="openweb"
 readonly NGINX_CONF="/etc/nginx/sites-available/${NGINX_SITE_NAME}"
 readonly NGINX_LINK="/etc/nginx/sites-enabled/${NGINX_SITE_NAME}"
@@ -167,6 +169,28 @@ is_placeholder() {
     esac
 }
 
+# Versuchen, einen Supabase-Secret auszulesen.
+# Methode 1: 'supabase secrets get NAME' (interaktive CLI, erfordert Login)
+# Methode 2: Management-API mit Access-Token (falls SUPABASE_ACCESS_TOKEN gesetzt)
+# Gibt Klartext zurück oder leer bei Fehler.
+get_supabase_secret() {
+    local name="$1"
+    # CLI vorhanden + eingeloggt?
+    local cli=""
+    [[ -x "$SUPABASE_CLI" ]] && cli="$SUPABASE_CLI"
+    command -v supabase >/dev/null 2>&1 && cli="${cli:-supabase}"
+    if [[ -n "$cli" ]]; then
+        local val
+        val=$("$cli" secrets get --project-ref "$SUPABASE_PROJECT_REF" "$name" 2>/dev/null | head -n1 | tr -d '\r')
+        # Wenn die CLI nicht eingeloggt ist, gibt sie einen Fehler aus — verwerfen
+        if [[ -n "$val" && "$val" != *"error"* && "$val" != *"Error"* ]]; then
+            echo "$val"
+            return 0
+        fi
+    fi
+    return 1
+}
+
 # Jetzt erst das Passwort-Prompt — es kennt jetzt die EXISTING_*-Werte
 prompt_admin_password
 
@@ -197,6 +221,34 @@ fi
 ADMIN_PASS_JSON=$(printf '%s' "$ADMIN_PASSWORD" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().rstrip("\n")))' 2>/dev/null || \
                   printf '%s' "$ADMIN_PASSWORD" | sed 's/\\/\\\\/g; s/"/\\"/g; s/'"'"'/\\'"'"'/g')
 
+# Navidrome-Werte: versuchen aus Supabase-Secrets zu laden.
+# Falls vorhanden → enabled=true + Werte einsetzen.
+# Falls nicht → Platzhalter lassen + Hinweis im Output.
+NAVIDROME_URL_FROM_SECRET=""
+NAVIDROME_USER_FROM_SECRET=""
+NAVIDROME_PASS_FROM_SECRET=""
+if NAVIDROME_URL_FROM_SECRET=$(get_supabase_secret "NAVIDROME_URL" 2>/dev/null); then
+    NAVIDROME_USER_FROM_SECRET=$(get_supabase_secret "NAVIDROME_USER" 2>/dev/null || true)
+    NAVIDROME_PASS_FROM_SECRET=$(get_supabase_secret "NAVIDROME_PASS" 2>/dev/null || true)
+fi
+
+if [[ -n "$NAVIDROME_URL_FROM_SECRET" && -n "$NAVIDROME_USER_FROM_SECRET" && -n "$NAVIDROME_PASS_FROM_SECRET" ]]; then
+    log_ok "Navidrome-Secrets aus Supabase geladen — Player wird aktiviert"
+    NAV_ENABLED="true"
+    NAV_URL="$NAVIDROME_URL_FROM_SECRET"
+    NAV_USER="$NAVIDROME_USER_FROM_SECRET"
+    # Passwort als JSON-String escapen (Sonderzeichen sichern)
+    NAV_PASS_JSON=$(printf '%s' "$NAVIDROME_PASS_FROM_SECRET" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().rstrip("\n")))' 2>/dev/null || \
+                    printf '%s' "$NAVIDROME_PASS_FROM_SECRET" | sed 's/\\/\\\\/g; s/"/\\"/g; s/'"'"'/\\'"'"'/g')
+else
+    log_warn "Navidrome-Secrets nicht in Supabase gefunden — Player bleibt deaktiviert"
+    log_warn "  Setze sie via: supabase secrets set NAVIDROME_URL=... NAVIDROME_USER=... NAVIDROME_PASS=..."
+    NAV_ENABLED="false"
+    NAV_URL="https://music.deinedomain.de"
+    NAV_USER="YOUR_USER"
+    NAV_PASS_JSON='"YOUR_PASS"'
+fi
+
 cat > "${INSTALL_DIR}/config.js" <<EOF
 // Lokale Server-Konfiguration — wird vom Install-Skript erzeugt.
 // Bearbeite diese Datei NICHT direkt; stattdessen \`sudo bash install.sh\` erneut ausführen.
@@ -210,10 +262,10 @@ window.SUPABASE_CONFIG = {
 };
 
 window.NAVIDROME_CONFIG = {
-  enabled: false,
-  url: 'https://music.deinedomain.de',
-  user: 'YOUR_USER',
-  pass: 'YOUR_PASS',
+  enabled: ${NAV_ENABLED},
+  url: '${NAV_URL}',
+  user: '${NAV_USER}',
+  pass: ${NAV_PASS_JSON},
   proxyUrl: '${SUPABASE_URL}/functions/v1/navidrome-proxy',
   pollIntervalSec: 30,
 };
