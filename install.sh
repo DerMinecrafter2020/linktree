@@ -148,6 +148,49 @@ do_uninstall() {
     log_info "  apt remove --purge nginx"
 }
 
+# 5) Admin-Passwort aendern (config.js)
+do_change_password() {
+    if [[ ! -d "$INSTALL_DIR" ]]; then
+        log_error "Kein OpenWeb-Install unter ${INSTALL_DIR} — bitte erst installieren"
+        exit 1
+    fi
+
+    log_info "Admin-Passwort aendern"
+
+    # Aktuelles Passwort aus config.js lesen
+    local current_pw
+    current_pw=$(grep -oE "ADMIN_DEFAULT_PASSWORD\s*=\s*['\"][^'\"]*['\"]" "${INSTALL_DIR}/config.js" 2>/dev/null | head -1 | sed "s/ADMIN_DEFAULT_PASSWORD\s*=\s*['\"]//;s/['\"]$//")
+    if [[ -z "$current_pw" ]]; then
+        current_pw="(unbekannt)"
+    fi
+    log_info "  aktuelles Passwort in config.js: ${current_pw:0:3}*** (Laenge: ${#current_pw})"
+
+    # Neues Passwort abfragen (mit Doppel-Bestaetigung wenn TTY)
+    change_admin_password
+    local new_pw="$ADMIN_PASSWORD"
+
+    # config.js aktualisieren — nur die ADMIN_DEFAULT_PASSWORD-Zeile ersetzen
+    local escaped_pw
+    escaped_pw=$(printf '%s' "$new_pw" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().rstrip("\n")))' 2>/dev/null || \
+                  printf '%s' "$new_pw" | sed 's/\\/\\\\/g; s/"/\\"/g; s/'"'"'/\\'"'"'/g')
+
+    # Backup vor Aenderung
+    cp -n "${INSTALL_DIR}/config.js" "${INSTALL_DIR}/config.js.bak.$(date +%s)" 2>/dev/null || true
+
+    # Zeile ersetzen
+    if grep -q "window.ADMIN_DEFAULT_PASSWORD" "${INSTALL_DIR}/config.js"; then
+        sed -i "s|window\.ADMIN_DEFAULT_PASSWORD\s*=.*|window.ADMIN_DEFAULT_PASSWORD = $escaped_pw;|" "${INSTALL_DIR}/config.js"
+    else
+        # Falls Zeile fehlt, am Ende der Datei anfuegen
+        echo "window.ADMIN_DEFAULT_PASSWORD = $escaped_pw;" >> "${INSTALL_DIR}/config.js"
+    fi
+    chmod 640 "${INSTALL_DIR}/config.js"
+    log_ok "Admin-Passwort in ${INSTALL_DIR}/config.js aktualisiert"
+    log_info "Hinweis: Browser muss localStorage (linktree-admin-pw-hash) leeren,"
+    log_info "         damit der neue Hash beim Login-Versuch berechnet wird."
+    log_info "         Im Browser-Console: localStorage.clear(); dann /admin.html neu laden."
+}
+
 # 5) Supabase CLI installieren (von hier aufrufbar)
 install_supabase_cli() {
     if [[ -x "$SUPABASE_CLI" ]] || command -v supabase >/dev/null 2>&1; then
@@ -238,6 +281,7 @@ EOF
         "Update von GitHub pushen" \
         "Supabase CLI installieren / reparieren" \
         "Skript selbst updaten" \
+        "Admin-Passwort ändern" \
         "Alles deinstallieren" \
         "Beenden"
     do
@@ -246,8 +290,9 @@ EOF
             2) MODE="update" ;;
             3) MODE="install-cli" ;;
             4) MODE="update-self" ;;
-            5) MODE="uninstall" ;;
-            6) log_info "Abbruch"; exit 0 ;;
+            5) MODE="change-password" ;;
+            6) MODE="uninstall" ;;
+            7) log_info "Abbruch"; exit 0 ;;
             *) log_warn "Ungültige Auswahl: $REPLY"; continue ;;
         esac
         break
@@ -274,6 +319,10 @@ case "$MODE" in
         do_install_cli
         exit 0
         ;;
+    change-password)
+        do_change_password
+        exit 0
+        ;;
 esac
 
 # === Standard-Pfad: install (auch fuer 'neuinstallieren') ===
@@ -285,19 +334,16 @@ apt-get update -qq
 apt-get install -y -qq nginx git curl ca-certificates ufw >/dev/null
 log_ok "Abhängigkeiten installiert"
 
-# --- Schritt 2: Admin-Passwort abfragen ---
-# Wir packen das Passwort-Prompt in eine Funktion, weil 'local'
-# nur innerhalb von Funktionen erlaubt ist (nicht im while-Loop).
+# --- Schritt 2: Admin-Passwort ---
+# Default: 'admin123' — der User muss es nach dem ersten Login aendern
+# (Force-Change-Dialog in admin.js). Hier nur ein optionaler Override.
 prompt_admin_password() {
     log_info "Konfiguration: Admin-Passwort für /admin.html"
     echo ""
 
-    # Falls schon ein echtes Passwort in config.js existiert, nachfragen ob
+    # Falls schon ein Passwort in config.js existiert, nachfragen ob
     # ein neues gesetzt werden soll. So wird der User bei Re-Runs nicht
     # jedes Mal zur Passwort-Eingabe gezwungen.
-    # Bei 'neuinstallieren' wird IMMER neu gefragt.
-    # HINWEIS: [[ ... ]] kann NICHT mit Backslash-Newline umbrochen werden
-    # (anders als [ ... ]), darum alles auf einer Zeile.
     local keep_existing=0
     if [[ "$MODE" != "neuinstallieren" ]]; then
         if [[ -n "${EXISTING_ADMIN_PW:-}" ]]; then
@@ -317,41 +363,53 @@ prompt_admin_password() {
         log_info "  OK, neues Passwort wird gesetzt"
     fi
 
+    # Default-Passwort vorschlagen + Override-Funktion anbieten
+    echo ""
+    echo "  Standard-Passwort: admin123"
+    echo "  (Beim ersten /admin.html-Login wirst du zum Aendern gezwungen.)"
+    echo ""
+    echo "  Optionen:"
+    echo "    [Enter]       Standard 'admin123' verwenden"
+    echo "    <eigenes PW>  Jetzt ein anderes Passwort setzen"
+    echo ""
+    echo -n "  Deine Wahl: "
+    read -r ADMIN_PASSWORD
+
+    # Wenn leer → Standard admin123
+    if [[ -z "$ADMIN_PASSWORD" ]]; then
+        ADMIN_PASSWORD="admin123"
+        log_info "  Standard-Passwort 'admin123' wird gesetzt"
+    else
+        log_ok "  eigenes Passwort wird gesetzt"
+    fi
+}
+
+# Helper-Funktion: eigenes Passwort spaeter via Menue aendern
+# Wird vom install.sh 'change-password'-Modus (oder interaktiv) aufgerufen.
+change_admin_password() {
+    echo ""
+    log_info "Admin-Passwort aendern"
+    echo ""
     while true; do
-        echo -n "  Admin-Passwort (min. 16 Zeichen, Enter zum Überspringen): "
+        echo -n "  Neues Admin-Passwort (Enter = Standard 'admin123'): "
+        read -r NEW_PW
+        if [[ -z "$NEW_PW" ]]; then
+            NEW_PW="admin123"
+            log_info "  Standard-Passwort 'admin123' wird verwendet"
+            break
+        fi
+        # Optional: Doppel-Eingabe zur Bestaetigung (nur fuer TTY)
         if [[ -t 0 ]]; then
-            read -rs ADMIN_PASSWORD || ADMIN_PASSWORD=""
-        else
-            read ADMIN_PASSWORD
+            echo -n "  Passwort bestaetigen: "
+            read -r CONFIRM_PW
+            if [[ "$NEW_PW" != "$CONFIRM_PW" ]]; then
+                log_warn "Passwoerter stimmen nicht ueberein — erneut versuchen"
+                continue
+            fi
         fi
-
-        # Wenn leer, später in config.js als Platzhalter lassen
-        if [[ -z "$ADMIN_PASSWORD" ]]; then
-            log_warn "Kein Passwort gesetzt. Du musst es später manuell in ${INSTALL_DIR}/config.js eintragen."
-            ADMIN_PASSWORD="__SET_ME_MANUALLY__"
-            return 0
-        fi
-
-        if [[ ${#ADMIN_PASSWORD} -lt 16 ]]; then
-            log_error "Passwort zu kurz (${#ADMIN_PASSWORD} Zeichen). Mindestens 16 erforderlich."
-            continue
-        fi
-
-        # Stärke-Check: mind. 3 von 4 Zeichenklassen
-        local classes=0
-        [[ "$ADMIN_PASSWORD" =~ [a-z] ]] && classes=$((classes + 1))
-        [[ "$ADMIN_PASSWORD" =~ [A-Z] ]] && classes=$((classes + 1))
-        [[ "$ADMIN_PASSWORD" =~ [0-9] ]] && classes=$((classes + 1))
-        [[ "$ADMIN_PASSWORD" =~ [^a-zA-Z0-9] ]] && classes=$((classes + 1))
-        if [[ $classes -lt 3 ]]; then
-            log_warn "Passwort ist schwach (verwende mind. 3 von: Klein-/Großbuchstaben, Zahlen, Sonderzeichen)"
-            echo -n "  Trotzdem verwenden? (j/n): "
-            read -r CONFIRM
-            [[ "$CONFIRM" =~ ^[jJyY]$ ]] && return 0
-            continue
-        fi
-        return 0
+        break
     done
+    ADMIN_PASSWORD="$NEW_PW"
 }
 
 # --- Schritt 3: /var/html vorbereiten + Repo klonen/updaten ---
