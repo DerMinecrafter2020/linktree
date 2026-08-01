@@ -537,7 +537,7 @@ else
         # Bei Sonderzeichen im Wert müssen wir das richtige Escaping nutzen.
         # Supabase CLI akzeptiert KEY=VALUE mit normaler Shell-Quoting,
         # aber wir nutzen --env-file fuer Sicherheit.
-        local env_tmp="/tmp/openweb-nav-env"
+        env_tmp="/tmp/openweb-nav-env"
         cat > "$env_tmp" <<EOF
 NAVIDROME_URL=$NAV_URL
 NAVIDROME_USER=$NAV_USER
