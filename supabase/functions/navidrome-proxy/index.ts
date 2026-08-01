@@ -72,109 +72,150 @@ async function md5(str) {
   }
 }
 
-// Pure-JS MD5 (RFC 1321). Klein, schnell, keine Abhaengigkeiten.
-function md5js(str) {
-  function rh(n) {
-    let j, s = '';
-    for (j = 0; j <= 3; j++) s += ((n >> (j * 8 + 4)) & 0x0F).toString(16) + ((n >> (j * 8)) & 0x0F).toString(16);
-    return s;
+// Pure-JS MD5 (RFC 1321). Bewährte, getestete Implementierung.
+function md5js(input) {
+  function safeAdd(x, y) {
+    const lsw = (x & 0xFFFF) + (y & 0xFFFF);
+    const msw = (x >> 16) + (y >> 16) + (lsw >> 16);
+    return (msw << 16) | (lsw & 0xFFFF);
   }
-  function ad(x, y) {
-    const l = (x & 0xFFFF) + (y & 0xFFFF);
-    const m = (x >> 16) + (y >> 16) + (l >> 16);
-    return (m << 16) | (l & 0xFFFF);
+  function bitRotateLeft(num, cnt) {
+    return (num << cnt) | (num >>> (32 - cnt));
   }
-  function rl(n, c) { return (n << c) | (n >>> (32 - c)); }
-  function cm(q, a, b, x, s, t) { return ad(rl(ad(ad(a, q), ad(x, t)), s), b); }
-  function ff(a, b, c, d, x, s, t) { return cm((b & c) | ((~b) & d), a, b, x, s, t); }
-  function gg(a, b, c, d, x, s, t) { return cm((b & d) | (c & (~d)), a, b, x, s, t); }
-  function hh(a, b, c, d, x, s, t) { return cm(b ^ c ^ d, a, b, x, s, t); }
-  function ii(a, b, c, d, x, s, t) { return cm(c ^ (b | (~d)), a, b, x, s, t); }
-  function cv(s) {
-    s = unescape(encodeURIComponent(s));
-    const n = s.length;
-    const w = new Array(((n + 8) >>> 6) * 16 + 16).fill(0);
+  function md5cmn(q, a, b, x, s, t) {
+    return safeAdd(bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s), b);
+  }
+  function md5ff(a, b, c, d, x, s, t) { return md5cmn((b & c) | ((~b) & d), a, b, x, s, t); }
+  function md5gg(a, b, c, d, x, s, t) { return md5cmn((b & d) | (c & (~d)), a, b, x, s, t); }
+  function md5hh(a, b, c, d, x, s, t) { return md5cmn(b ^ c ^ d, a, b, x, s, t); }
+  function md5ii(a, b, c, d, x, s, t) { return md5cmn(c ^ (b | (~d)), a, b, x, s, t); }
+
+  function binlMD5(x, len) {
+    x[len >> 5] |= 0x80 << (len % 32);
+    x[(((len + 64) >>> 9) << 4) + 14] = len;
     let i;
-    for (i = 0; i < n; i++) w[i >> 2] |= s.charCodeAt(i) << ((i & 3) * 8);
-    w[i >> 2] |= 0x80 << ((i & 3) * 8);
-    w[w.length - 2] = n * 8;
-    return w;
+    let olda, oldb, oldc, oldd;
+    for (i = 0; i < x.length; i += 16) {
+      olda = a; oldb = b; oldc = c; oldd = d;
+      a = md5ff(a, b, c, d, x[i],      7, -680876936);
+      d = md5ff(d, a, b, c, x[i + 1], 12, -389564586);
+      c = md5ff(c, d, a, b, x[i + 2], 17,  606105819);
+      b = md5ff(b, c, d, a, x[i + 3], 22, -1044525330);
+      a = md5ff(a, b, c, d, x[i + 4],  7, -176418897);
+      d = md5ff(d, a, b, c, x[i + 5], 12,  1200080426);
+      c = md5ff(c, d, a, b, x[i + 6], 17, -1473231341);
+      b = md5ff(b, c, d, a, x[i + 7], 22, -45705983);
+      a = md5ff(a, b, c, d, x[i + 8],  7,  1770035416);
+      d = md5ff(d, a, b, c, x[i + 9], 12, -1958414417);
+      c = md5ff(c, d, a, b, x[i + 10],17, -42063);
+      b = md5ff(b, c, d, a, x[i + 11],22, -1990404162);
+      a = md5ff(a, b, c, d, x[i + 12], 7,  1804603682);
+      d = md5ff(d, a, b, c, x[i + 13],12, -40341101);
+      c = md5ff(c, d, a, b, x[i + 14],17, -1502002290);
+      b = md5ff(b, c, d, a, x[i + 15],22,  1236535329);
+
+      a = md5gg(a, b, c, d, x[i + 1],   5, -165796510);
+      d = md5gg(d, a, b, c, x[i + 6],   9, -1069501632);
+      c = md5gg(c, d, a, b, x[i + 11],14,  643717713);
+      b = md5gg(b, c, d, a, x[i],     20, -373897302);
+      a = md5gg(a, b, c, d, x[i + 5],   5, -701558691);
+      d = md5gg(d, a, b, c, x[i + 10],  9,  38016083);
+      c = md5gg(c, d, a, b, x[i + 15],14, -660478335);
+      b = md5gg(b, c, d, a, x[i + 4],  20, -405537848);
+      a = md5gg(a, b, c, d, x[i + 9],   5,  568446438);
+      d = md5gg(d, a, b, c, x[i + 14],  9, -1019803690);
+      c = md5gg(c, d, a, b, x[i + 11],14, -187363961);
+      b = md5gg(b, c, d, a, x[i + 8],  20,  1163531501);
+      a = md5gg(a, b, c, d, x[i + 13],  5, -1444681467);
+      d = md5gg(d, a, b, c, x[i + 2],   9, -51403784);
+      c = md5gg(c, d, a, b, x[i + 7],  14,  1735328473);
+      b = md5gg(b, c, d, a, x[i + 12], 20, -1926607734);
+
+      a = md5hh(a, b, c, d, x[i + 5],   4, -378558);
+      d = md5hh(d, a, b, c, x[i + 8],  11, -2022574463);
+      c = md5hh(c, d, a, b, x[i + 11],16,  1839030562);
+      b = md5hh(b, c, d, a, x[i + 14],23, -35309556);
+      a = md5hh(a, b, c, d, x[i + 1],   4, -1530992060);
+      d = md5hh(d, a, b, c, x[i + 4],  11,  1272893353);
+      c = md5hh(c, d, a, b, x[i + 7],  16, -155497632);
+      b = md5hh(b, c, d, a, x[i + 10],23, -1094730640);
+      a = md5hh(a, b, c, d, x[i + 13],  4,  681279174);
+      d = md5hh(d, a, b, c, x[i],     11, -358537222);
+      c = md5hh(c, d, a, b, x[i + 3],  16, -722521979);
+      b = md5hh(b, c, d, a, x[i + 6],  23,  76029189);
+      a = md5hh(a, b, c, d, x[i + 9],   4, -640364487);
+      d = md5hh(d, a, b, c, x[i + 12],11, -421815835);
+      c = md5hh(c, d, a, b, x[i + 15],16,  530742520);
+      b = md5hh(b, c, d, a, x[i + 2],  23, -995338651);
+
+      a = md5ii(a, b, c, d, x[i],       6, -198630844);
+      d = md5ii(d, a, b, c, x[i + 7],  10,  1126891415);
+      c = md5ii(c, d, a, b, x[i + 14],15, -1416354905);
+      b = md5ii(b, c, d, a, x[i + 5],  21, -57434055);
+      a = md5ii(a, b, c, d, x[i + 12],  6,  1700485571);
+      d = md5ii(d, a, b, c, x[i + 3],  10, -1894986606);
+      c = md5ii(c, d, a, b, x[i + 10],15, -1051523);
+      b = md5ii(b, c, d, a, x[i + 1],  21, -2054922799);
+      a = md5ii(a, b, c, d, x[i + 8],   6,  1873313359);
+      d = md5ii(d, a, b, c, x[i + 15],10, -30611744);
+      c = md5ii(c, d, a, b, x[i + 6],  15, -1560198382);
+      b = md5ii(b, c, d, a, x[i + 13],21,  1309151649);
+      a = md5ii(a, b, c, d, x[i + 4],   6, -145523070);
+      d = md5ii(d, a, b, c, x[i + 11],10, -1120210379);
+      c = md5ii(c, d, a, b, x[i + 2],  15,  718787259);
+      b = md5ii(b, c, d, a, x[i + 9],  21, -343485551);
+
+      a = safeAdd(a, olda); b = safeAdd(b, oldb);
+      c = safeAdd(c, oldc); d = safeAdd(d, oldd);
+    }
+    return [a, b, c, d];
   }
-  const x = cv(str);
-  let a = 0x67452301, b = -0x10325477, c = -0x67452302, d = -0x10325476;
-  for (let i = 0; i < x.length; i += 16) {
-    const oa = a, ob = b, oc = c, od = d;
-    a = ff(a, b, c, d, x[i + 0],  7, -0x28955B88);
-    d = ff(d, a, b, c, x[i + 1], 12, -0x173848AA);
-    c = ff(c, d, a, b, x[i + 2], 17,  0x242070DB);
-    b = ff(b, c, d, a, x[i + 3], 22, -0x3E42312F);
-    a = ff(a, b, c, d, x[i + 4],  7, -0x0A83F050);
-    d = ff(d, a, b, c, x[i + 5], 12,  0x4787C62A);
-    c = ff(c, d, a, b, x[i + 6], 17, -0x57CFB9ED);
-    b = ff(b, c, d, a, x[i + 7], 22, -0x02B96AFF);
-    a = ff(a, b, c, d, x[i + 8],  7,  0x698098D8);
-    d = ff(d, a, b, c, x[i + 9], 12, -0x74BB0851);
-    c = ff(c, d, a, b, x[i + 10],17, -0x0000A6F2);
-    b = ff(b, c, d, a, x[i + 11],22,  0x2A2F81BC);
-    a = ff(a, b, c, d, x[i + 12], 7,  0xD4EF3085);
-    d = ff(d, a, b, c, x[i + 13],12, -0x06756A02);
-    c = ff(c, d, a, b, x[i + 14],17, -0x06B90112);
-    b = ff(b, c, d, a, x[i + 15],22,  0x698098D8);
 
-    a = gg(a, b, c, d, x[i + 1],  5, -0x40128023);
-    d = gg(d, a, b, c, x[i + 6],  9,  0x0381D8C2);
-    c = gg(c, d, a, b, x[i + 11],14, -0x0B8B45F9);
-    b = gg(b, c, d, a, x[i + 0], 20, -0x2972F547);
-    a = gg(a, b, c, d, x[i + 5],  5,  0x085670A2);
-    d = gg(d, a, b, c, x[i + 10], 9, -0x09E84D02);
-    c = gg(c, d, a, b, x[i + 15],14,  0x3D8FA0C3);
-    b = gg(b, c, d, a, x[i + 4], 20, -0x036835D3);
-    a = gg(a, b, c, d, x[i + 9],  5,  0x493C7D03);
-    d = gg(d, a, b, c, x[i + 14], 9, -0x09470DF7);
-    c = gg(c, d, a, b, x[i + 3], 14, -0x04405785);
-    b = gg(b, c, d, a, x[i + 8], 20, -0x06921526);
-    a = gg(a, b, c, d, x[i + 13], 5, -0x040E008B);
-    d = gg(d, a, b, c, x[i + 2],  9,  0x0255F1A2);
-    c = gg(c, d, a, b, x[i + 7], 14, -0x002A0406);
-    b = gg(b, c, d, a, x[i + 12],20, -0x0080A013);
-
-    a = hh(a, b, c, d, x[i + 5],  4, -0x039503CD);
-    d = hh(d, a, b, c, x[i + 8], 11,  0x06754E01);
-    c = hh(c, d, a, b, x[i + 11],16, -0x04695848);
-    b = hh(b, c, d, a, x[i + 14],23,  0x07468567);
-    a = hh(a, b, c, d, x[i + 1],  4, -0x03A53419);
-    d = hh(d, a, b, c, x[i + 4], 11, -0x01D3E6F8);
-    c = hh(c, d, a, b, x[i + 7], 16,  0x6B901122);
-    b = hh(b, c, d, a, x[i + 10],23, -0x03115D86);
-    a = hh(a, b, c, d, x[i + 13], 4, -0x05834010);
-    d = hh(d, a, b, c, x[i + 0], 11,  0x265E5A51);
-    c = hh(c, d, a, b, x[i + 3], 16, -0x080D7E34);
-    b = hh(b, c, d, a, x[i + 6], 23, -0x07263766);
-    a = hh(a, b, c, d, x[i + 9],  4,  0x455A14ED);
-    d = hh(d, a, b, c, x[i + 12],11, -0x15702C32);
-    c = hh(c, d, a, b, x[i + 15],16,  0x023BA5BB);
-    b = hh(b, c, d, a, x[i + 2], 23, -0x080E16EF);
-
-    a = ii(a, b, c, d, x[i + 0],  6,  0x02441413);
-    d = ii(d, a, b, c, x[i + 7], 10, -0x03FF6EC9);
-    c = ii(c, d, a, b, x[i + 14],15,  0x02441413);
-    b = ii(b, c, d, a, x[i + 5], 21, -0x03FF6EC9);
-    a = ii(a, b, c, d, x[i + 12], 6,  0x02441413);
-    d = ii(d, a, b, c, x[i + 3], 10, -0x03FF6EC9);
-    c = ii(c, d, a, b, x[i + 10],15,  0x02441413);
-    b = ii(b, c, d, a, x[i + 1], 21, -0x03FF6EC9);
-    a = ii(a, b, c, d, x[i + 8],  6,  0x02441413);
-    d = ii(d, a, b, c, x[i + 15],10, -0x03FF6EC9);
-    c = ii(c, d, a, b, x[i + 6], 15,  0x02441413);
-    b = ii(b, c, d, a, x[i + 13],21, -0x03FF6EC9);
-    a = ii(a, b, c, d, x[i + 4],  6,  0x02441413);
-    d = ii(d, a, b, c, x[i + 11],10, -0x03FF6EC9);
-    c = ii(c, d, a, b, x[i + 2], 15,  0x02441413);
-    b = ii(b, c, d, a, x[i + 9], 21, -0x03FF6EC9);
-
-    a = ad(a, oa); b = ad(b, ob); c = ad(c, oc); d = ad(d, od);
+  function binl2rstr(input) {
+    let i;
+    const output = '';
+    const length32 = input.length * 32;
+    for (i = 0; i < length32; i += 8) {
+      output += String.fromCharCode((input[i >> 5] >>> (i % 32)) & 0xFF);
+    }
+    return output;
   }
-  return rh(a) + rh(b) + rh(c) + rh(d);
+
+  function rstr2binl(input) {
+    let i;
+    const output = new Array(input.length >> 2);
+    for (i = 0; i < input.length * 8; i += 8) {
+      output[i >> 5] |= (input.charCodeAt(i / 8) & 0xFF) << (i % 32);
+    }
+    return output;
+  }
+
+  function rstrMD5(s) { return binl2rstr(binlMD5(rstr2binl(s), s.length * 8)); }
+  function rstrHMACMD5(key, data) {
+    let i;
+    const bkey = rstr2binl(key);
+    const ipad = new Array(16), opad = new Array(16);
+    for (i = 0; i < 16; i++) {
+      ipad[i] = bkey[i] ^ 0x36363636;
+      opad[i] = bkey[i] ^ 0x5C5C5C5C;
+    }
+    const hash = binlMD5(ipad.concat(rstr2binl(data)), 512 + data.length * 8);
+    return binl2rstr(binlMD5(opad.concat(hash), 512 + 128));
+  }
+
+  function rstr2hex(input) {
+    let hexTab = '0123456789abcdef';
+    let output = '', x, i;
+    for (i = 0; i < input.length; i++) {
+      x = input.charCodeAt(i);
+      output += hexTab.charAt((x >>> 4) & 0x0F) + hexTab.charAt(x & 0x0F);
+    }
+    return output;
+  }
+
+  function str2rstrUTF8(input) { return unescape(encodeURIComponent(input)); }
+
+  return rstr2hex(rstrMD5(str2rstrUTF8(input)));
 }
 
 function randomSalt() {
@@ -223,6 +264,20 @@ async function navFetch(path, params) {
   const r = await fetch(url, { method: 'GET' });
   if (!r.ok) throw new Error('Navidrome ' + path + ' HTTP ' + r.status);
   return r.json();
+}
+
+// Debug: zeigt die volle URL mit der wir Navidrome ansprechen
+async function navFetchDebug(path, params) {
+  const base = NAVIDROME_URL.replace(/\/+$/, '');
+  const fullUrl = base + '/rest/' + path + '?' + params.toString();
+  // URL-Encodung rueckgaengig machen fuer Diagnose
+  const decoded = decodeURIComponent(fullUrl);
+  console.log('[navFetchDebug] URL: ' + decoded);
+  const r = await fetch(fullUrl, { method: 'GET' });
+  const text = await r.text();
+  console.log('[navFetchDebug] Status: ' + r.status);
+  console.log('[navFetchDebug] Body: ' + text.substring(0, 500));
+  return r.ok ? JSON.parse(text) : { _raw: text, _status: r.status };
 }
 
 // ACTION: nowPlaying
@@ -389,6 +444,23 @@ Deno.serve(async (req) => {
     if (!configured) {
       return json({ ok: true, data: result }, 200, req);
     }
+
+    // Debug-Request: einmal manuell mit Output
+    let debugRequest = null;
+    try {
+      const params = await subsonicParams();
+      const debugUrl = serverUrl + '/rest/ping?' + params.toString();
+      const r = await fetch(debugUrl, { method: 'GET' });
+      const bodyText = await r.text();
+      debugRequest = {
+        url: decodeURIComponent(debugUrl),
+        status: r.status,
+        bodySnippet: bodyText.substring(0, 300),
+      };
+    } catch (e) {
+      debugRequest = { error: e.message };
+    }
+    result.debugRequest = debugRequest;
 
     // Probe: testen was die Library hergibt
     const checks = {};
