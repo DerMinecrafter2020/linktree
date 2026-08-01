@@ -565,6 +565,19 @@ echo -n "  Navidrome URL (z.B. https://music.deinedomain.de oder http://localhos
 read -r NAV_URL_PROMPT
 NAV_URL="${NAV_URL_PROMPT:-https://music.deinedomain.de}"
 
+# Wenn der User KEIN Navidrome konfiguriert, aber Supabase-Secrets
+# vorhanden sind, aktivieren wir den Player automatisch.
+if [[ -z "$NAV_USER" && "$SECRETS_READABLE" -eq 1 ]]; then
+    if NAV_URL_FROM_SECRET=$(get_supabase_secret "NAVIDROME_URL" 2>/dev/null) \
+       && [[ -n "$NAV_URL_FROM_SECRET" ]]; then
+        log_info "  Navidrome-Secrets gefunden — Player wird automatisch aktiviert"
+        NAV_URL="$NAV_URL_FROM_SECRET"
+        NAV_USER="(aus Supabase-Secrets)"
+        NAV_PASS_JSON='"(siehe Supabase-Secrets)"'
+        NAV_ENABLED="true"
+    fi
+fi
+
 # Frage Navidrome-Username
 echo -n "  Navidrome Username: "
 read -r NAV_USER

@@ -206,7 +206,9 @@
     isEnabled() {
       const c = this.cfg;
       if (!c) return false;
-      // proxyUrl reicht — wenn gesetzt, versuchen wir zu connecten
+      // Standardmaessig AN. Nur aus, wenn explizit enabled === false.
+      if (c.enabled === false) return false;
+      // proxyUrl muss gesetzt sein
       if (!c.proxyUrl) return false;
       // Platzhalter rausfiltern
       if ((c.proxyUrl || '').includes('YOUR-PROJECT')) return false;
