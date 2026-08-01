@@ -232,20 +232,37 @@ EOF
 # Default-Site deaktivieren, unsere aktivieren
 rm -f /etc/nginx/sites-enabled/default
 
+log_info "Site '${NGINX_SITE_NAME}' enablen..."
+log_info "  source: ${NGINX_CONF}"
+log_info "  target: ${NGINX_LINK}"
+
 # nginx-Site enablen via nginx_ensite (falls verfuegbar), sonst per Symlink
 if command -v nginx_ensite >/dev/null 2>&1; then
     nginx_ensite "${NGINX_SITE_NAME}"
-    log_ok "Site '${NGINX_SITE_NAME}' via nginx_ensite aktiviert"
+    log_ok "Site via nginx_ensite aktiviert"
 else
     ln -sf "$NGINX_CONF" "$NGINX_LINK"
-    log_ok "Site '${NGINX_SITE_NAME}' via Symlink aktiviert: ${NGINX_LINK}"
+    log_ok "Site via Symlink aktiviert: ${NGINX_LINK} -> $(readlink -f "$NGINX_LINK" 2>/dev/null || echo "?")"
 fi
 
-# Sicherstellen, dass der Link tatsaechlich existiert
+# Sicherstellen, dass der Link tatsaechlich existiert und auf unsere Conf zeigt
 if [[ ! -L "$NGINX_LINK" ]]; then
     log_error "Konnte Site nicht aktivieren — ${NGINX_LINK} existiert nicht"
     exit 1
 fi
+
+LINK_TARGET=$(readlink "$NGINX_LINK")
+if [[ "$LINK_TARGET" != "$NGINX_CONF" ]]; then
+    log_warn "Symlink zeigt auf '${LINK_TARGET}', erwartet '${NGINX_CONF}' — wird korrigiert"
+    ln -sf "$NGINX_CONF" "$NGINX_LINK"
+fi
+
+# Liste alle aktivierten Sites
+log_info "Aktivierte Sites:"
+for site in /etc/nginx/sites-enabled/*; do
+    [[ -e "$site" ]] || continue
+    log_info "  $(basename "$site") -> $(readlink "$site" 2>/dev/null || echo "(kein Symlink)")"
+done
 
 # WICHTIG: Wenn /etc/nginx/nginx.conf einen globalen 'root'-Eintrag
 # (z.B. /var/www/html) hat, ueberschreibt dieser unseren server-block-root.
