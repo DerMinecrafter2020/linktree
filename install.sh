@@ -58,43 +58,50 @@ apt-get install -y -qq nginx git curl ca-certificates ufw >/dev/null
 log_ok "Abhängigkeiten installiert"
 
 # --- Schritt 2: Admin-Passwort abfragen ---
-log_info "Konfiguration: Admin-Passwort für /admin.html"
-echo ""
-while true; do
-    echo -n "  Admin-Passwort (min. 16 Zeichen, Enter zum Überspringen): "
-    if [[ -t 0 ]]; then
-        read -rs ADMIN_PASSWORD || ADMIN_PASSWORD=""
-    else
-        read ADMIN_PASSWORD
-    fi
+# Wir packen das Passwort-Prompt in eine Funktion, weil 'local'
+# nur innerhalb von Funktionen erlaubt ist (nicht im while-Loop).
+prompt_admin_password() {
+    log_info "Konfiguration: Admin-Passwort für /admin.html"
+    echo ""
 
-    # Wenn leer, später in config.js als Platzhalter lassen
-    if [[ -z "$ADMIN_PASSWORD" ]]; then
-        log_warn "Kein Passwort gesetzt. Du musst es später manuell in ${INSTALL_DIR}/config.js eintragen."
-        ADMIN_PASSWORD="__SET_ME_MANUALLY__"
-        break
-    fi
+    while true; do
+        echo -n "  Admin-Passwort (min. 16 Zeichen, Enter zum Überspringen): "
+        if [[ -t 0 ]]; then
+            read -rs ADMIN_PASSWORD || ADMIN_PASSWORD=""
+        else
+            read ADMIN_PASSWORD
+        fi
 
-    if [[ ${#ADMIN_PASSWORD} -lt 16 ]]; then
-        log_error "Passwort zu kurz (${#ADMIN_PASSWORD} Zeichen). Mindestens 16 erforderlich."
-        continue
-    fi
+        # Wenn leer, später in config.js als Platzhalter lassen
+        if [[ -z "$ADMIN_PASSWORD" ]]; then
+            log_warn "Kein Passwort gesetzt. Du musst es später manuell in ${INSTALL_DIR}/config.js eintragen."
+            ADMIN_PASSWORD="__SET_ME_MANUALLY__"
+            return 0
+        fi
 
-    # Stärke-Check: mind. 3 von 4 Zeichenklassen
-    local classes=0
-    [[ "$ADMIN_PASSWORD" =~ [a-z] ]] && classes=$((classes + 1))
-    [[ "$ADMIN_PASSWORD" =~ [A-Z] ]] && classes=$((classes + 1))
-    [[ "$ADMIN_PASSWORD" =~ [0-9] ]] && classes=$((classes + 1))
-    [[ "$ADMIN_PASSWORD" =~ [^a-zA-Z0-9] ]] && classes=$((classes + 1))
-    if [[ $classes -lt 3 ]]; then
-        log_warn "Passwort ist schwach (verwende mind. 3 von: Klein-/Großbuchstaben, Zahlen, Sonderzeichen)"
-        echo -n "  Trotzdem verwenden? (j/n): "
-        read -r CONFIRM
-        [[ "$CONFIRM" =~ ^[jJyY]$ ]] && break
-        continue
-    fi
-    break
-done
+        if [[ ${#ADMIN_PASSWORD} -lt 16 ]]; then
+            log_error "Passwort zu kurz (${#ADMIN_PASSWORD} Zeichen). Mindestens 16 erforderlich."
+            continue
+        fi
+
+        # Stärke-Check: mind. 3 von 4 Zeichenklassen
+        local classes=0
+        [[ "$ADMIN_PASSWORD" =~ [a-z] ]] && classes=$((classes + 1))
+        [[ "$ADMIN_PASSWORD" =~ [A-Z] ]] && classes=$((classes + 1))
+        [[ "$ADMIN_PASSWORD" =~ [0-9] ]] && classes=$((classes + 1))
+        [[ "$ADMIN_PASSWORD" =~ [^a-zA-Z0-9] ]] && classes=$((classes + 1))
+        if [[ $classes -lt 3 ]]; then
+            log_warn "Passwort ist schwach (verwende mind. 3 von: Klein-/Großbuchstaben, Zahlen, Sonderzeichen)"
+            echo -n "  Trotzdem verwenden? (j/n): "
+            read -r CONFIRM
+            [[ "$CONFIRM" =~ ^[jJyY]$ ]] && return 0
+            continue
+        fi
+        return 0
+    done
+}
+
+prompt_admin_password
 
 # --- Schritt 3: /var/html vorbereiten + Repo klonen/updaten ---
 log_info "Bereite ${INSTALL_DIR} vor und klone GitHub-Repo..."
