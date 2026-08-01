@@ -177,38 +177,19 @@
   // Bei Fehler/kein Server: Player-Container wird ausgeblendet.
   //
   // Konfigurations-Reihenfolge (spaeter gewinnt):
-  //   1. config.js (NAVIDROME_CONFIG)        — Defaults / Platzhalter
-  //   2. localStorage 'openweb-navidrome-config' — vom Admin gespeichert
-  const NP_STORAGE_KEY = 'openweb-navidrome-config';
-
-  function loadNavidromeFromStorage() {
-    try {
-      const raw = localStorage.getItem(NP_STORAGE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return {
-        enabled: !!parsed.enabled,
-        proxyUrl: typeof parsed.proxyUrl === 'string' ? parsed.proxyUrl : '',
-        pollIntervalSec: Math.min(600, Math.max(10, parseInt(parsed.pollIntervalSec || 30, 10) || 30)),
-      };
-    } catch (_) { return null; }
-  }
+  // Navidrome-Config kommt komplett aus window.NAVIDROME_CONFIG (von
+  // config.js oder vom Admin-Panel in den Speicher geschrieben).
+  // KEIN localStorage mehr. Bei Seiten-Reload muss der User ggf.
+  // die Werte im Admin-Panel neu setzen.
 
   function mergeNavidromeConfig() {
     const base = window.NAVIDROME_CONFIG || {};
-    const stored = loadNavidromeFromStorage();
-    // Default: enabled=true. User kann im Admin-Panel deaktivieren.
-    const enabled = stored && typeof stored.enabled === 'boolean'
-        ? stored.enabled
-        : true;  // ← Default AN
-    if (!stored) {
-      return Object.assign({}, base, { enabled: enabled });
-    }
-    // localStorage ueberschreibt Defaults; URL/User/Pass kommen NIE in den Browser
+    // window.NAVIDROME_CONFIG hat bereits enabled/proxyUrl/pollIntervalSec
+    // (entweder aus config.js oder vom Admin gesetzt).
     return Object.assign({}, base, {
-      enabled: enabled,
-      proxyUrl: stored.proxyUrl || base.proxyUrl,
-      pollIntervalSec: stored.pollIntervalSec || base.pollIntervalSec || 30,
+      enabled: typeof base.enabled === 'boolean' ? base.enabled : true,
+      proxyUrl: base.proxyUrl || '',
+      pollIntervalSec: base.pollIntervalSec || 30,
     });
   }
 

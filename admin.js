@@ -26,87 +26,16 @@
   //    • Vergleich erfolgt konstant (timing-safe)
   //    • Passwort wird nirgends im Klartext gespeichert
   // =========================================================
-  const STORAGE_PW_HASH = 'linktree-admin-pw-hash';
-  const STORAGE_PW_SALT = 'linktree-admin-pw-salt';
-  const STORAGE_PW_ITER = 'linktree-admin-pw-iter';
-  const STORAGE_PW_ALGO = 'linktree-admin-pw-algo';  // 'pbkdf2' oder 'sha256'
-  const STORAGE_PW_MUST_CHANGE = 'linktree-admin-pw-must-change';
-  const DEFAULT_PASSWORD = 'admin123';
-  const SESSION_KEY = 'linktree-admin-session';
-  const SESSION_DURATION = 60 * 60 * 1000; // 1 Stunde
+  // KEIN localStorage mehr!
+  // =========================================================
+  // Das Admin-Passwort wird auf dem SERVER gehasht und geprueft
+  // (auth-login Edge-Function). Sobald das Login erfolgreich ist,
+  // bekommen wir ein JWT-Token zurueck, das wir nur in sessionStorage
+  // halten (verschwindet beim Tab-Schliessen).
+  const SESSION_KEY = 'linktree-admin-session';   // nur Ablaufzeit
+  const SESSION_DURATION = 60 * 60 * 1000;
   const TAB_STORAGE_KEY = 'linktree-admin-active-tab';
-  const PBKDF2_ITERATIONS = 210000;
-  const PBKDF2_HASH = 'SHA-256';
-  const PBKDF2_KEYLEN = 32;
-
-  // PBKDF2 → SHA-256.
-// Primaer: Web Crypto API (schnell, in jedem modernen Browser nativ).
-// Fallback: einfacher SHA-256-Hash (ohne Salt, ohne Iteration) nur als
-// Notbehelf fuer unsichere Origins (HTTP statt HTTPS, file://), wo
-// Browser crypto.subtle blockieren.
-//
-// WICHTIG: Das ist KEIN sicherer Passwort-Hash mehr — nur ein Workaround
-// damit Login ueberhaupt funktioniert. Im Produktivbetrieb sollte die
-// Seite IMMER ueber HTTPS laufen.
-async function pbkdf2(password, saltB64, iterations) {
-    if (window.crypto && window.crypto.subtle) {
-      try {
-        const enc = new TextEncoder();
-        const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
-        const keyMaterial = await crypto.subtle.importKey(
-          'raw',
-          enc.encode(password),
-          { name: 'PBKDF2' },
-          false,
-          ['deriveBits']
-        );
-        const bits = await crypto.subtle.deriveBits(
-          { name: 'PBKDF2', salt, iterations, hash: PBKDF2_HASH },
-          keyMaterial,
-          PBKDF2_KEYLEN * 8
-        );
-        return { hash: bufferToBase64(bits), algo: 'pbkdf2' };
-      } catch (e) {
-        console.warn('[security] PBKDF2 fehlgeschlagen, fallback auf SHA256:', e.message);
-        // Fallthrough zu SHA-256
-      }
-    }
-    // Fallback: simple SHA-256(salt + password) — nur fuer unsichere Origins
-    if (!window.crypto || !window.crypto.subtle) {
-      console.warn('[security] Web Crypto nicht verfuegbar — verwende unsicheren SHA256-Fallback. Seite ueber HTTPS aufrufen!');
-    }
-    const enc = new TextEncoder();
-    const data = enc.encode(saltB64 + ':' + password);
-    const hashBuf = await crypto.subtle.digest('SHA-256', data);
-    return { hash: bufferToBase64(hashBuf), algo: 'sha256' };
-  }
-
-  function bufferToBase64(buf) {
-    const bytes = new Uint8Array(buf);
-    let bin = '';
-    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-    return btoa(bin);
-  }
-
-  function randomSalt(bytes = 16) {
-    const arr = new Uint8Array(bytes);
-    crypto.getRandomValues(arr);
-    let bin = '';
-    for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
-    return btoa(bin);
-  }
-
-  // Konstante-Zeit-Vergleich (timing-safe) — verhindert
-  // das Messen der Passwortlänge über Reaktionszeit.
-  function timingSafeEqual(a, b) {
-    if (typeof a !== 'string' || typeof b !== 'string') return false;
-    const len = Math.max(a.length, b.length);
-    let diff = a.length ^ b.length;
-    for (let i = 0; i < len; i++) {
-      diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
-    }
-    return diff === 0;
-  }
+  const DEFAULT_PASSWORD = 'admin123';  // nur Anzeige im Form
 
   // =========================================================
   // STATE
@@ -117,87 +46,65 @@ async function pbkdf2(password, saltB64, iterations) {
   };
 
   // =========================================================
-  // PASSWORD (gehashed)
+  // AUTH (server-side via auth-login Edge-Function)
   // =========================================================
-  async function ensureDefaultHash() {
-    // Wenn noch kein Hash existiert (Erstinstallation), lege Default an.
-    if (!localStorage.getItem(STORAGE_PW_HASH)) {
-      // Warnung, wenn wir auf unsicherem Origin laufen
-      const isInsecure = !window.crypto || !window.crypto.subtle;
-      if (isInsecure && location.protocol !== 'file:') {
-        // Banner, aber kein Abbruch — pbkdf2 nutzt SHA-256-Fallback
-        const banner = document.createElement('div');
-        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#fbb;color:#800;padding:8px;font-family:sans-serif;text-align:center;z-index:99999;font-size:13px;';
-        banner.innerHTML = '⚠️ Unsicherer Origin: Login nutzt SHA-256-Fallback (schwächer). Für volle Sicherheit Seite über HTTPS aufrufen.';
-        document.body.appendChild(banner);
-      }
-      const salt = randomSalt();
-      const result = await pbkdf2(DEFAULT_PASSWORD, salt, PBKDF2_ITERATIONS);
-      localStorage.setItem(STORAGE_PW_SALT, salt);
-      localStorage.setItem(STORAGE_PW_ITER, String(PBKDF2_ITERATIONS));
-      localStorage.setItem(STORAGE_PW_HASH, result.hash);
-      localStorage.setItem(STORAGE_PW_ALGO, result.algo);
-      // Beim ersten Login MUSS das Passwort geaendert werden
-      localStorage.setItem(STORAGE_PW_MUST_CHANGE, '1');
-    }
+  // Das JWT-Token wird von supabase-client.js in sessionStorage
+  // gespeichert (TOKEN_KEY = 'admin-token'). Wir greifen hier
+  // nur lesend darauf zu, weil supabase-client.js schreibt.
+  const TOKEN_KEY = 'admin-token';
+  const TOKEN_EXP = 'admin-token-exp';
+
+  function setSession() {
+    // Supabase-client hat das Token bereits in sessionStorage gesetzt.
+    // Diese Funktion ist ein no-op für Kompatibilitaet.
+  }
+  function hasValidSession() {
+    const tok = sessionStorage.getItem(TOKEN_KEY);
+    if (!tok) return false;
+    const exp = parseInt(sessionStorage.getItem(TOKEN_EXP) || '0', 10);
+    if (!exp) return true;  // ungültiges Format, aber Token existiert
+    return Date.now() < (exp * 1000) - 60_000;
+  }
+  function getAuthHeader() {
+    const tok = sessionStorage.getItem(TOKEN_KEY);
+    return tok ? `Bearer ${tok}` : '';
+  }
+  function clearSession() {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_EXP);
+    sessionStorage.removeItem(SESSION_KEY);
   }
 
-  async function getStoredPasswordHash() {
-    return {
-      hash: localStorage.getItem(STORAGE_PW_HASH),
-      salt: localStorage.getItem(STORAGE_PW_SALT),
-      iter: Number(localStorage.getItem(STORAGE_PW_ITER)) || PBKDF2_ITERATIONS,
-      algo: localStorage.getItem(STORAGE_PW_ALGO) || 'pbkdf2'
-    };
+  // Login via Supabase Edge-Function (auth-login)
+  // Antwort: { ok: true, token: 'eyJ...', expiresAt: 1234567890 }
+  async function loginServer(password) {
+    return await window.SupabaseAPI.authLogin({ password: password, honeypot: '' });
   }
 
-  async function verifyPassword(input) {
-    if (!input) return false;
-    const { hash, salt, iter, algo } = await getStoredPasswordHash();
-    if (!hash || !salt) return false;
-    const result = await pbkdf2(String(input), salt, iter);
-    // Algorithmus muss gleich sein wie beim Erstellen des Hashes
-    // (sonst Mismatch bei PBKDF2-vs-SHA256-Fallback)
-    const storedAlgo = algo || 'pbkdf2';
-    if (result.algo !== storedAlgo) {
-      console.warn(`[security] Hash-Algorithmus Mismatch: stored=${storedAlgo}, computed=${result.algo}. Login mit altem Passwort nicht moeglich.`);
-      return false;
-    }
-    return timingSafeEqual(result.hash, hash);
-  }
-
+  // Alte PW-Funktionen (bleiben fuer Migration / Force-Change-Fallback)
+  // === REMOVED: localStorage-Password-Logik ===
+  // Wir speichern KEIN Passwort mehr client-seitig. setPassword ruft
+  // die Server-Edge-Function auth-change-password.
   async function setPassword(newPw) {
-    const salt = randomSalt();
-    const result = await pbkdf2(newPw, salt, PBKDF2_ITERATIONS);
-    localStorage.setItem(STORAGE_PW_SALT, salt);
-    localStorage.setItem(STORAGE_PW_ITER, String(PBKDF2_ITERATIONS));
-    localStorage.setItem(STORAGE_PW_HASH, result.hash);
-    localStorage.setItem(STORAGE_PW_ALGO, result.algo);
-    // Nach Passwort-Aenderung ist der Force-Change-Flag weg
-    localStorage.removeItem(STORAGE_PW_MUST_CHANGE);
+    return await window.SupabaseAPI.authChangePassword({
+      oldPassword: '',  // bei Force-Change weiss der Server das schon
+      newPassword: newPw
+    });
   }
 
+  // Force-Change-Check: server liefert ein Flag im Token
   function mustChangePassword() {
-    return localStorage.getItem(STORAGE_PW_MUST_CHANGE) === '1';
+    const tok = sessionStorage.getItem(TOKEN_KEY);
+    if (!tok) return false;
+    try {
+      const parts = tok.split('.');
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      return payload.must_change === true;
+    } catch { return false; }
   }
 
   const $  = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
-
-  // =========================================================
-  // SESSION
-  // =========================================================
-  function setSession() {
-    const until = Date.now() + SESSION_DURATION;
-    // Anti-CSRF-Token: wird bei Mutationen mitgeschickt
-    const csrf = randomSalt(24);
-    sessionStorage.setItem(SESSION_KEY, String(until));
-    sessionStorage.setItem('admin-token', csrf);
-    sessionStorage.setItem('admin-token-created', String(Date.now()));
-  }
-  function hasValidSession() {
-    const v = Number(sessionStorage.getItem(SESSION_KEY));
-    return Number.isFinite(v) && v > Date.now();
   }
   function clearSession() {
     sessionStorage.removeItem(SESSION_KEY);
@@ -262,9 +169,10 @@ async function pbkdf2(password, saltB64, iterations) {
 
       const start = performance.now();
 
-      // ---- Auth-Modus wählen ----
-      const useEdgeAuth = !!window.SUPABASE_CONFIG?.authEnabled
-                        && !!window.SUPABASE_CONFIG?.authLoginUrl;
+// ---- Auth-Modus wählen ----
+      // IMMER server-side (auth-login Edge-Function). Wir speichern
+      // kein Passwort im Browser, daher ist das die einzige Option.
+      const useEdgeAuth = !!window.SUPABASE_CONFIG?.authLoginUrl;
 
       let ok = false;
       try {
@@ -273,10 +181,11 @@ async function pbkdf2(password, saltB64, iterations) {
           await window.db.login(pw, honeypot);
           ok = true;
         } else {
-          // Lokaler PBKDF2-Fallback
-          ok = await verifyPassword(pw);
+          // Kein Server-Login konfiguriert -> Login nicht moeglich
+          throw new Error('auth-login nicht konfiguriert');
         }
-      } catch {
+      } catch (e) {
+        console.warn('[login] failed:', e.message);
         ok = false;
       }
 
@@ -1270,11 +1179,10 @@ async function pbkdf2(password, saltB64, iterations) {
     // Hint-Text je nach Auth-Modus anpassen
     const hint = $('#change-pw-hint');
     if (hint) {
-      const useEdgeAuth = !!window.SUPABASE_CONFIG?.authEnabled
-                        && !!window.SUPABASE_CONFIG?.authChangePasswordUrl;
+      const useEdgeAuth = !!window.SUPABASE_CONFIG?.authChangePasswordUrl;
       hint.innerHTML = useEdgeAuth
         ? 'Passwort wird <strong>serverseitig</strong> als PBKDF2-Hash in Supabase gespeichert. Aktuelles Passwort zur Bestätigung nötig.'
-        : 'Passwort wird lokal als PBKDF2-Hash in <code>localStorage</code> gespeichert.';
+        : 'Passwort-Endpoint nicht konfiguriert — bitte Supabase Edge-Function "auth-change-password" deployen.';
     }
 
     // ---- Passwort ändern ----
@@ -1293,24 +1201,20 @@ async function pbkdf2(password, saltB64, iterations) {
         return;
       }
 
-      const useEdgeAuth = !!window.SUPABASE_CONFIG?.authEnabled
-                        && !!window.SUPABASE_CONFIG?.authChangePasswordUrl;
+      // IMMER server-side (kein localStorage-Fallback mehr)
+      const useEdgeAuth = !!window.SUPABASE_CONFIG?.authChangePasswordUrl;
 
       try {
         if (useEdgeAuth) {
-          // Server-verifies das alte PW, schreibt neuen Hash in DB
           if (opPw.length < 1) {
             toast('Bitte aktuelles Passwort eingeben', true);
             return;
           }
           await window.db.changePassword(opPw, np);
           form.reset();
-          toast('🔑 Passwort serverseitig geändert (DB-Hash, 210 000 Iter.)');
+          toast('🔑 Passwort serverseitig geändert');
         } else {
-          // Fallback: alter lokaler Hash
-          await setPassword(np);
-          form.reset();
-          toast('🔑 Passwort geändert (PBKDF2-Hash, ' + PBKDF2_ITERATIONS + ' Iterationen)');
+          toast('Passwort-Endpoint nicht konfiguriert', true);
         }
       } catch (err) {
         toast('Fehler: ' + err.message, true);
@@ -1388,18 +1292,25 @@ async function pbkdf2(password, saltB64, iterations) {
           errEl.textContent = 'Passwörter stimmen nicht überein';
           return;
         }
-        // Aktuelles PW muss 'admin123' sein (wir sind im Force-Change-Flow)
-        if (!(await verifyPassword(oldPw))) {
-          errEl.textContent = 'Aktuelles Passwort ist falsch';
+
+        // Server-side: altes PW verifizieren + neues setzen
+        // Da wir schon eingeloggt sind (JWT im sessionStorage), reicht
+        // es, auth-change-password mit dem aktuellen JWT + oldPW aufzurufen.
+        try {
+          await window.SupabaseAPI.authChangePassword({
+            oldPassword: oldPw,
+            newPassword: newPw
+          });
+        } catch (err) {
+          errEl.textContent = 'Server-Fehler: ' + err.message;
           return;
         }
-        // PW aendern (setPassword entfernt das Must-Change-Flag automatisch)
-        await setPassword(newPw);
+
         // Modal entfernen, Admin wieder interaktiv
         modal.remove();
         const appEl2 = document.getElementById('app');
         if (appEl2) appEl2.style.pointerEvents = '';
-        toast('🔑 Passwort erfolgreich geändert!');
+        toast('🔑 Passwort erfolgreich auf dem Server geändert!');
       });
     }
   }
@@ -1480,41 +1391,30 @@ async function pbkdf2(password, saltB64, iterations) {
   // =========================================================
   // NAVIDROME (Tab "Musik")
   // =========================================================
-  // Werte landen in localStorage (nicht in Supabase) — sind also nur
-  // für diesen Browser sichtbar und niemals öffentlich erreichbar.
-  const NP_STORAGE_KEY = 'openweb-navidrome-config';
+  // KEIN localStorage mehr! Navidrome-Config wird in-memory gehalten
+  // (window.NAVIDROME_CONFIG) und nach Reload neu aus dem Formular
+  // geladen. Credentials (URL/User/Pass) bleiben in Supabase-Secrets
+  // und werden NIE im Browser gespeichert.
 
   function loadNavidromeConfig() {
-    try {
-      const raw = localStorage.getItem(NP_STORAGE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      // Credentials (URL/User/Pass) werden NICHT mehr im Browser gespeichert.
-      return {
-        enabled: !!parsed.enabled,
-        proxyUrl: typeof parsed.proxyUrl === 'string' ? parsed.proxyUrl : '',
-        pollIntervalSec: Math.min(600, Math.max(10, parseInt(parsed.pollIntervalSec || 30, 10) || 30)),
-      };
-    } catch (_) { return null; }
+    // Nur die Browser-Override-Werte, KEIN localStorage
+    return window.NAVIDROME_CONFIG || null;
   }
 
   function saveNavidromeConfig(cfg) {
-    // Nur lokale Einstellungen speichern — Credentials bleiben in Supabase Secrets
+    // In-memory speichern — kein localStorage!
     const minimal = {
       enabled: !!cfg.enabled,
       proxyUrl: cfg.proxyUrl || '',
       pollIntervalSec: cfg.pollIntervalSec || 30,
     };
-    localStorage.setItem(NP_STORAGE_KEY, JSON.stringify(minimal));
-    // Auch in window.NAVIDROME_CONFIG schreiben, damit die Hauptseite
-    // bei Reload den gleichen Stand hat (wenn sie später geladen wird)
     window.NAVIDROME_CONFIG = Object.assign({}, window.NAVIDROME_CONFIG || {}, minimal);
   }
 
   function renderNavidromeForm() {
     const form = $('#navidrome-form');
     if (!form) return;
-    const cfg = loadNavidromeConfig() || {
+    const cfg = window.NAVIDROME_CONFIG || {
       enabled: false,
       proxyUrl: (window.SUPABASE_CONFIG?.url
         ? window.SUPABASE_CONFIG.url.replace(/\/$/, '') + '/functions/v1/navidrome-proxy'
@@ -1615,17 +1515,8 @@ async function pbkdf2(password, saltB64, iterations) {
   // BOOT
   // =========================================================
   document.addEventListener('DOMContentLoaded', async () => {
-    // Beim ersten Start wird das Default-Passwort als Hash persistiert.
-    // Falls Web Crypto nicht verfuegbar ist (z.B. file://-Origin), wird
-    // ein grosses Error-Overlay angezeigt und der Boot bricht ab.
-    try {
-      await ensureDefaultHash();
-    } catch (e) {
-      console.warn('hash init failed:', e.message);
-      // Login-Form nicht-anzeigen, damit der User die Meldung sieht
-      const overlay = document.getElementById('login-overlay');
-      if (overlay) overlay.style.display = 'none';
-    }
+    // KEIN ensureDefaultHash() mehr — das Passwort liegt nur auf dem Server.
+    // Hier pruefen wir nur, ob eine aktive Session im Browser existiert.
 
     // Defensive: Wenn die App via file:// (lokal) läuft, gib einen Warnhinweis
     if (location.protocol === 'file:') {
