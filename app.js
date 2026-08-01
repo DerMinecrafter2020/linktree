@@ -274,11 +274,33 @@
       // Bar beim Reload auf 0 zurueck, bis der erste Server-Tick kommt).
       this.bootstrapFromLocalStorage();
       await this.tick();
-      // Server-Polling: langsamer (Standard 30s)
-      const pollInterval = Math.max(10, this.cfg.pollIntervalSec || 30) * 1000;
-      this.pollTimer = setInterval(() => this.tick(), pollInterval);
+      // Server-Polling: alle 5s fuer schnelle Track-Stop-Erkennung
+      // (unabhaengig vom konfigurierten Intervall)
+      this.pollTimer = setInterval(() => this.tick(), 5000);
       // Lokales Progress-Polling: jede Sekunde, fuer die Bar-Animation
-      this.progressTimer = setInterval(() => this.updateProgress(), 1000);
+      this.progressTimer = setInterval(() => {
+        this.updateProgress();
+        this.checkTrackStale();
+      }, 1000);
+    },
+
+    // Prueft, ob der Track stale ist (Position bewegt sich nicht mehr)
+    // -> vermutlich pausiert oder gestoppt
+    checkTrackStale() {
+      if (!this.currentTrack) return;
+      const now = Date.now();
+      const elapsedSinceServer = (now - this.progressStartedAt) / 1000;
+      const localPos = this.initialPosition + elapsedSinceServer;
+      // Wenn die letzte Server-Position sehr jung war (< 5s) und wir
+      // lokal schon am Ende sind, nichts tun (Song koennte gerade enden).
+      const duration = Number(this.currentTrack.duration || 0);
+      if (duration > 0 && localPos > duration + 2) {
+        // Wir sind ueber das Ende hinaus -> Song fertig
+        console.log('[navidrome] track ended');
+        this.currentTrack = null;
+        localStorage.removeItem(NP_POS_STORAGE_KEY);
+        this.renderIdle();
+      }
     },
 
     // Beim Reload: sofort die letzte bekannte Track-Position anzeigen,
@@ -335,6 +357,38 @@
       // Zeitanzeige unter der Progress-Bar aktualisieren
       const timePos = wrap.querySelector('.np-time-pos');
       if (timePos) timePos.textContent = formatTime(position);
+    },
+
+    // Prueft, ob der Track stale ist (lange keine Position-Aenderung)
+    // -> vermutlich pausiert oder gestoppt. Da das Server-Polling nur alle
+    // 5s tickt, warten wir bis 30s ohne Server-Aenderung.
+    checkTrackStale() {
+      if (!this.currentTrack) return;
+      const now = Date.now();
+      const sinceLastServer = (now - this.progressStartedAt) / 1000;
+      // Wenn wir 35s nichts vom Server gehoert haben UND wir die letzten 15s
+      // die gleiche Position haben (innerhalb 2s Toleranz), dann ist der
+      // Track wahrscheinlich gestoppt oder pausiert.
+      if (sinceLastServer > 35) {
+        const localPos = this.initialPosition + sinceLastServer;
+        const staleTime = (now - this.progressStartedAt) / 1000;
+        // Wenn die Position sich nicht signifikant weiterbewegt, Idle annehmen.
+        // Wir nutzen: wenn Position nach 35s Server-Stille unter Duration ist
+        // UND die letzte bekannte Server-Position + 35s nicht ueber Duration,
+        // ist es wahrscheinlich gestoppt (kein Player mehr aktiv).
+        // Aber: Navidrome gibt in getNowPlaying NUR aktive Player zurueck.
+        // Wenn unser Eintrag dort wegfaellt, kommt naechster Server-Tick mit
+        // playing=false. Wir verlassen uns also auf das 5s-Server-Polling.
+        // Hier nur: wenn die lokale Schaetzung das Track-Ende ueberschritten
+        // hat, wechsel auf Idle.
+        const duration = Number(this.currentTrack.duration || 0);
+        if (duration > 0 && localPos >= duration) {
+          console.log('[navidrome] track ended (local estimate past duration)');
+          this.currentTrack = null;
+          localStorage.removeItem(NP_POS_STORAGE_KEY);
+          this.renderIdle();
+        }
+      }
     },
 
     async tick() {
