@@ -251,14 +251,26 @@ async function getNowPlaying() {
     const params = subsonicParams();
     const data = await navFetch('getNowPlaying', params);
     const resp = data && data['subsonic-response'];
-    const entry = resp && resp.nowPlaying && resp.nowPlaying.entry && resp.nowPlaying.entry[0];
-    if (entry) {
-      return buildPlayingEntry(entry, 'nowPlaying', serverUrl);
+    const allEntries = resp && resp.nowPlaying && resp.nowPlaying.entry;
+    const entries = Array.isArray(allEntries) ? allEntries : (allEntries ? [allEntries] : []);
+
+    // Filtere: nur Entries vom konfigurierten User.
+    // Subsonic gibt alle Player zurueck; wir wollen nur den User,
+    // dessen Credentials wir nutzen (Username = NAVIDROME_USER).
+    const usernameLc = NAVIDROME_USER.toLowerCase();
+    const myEntries = entries.filter((e) => {
+      const u = (e && e.username ? String(e.username) : '').toLowerCase();
+      return u === usernameLc;
+    });
+
+    if (myEntries.length > 0) {
+      return buildPlayingEntry(myEntries[0], 'nowPlaying', serverUrl);
     }
-    // Fallback: getPlayQueue
+    // Falls kein Eintrag fuer unseren User, schauen wir in der eigenen
+    // Play-Queue nach.
     const queue = await getPlayQueueForUser();
     if (queue) return queue;
-    return { playing: false, url: serverUrl };
+    return { playing: false, url: serverUrl, filteredOut: entries.length };
   } catch (err) {
     console.error('nowPlaying failed:', err && err.message);
     return { playing: false, error: err && err.message, url: serverUrl };
