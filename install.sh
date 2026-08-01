@@ -156,6 +156,19 @@ install_supabase_cli() {
     fi
     log_info "supabase CLI nicht gefunden — versuche Installation..."
 
+    # Variante A: Offizieller one-liner von Supabase (curl | bash)
+    # Quelle: https://github.com/supabase/cli#install-the-cli
+    log_info "  Versuche offiziellen one-liner (curl | bash)..."
+    if curl -fsSL https://raw.githubusercontent.com/supabase/cli/main/install | bash 2>/dev/null; then
+        if command -v supabase >/dev/null 2>&1; then
+            log_ok "supabase CLI via offiziellem one-liner installiert"
+            return 0
+        fi
+    fi
+
+    # Variante B: .deb-Paket von GitHub Releases (fuer Debian/Ubuntu)
+    log_info "  one-liner fehlgeschlagen, versuche .deb-Paket..."
+
     # Architektur erkennen
     local arch
     arch=$(uname -m)
@@ -168,7 +181,6 @@ install_supabase_cli() {
             ;;
     esac
 
-    # 1) Versuch: .deb herunterladen und installieren
     local deb_url="https://github.com/supabase/cli/releases/latest/download/supabase_linux_${arch}.deb"
     local deb_file="/tmp/supabase-cli.deb"
 
@@ -181,7 +193,7 @@ install_supabase_cli() {
         rm -f "$deb_file"
     fi
 
-    # 2) Versuch: .tar.gz herunterladen und nach /usr/local/bin entpacken
+    # Variante C: .tar.gz herunterladen und nach /usr/local/bin entpacken
     log_info "  .deb fehlgeschlagen, versuche tar.gz..."
     local tar_url="https://github.com/supabase/cli/releases/latest/download/supabase_linux_${arch}.tar.gz"
     local tar_file="/tmp/supabase-cli.tar.gz"
