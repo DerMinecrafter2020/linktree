@@ -229,154 +229,37 @@ async function navFetch(path, params) {
 async function getNowPlaying() {
   const serverUrl = NAVIDROME_URL.replace(/\/+$/, '');
   try {
-    // 1) Versuche zuerst getNowPlaying (liefert nur aktive Player)
+    // Nur getNowPlaying: zeigt aktuell laufende Tracks an, sonst nichts.
     const params = await subsonicParams();
     const data   = await navFetch('getNowPlaying', params);
 
     const resp  = data && data['subsonic-response'];
     const entry = resp && resp.nowPlaying && resp.nowPlaying.entry && resp.nowPlaying.entry[0];
 
-    if (entry) {
-      const coverUrl = entry.coverArt ? await getCoverArt(entry.coverArt, 220) : '';
-      const player   = entry.player || {};
-      const minutesAgoNum = Number(entry.minutesAgo || 0) || 0;
-      const durationNum   = Number(entry.duration   || 0) || 0;
-      const positionNum   = Number(player.position  || minutesAgoNum) || 0;
-      return {
-        playing:    true,
-        source:     'nowPlaying',
-        title:      String(entry.title  || ''),
-        artist:     String(entry.artist || ''),
-        album:      String(entry.album  || ''),
-        duration:   durationNum,
-        position:   positionNum,
-        coverUrl:   coverUrl,
-        player:     String(player.name  || ''),
-        minutesAgo: minutesAgoNum,
-        url:        serverUrl,
-      };
-    }
-
-    // 2) Fallback: getAlbumList2 (neuestes Album + erster Song daraus)
-    const album = await getLatestAlbumSong();
-    if (album) {
-      return Object.assign({}, album, { source: 'latestAlbum', url: serverUrl });
-    }
-
-    // 3) Fallback: getScrobbles (zuletzt gespielt)
-    const scrobbles = await getRecentScrobbles(1);
-    if (scrobbles) {
-      return Object.assign({}, scrobbles, { source: 'scrobbles', url: serverUrl });
-    }
-
-    // 4) Letzter Fallback: getRandomSongs
-    const random = await getRandomSong();
-    if (random) {
-      return Object.assign({}, random, { source: 'random', url: serverUrl });
-    }
-
-    return { playing: false, url: serverUrl };
-  } catch (err) {
-    console.error('nowPlaying failed:', err && err.message);
-    return { playing: false, error: err && err.message, url: serverUrl };
-  }
-}
-
-// Hol den ersten Song des neuesten Albums
-async function getLatestAlbumSong() {
-  try {
-    const params = await subsonicParams({ type: 'newest', size: 1 });
-    const data   = await navFetch('getAlbumList2', params);
-    const resp   = data && data['subsonic-response'];
-    const album  = resp && resp.albumList2 && resp.albumList2.album && resp.albumList2.album[0];
-    if (!album) return null;
-    // Songs des Albums laden
-    const songParams = await subsonicParams({ id: album.id });
-    const songData   = await navFetch('getAlbum', songParams);
-    const songResp   = songData && songData['subsonic-response'];
-    const songs      = songResp && songResp.album && songResp.album.song;
-    const first      = Array.isArray(songs) ? songs[0] : null;
-    if (!first) return null;
-    const coverUrl = (first.coverArt || album.coverArt) ? await getCoverArt(first.coverArt || album.coverArt, 220) : '';
-    return {
-      playing:    false,
-      recentPlay: true,
-      title:      String(first.title  || ''),
-      artist:     String(first.artist || album.artist || ''),
-      album:      String(first.album  || album.title  || ''),
-      duration:   Number(first.duration || 0) || 0,
-      position:   0,
-      coverUrl:   coverUrl,
-      player:     '',
-      minutesAgo: 0,
-    };
-  } catch (e) {
-    console.error('getLatestAlbumSong failed:', e && e.message);
-    return null;
-  }
-}
-
-// Hol einen zufaelligen Song aus der Library (letzter Fallback)
-async function getRandomSong() {
-  try {
-    const params = await subsonicParams({ size: 1 });
-    const data   = await navFetch('getRandomSongs', params);
-    const resp   = data && data['subsonic-response'];
-    const song   = resp && resp.randomSongs && resp.randomSongs.song && resp.randomSongs.song[0];
-    if (!song) return null;
-    const coverUrl = song.coverArt ? await getCoverArt(song.coverArt, 220) : '';
-    return {
-      playing:    false,
-      randomPick: true,
-      title:      String(song.title  || ''),
-      artist:     String(song.artist || ''),
-      album:      String(song.album  || ''),
-      duration:   Number(song.duration || 0) || 0,
-      position:   0,
-      coverUrl:   coverUrl,
-      player:     '',
-      minutesAgo: 0,
-    };
-  } catch (e) {
-    console.error('getRandomSong failed:', e && e.message);
-    return null;
-  }
-}
-
-// Hol den zuletzt gespielten Track via Scrobbles (fuer Fallback wenn
-// kein Player aktiv verbunden ist, z. B. wenn User mit Mobile-App spielt).
-async function getRecentScrobbles(count) {
-  const c = Math.min(50, Math.max(1, count || 1));
-  try {
-    const params = await subsonicParams({ count: c });
-    const data   = await navFetch('getScrobbles', params);
-    const resp   = data && data['subsonic-response'];
-    const entry   = resp && resp.scrobbles && resp.scrobbles.entry && resp.scrobbles.entry[0];
-    if (!entry) return null;
+    if (!entry) return { playing: false, url: serverUrl };
 
     const coverUrl = entry.coverArt ? await getCoverArt(entry.coverArt, 220) : '';
-    const dateStr  = entry.playedAt || '';
-    // "minutesAgo" aus ISO-Timestamp ableiten
-    let minutesAgo = 0;
-    if (dateStr) {
-      const t = Date.parse(dateStr);
-      if (!isNaN(t)) minutesAgo = Math.max(0, Math.floor((Date.now() - t) / 60000));
-    }
+    const player   = entry.player || {};
+    const minutesAgoNum = Number(entry.minutesAgo || 0) || 0;
+    const durationNum   = Number(entry.duration   || 0) || 0;
+    const positionNum   = Number(player.position  || minutesAgoNum) || 0;
+
     return {
-      playing:    false,             // scrobble ist ein "vorhin gespielt", nicht "spielt jetzt"
-      recentPlay: true,
+      playing:    true,
+      source:     'nowPlaying',
       title:      String(entry.title  || ''),
       artist:     String(entry.artist || ''),
       album:      String(entry.album  || ''),
-      duration:   Number(entry.duration || 0) || 0,
-      position:   0,
+      duration:   durationNum,
+      position:   positionNum,
       coverUrl:   coverUrl,
-      player:     '',
-      minutesAgo: minutesAgo,
+      player:     String(player.name  || ''),
+      minutesAgo: minutesAgoNum,
+      url:        serverUrl,
     };
-  } catch (e) {
-    console.error('getRecentScrobbles failed:', e && e.message);
-    return null;
+  } catch (err) {
+    console.error('nowPlaying failed:', err && err.message);
+    return { playing: false, error: err && err.message, url: serverUrl };
   }
 }
 

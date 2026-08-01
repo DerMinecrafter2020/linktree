@@ -255,20 +255,11 @@
           body: JSON.stringify({ action: 'nowPlaying' }),
         });
         const json = await r.json();
-        if (!r.ok || !json.ok) {
+        if (!r.ok || !json.ok || !json.data?.playing) {
           this.renderIdle();
           return;
         }
-        // playing=true → live, recentPlay=true → Scrobble-Fallback
-        if (json.data?.playing) {
-          this.renderTrack(json.data, { live: true, kind: 'live' });
-        } else if (json.data?.recentPlay) {
-          this.renderTrack(json.data, { live: false, kind: 'recent', minutesAgo: json.data.minutesAgo });
-        } else if (json.data?.randomPick) {
-          this.renderTrack(json.data, { live: false, kind: 'random' });
-        } else {
-          this.renderIdle();
-        }
+        this.renderTrack(json.data);
       } catch (err) {
         console.warn('[navidrome] poll failed:', err.message);
         this.renderIdle();
@@ -279,7 +270,7 @@
       const wrap = $('#navidrome-player');
       if (!wrap) return;
       wrap.classList.add('idle');
-      wrap.classList.remove('playing', 'recent');
+      wrap.classList.remove('playing');
       const titleEl = wrap.querySelector('.np-title');
       const artistEl = wrap.querySelector('.np-artist');
       if (titleEl) titleEl.textContent = 'Momentan läuft nichts';
@@ -291,13 +282,11 @@
       }
     },
 
-    renderTrack(data, opts) {
+    renderTrack(data) {
       const wrap = $('#navidrome-player');
       if (!wrap) return;
-      const live = !!(opts && opts.live);
-      const kind = (opts && opts.kind) || (live ? 'live' : 'recent');
-      wrap.classList.remove('idle', 'playing', 'recent', 'random');
-      wrap.classList.add(kind);
+      wrap.classList.remove('idle');
+      wrap.classList.add('playing');
 
       // Cover (Base64-DataURL oder Emoji)
       const cover = wrap.querySelector('.np-cover');
@@ -318,25 +307,14 @@
       const titleEl = wrap.querySelector('.np-title');
       const artistEl = wrap.querySelector('.np-artist');
       if (titleEl) titleEl.textContent = data.title || 'Unbekannt';
-
-      // Artist-Zeile: bei Scrobbles/Recent zusätzlich "vor X min" anzeigen,
-      // bei Random einen Hinweis "Aus deiner Library"
-      let artistLine = data.artist || (data.album || '');
-      if (!live) {
-        if (kind === 'recent' && opts && typeof opts.minutesAgo === 'number') {
-          artistLine = (artistLine ? artistLine + ' · ' : '') + humanAgo(opts.minutesAgo);
-        } else if (kind === 'random') {
-          artistLine = (artistLine ? artistLine + ' · ' : '') + 'Aus deiner Library';
-        }
-      }
-      if (artistEl) artistEl.textContent = artistLine || '';
+      if (artistEl) artistEl.textContent = data.artist || (data.album || '');
 
       // Progress (position / duration)
       const bar = wrap.querySelector('.np-progress-bar');
       if (bar) {
         const dur = Math.max(1, parseInt(data.duration || 0, 10));
-        const pos = Math.min(dur, parseInt(data.position || (live ? data.minutesAgo : 0) || 0, 10));
-        if (dur <= 0 || !live) {
+        const pos = Math.min(dur, parseInt(data.position || data.minutesAgo || 0, 10));
+        if (dur <= 0) {
           bar.style.width = '0%';
         } else {
           bar.style.width = Math.min(100, (pos / dur) * 100).toFixed(2) + '%';
@@ -368,16 +346,6 @@
       };
     },
   };
-
-  // "vor 5 min" / "vor 2 h" Formatierung
-  function humanAgo(mins) {
-    if (mins < 1) return 'gerade eben';
-    if (mins < 60) return 'vor ' + mins + ' min';
-    const h = Math.floor(mins / 60);
-    if (h < 24) return 'vor ' + h + ' h';
-    const d = Math.floor(h / 24);
-    return 'vor ' + d + (d === 1 ? ' Tag' : ' Tagen');
-  }
 
   function bindPlayerControls() {
     document.addEventListener('click', (e) => {
