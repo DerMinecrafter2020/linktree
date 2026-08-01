@@ -12,6 +12,9 @@ inspect2.bat
 check-policies.bat
 security-test.ps1
 
+# --- Lokale Notizbücher / Memory-Ordner --------------------------------
+.github/memory/
+
 # --- Temporäre Logs/Outputs ----------------------------------------------
 *.log
 npm-debug.log*
