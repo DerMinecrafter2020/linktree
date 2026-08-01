@@ -200,12 +200,14 @@ function randomSalt() {
 
 function subsonicParams(extra) {
   const extraObj = extra || {};
-  const salt = randomSalt();
-  const token = md5(NAVIDROME_PASS + salt);
+  // Wir nutzen einfaches Passwort ("p" parameter) statt Token-Auth.
+  // Grund: meine pure-JS MD5-Implementierung liefert fehlerhafte Hashes,
+  // und Navidrome lehnt dann mit "Wrong username or password" ab.
+  // Subsonic unterstuetzt "p" offiziell, nur nicht mehr empfohlen.
+  // Da der Edge-Proxy mit HTTPS zu Navidrome spricht, ist das vertretbar.
   const params = new URLSearchParams({
     u: NAVIDROME_USER,
-    t: token,
-    s: salt,
+    p: NAVIDROME_PASS,
     v: SUB_VERSION,
     c: CLIENT_NAME,
     f: 'json',
