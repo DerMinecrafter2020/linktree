@@ -34,6 +34,30 @@
   </div>
 
   <main class="card">
+
+    <!-- =========================================================
+         NAVIDROME / SUBSONIC PLAYER (Spotify-Style)
+         =========================================================
+         Wird per JS ein-/ausgeblendet je nach NAVIDROME_CONFIG.enabled.
+         Polling-Intervall siehe config.js (pollIntervalSec).
+         Verwendet Edge-Function `navidrome-proxy` für CORS-Schutz. -->
+    <section id="navidrome-player" class="np-player idle" aria-label="Aktuell gespielter Track" hidden>
+      <div class="np-cover" aria-hidden="true"></div>
+      <div class="np-info">
+        <div class="np-title">Verbinde mit Navidrome…</div>
+        <div class="np-artist">—</div>
+        <div class="np-progress" aria-hidden="true">
+          <div class="np-progress-bar"></div>
+        </div>
+      </div>
+      <div class="np-controls" aria-label="Player-Steuerung">
+        <button type="button" data-np-action="previous" class="np-btn" aria-label="Vorheriger Titel">⏮</button>
+        <button type="button" data-np-action="play"     class="np-btn" aria-label="Play">▶</button>
+        <button type="button" data-np-action="pause"    class="np-btn" aria-label="Pause">⏸</button>
+        <button type="button" data-np-action="next"     class="np-btn" aria-label="Nächster Titel">⏭</button>
+      </div>
+    </section>
+
     <header class="profile">
       <div class="avatar-wrap">
         <div class="avatar-ring"></div>

@@ -120,6 +120,160 @@ body {
   margin-bottom: 28px;
 }
 
+/* =========================================================
+   NAVIDROME PLAYER (Spotify-Style, Neon-Theme)
+   ========================================================= */
+.np-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 16px;
+  margin-bottom: 24px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  position: relative;
+  overflow: hidden;
+}
+.np-player::before {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(circle at 50% 0%, var(--neon-pink), transparent 50%),
+              radial-gradient(circle at 80% 80%, var(--neon-cyan), transparent 50%);
+  filter: blur(60px);
+  opacity: 0.18;
+  z-index: 0;
+  pointer-events: none;
+}
+.np-player > * { position: relative; z-index: 1; }
+
+.np-cover {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--bg-2), var(--bg-1));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 64px;
+  box-shadow: 0 0 0 1px var(--border),
+              0 12px 40px rgba(0, 0, 0, 0.4),
+              0 0 60px rgba(255, 43, 214, 0.25);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.np-cover.placeholder {
+  background: linear-gradient(135deg, rgba(255,43,214,0.15), rgba(0,240,255,0.10));
+  border: 1px dashed var(--border-strong);
+}
+.np-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.np-player.playing .np-cover {
+  animation: np-spin 12s linear infinite;
+}
+.np-player.idle .np-cover {
+  animation: none;
+  opacity: 0.6;
+}
+
+@keyframes np-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.np-info {
+  text-align: center;
+  width: 100%;
+}
+.np-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.3px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.np-artist {
+  font-size: 13px;
+  color: var(--text-dim);
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.np-progress {
+  margin-top: 12px;
+  height: 4px;
+  background: var(--glass);
+  border-radius: 999px;
+  overflow: hidden;
+  width: 100%;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.np-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--neon-pink), var(--neon-cyan));
+  border-radius: 999px;
+  transition: width 0.6s ease;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+}
+
+.np-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+}
+.np-btn {
+  background: var(--glass);
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: transform 0.15s, background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  font-family: inherit;
+}
+.np-btn:hover {
+  background: var(--glass-hover);
+  border-color: var(--neon-cyan);
+  transform: translateY(-1px);
+}
+.np-btn:active { transform: translateY(0); }
+.np-btn[data-np-action="play"],
+.np-btn[data-np-action="pause"] {
+  width: 54px;
+  height: 54px;
+  font-size: 20px;
+  background: linear-gradient(135deg, var(--neon-pink), var(--neon-violet));
+  border-color: transparent;
+  box-shadow: 0 4px 20px rgba(255, 43, 214, 0.35);
+}
+.np-btn[data-np-action="play"]:hover,
+.np-btn[data-np-action="pause"]:hover {
+  box-shadow: 0 6px 28px rgba(255, 43, 214, 0.5);
+}
+.np-player.idle .np-controls { opacity: 0.4; pointer-events: none; }
+
 .avatar-wrap {
   position: relative;
   width: 110px;

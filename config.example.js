@@ -14,3 +14,25 @@ window.SUPABASE_CONFIG = {
   authLoginUrl:          'https://YOUR-PROJECT.supabase.co/functions/v1/auth-login',
   authChangePasswordUrl: 'https://YOUR-PROJECT.supabase.co/functions/v1/auth-change-password',
 };
+
+// =========================================================
+// Navidrome / Subsonic — Musik-Player (optional)
+// =========================================================
+// Wenn aktiviert, holt die Hauptseite alle 30s den aktuellen
+// Track von deinem Navidrome-Server via Subsonic-API.
+//
+// Voraussetzung:
+//   1. Edge-Function `navidrome-proxy` deployen:
+//        supabase functions deploy navidrome-proxy
+//   2. Secrets setzen:
+//        supabase secrets set NAVIDROME_URL=https://navidrome.example.com
+//        supabase secrets set NAVIDROME_USER=alice
+//        supabase secrets set NAVIDROME_PASS=geheim123
+window.NAVIDROME_CONFIG = {
+  enabled: false,                                  // auf true setzen zum Aktivieren
+  url: 'https://navidrome.example.com',
+  user: 'YOUR_USER',
+  pass: 'YOUR_PASS',
+  proxyUrl: 'https://YOUR-PROJECT.supabase.co/functions/v1/navidrome-proxy',
+  pollIntervalSec: 30,
+};

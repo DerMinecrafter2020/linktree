@@ -20,3 +20,22 @@ window.SUPABASE_CONFIG = {
   authLoginUrl:          'https://fxywervpqojpjwreymdp.supabase.co/functions/v1/auth-login',
   authChangePasswordUrl: 'https://fxywervpqojpjwreymdp.supabase.co/functions/v1/auth-change-password',
 };
+
+// =========================================================
+// Navidrome / Subsonic — Musik-Player
+// =========================================================
+// Trage hier deine Navidrome-URL und Credentials ein.
+// Optional: Wenn du KEINE Navidrome hast, lass die Werte leer
+// und der Player wird auf der Hauptseite ausgeblendet.
+window.NAVIDROME_CONFIG = {
+  enabled: false,
+  url: 'https://music.deinedomain.de',   // z. B. https://navidrome.example.com
+  user: 'YOUR_USER',
+  pass: 'YOUR_PASS',
+
+  // Edge-Function-Proxy (empfohlen — schützt Credentials vor CORS-Exposure)
+  proxyUrl: 'https://fxywervpqojpjwreymdp.supabase.co/functions/v1/navidrome-proxy',
+
+  // Polling-Intervall für "Now Playing" (in Sekunden)
+  pollIntervalSec: 30,
+};

@@ -176,6 +176,142 @@
     }[c]));
   }
 
+  // =========================================================
+  // NAVIDROME PLAYER (optional)
+  // =========================================================
+  // Pollt alle 30s den Navidrome-Proxy und zeigt aktuellen Track.
+  // Bei Fehler/kein Server: Player-Container wird ausgeblendet.
+  const np = {
+    cfg: window.NAVIDROME_CONFIG || null,
+    pollTimer: null,
+    lastTitle: '',
+
+    isEnabled() {
+      return !!(this.cfg?.enabled && this.cfg?.proxyUrl
+        && !this.cfg.url.startsWith('YOUR_')
+        && !this.cfg.user.startsWith('YOUR_')
+        && !this.cfg.pass.startsWith('YOUR_'));
+    },
+
+    async start() {
+      if (!this.isEnabled()) return;
+      const wrap = $('#navidrome-player');
+      if (!wrap) return;
+      wrap.hidden = false;
+      await this.tick();
+      const interval = Math.max(10, this.cfg.pollIntervalSec || 30) * 1000;
+      this.pollTimer = setInterval(() => this.tick(), interval);
+    },
+
+    stop() {
+      if (this.pollTimer) clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    },
+
+    async tick() {
+      try {
+        const r = await fetch(this.cfg.proxyUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': window.SUPABASE_CONFIG?.anonKey || '',
+          },
+          body: JSON.stringify({ action: 'nowPlaying' }),
+        });
+        const json = await r.json();
+        if (!json.ok || !json.data?.playing) {
+          this.renderIdle();
+          return;
+        }
+        this.renderTrack(json.data);
+      } catch (err) {
+        console.warn('[navidrome] poll failed:', err.message);
+        this.renderIdle();
+      }
+    },
+
+    renderIdle() {
+      const wrap = $('#navidrome-player');
+      if (!wrap) return;
+      wrap.classList.add('idle');
+      const titleEl = wrap.querySelector('.np-title');
+      const artistEl = wrap.querySelector('.np-artist');
+      if (titleEl) titleEl.textContent = 'Momentan läuft nichts';
+      if (artistEl) artistEl.textContent = 'Starte Musik in Navidrome, dann erscheint sie hier';
+      const cover = wrap.querySelector('.np-cover');
+      if (cover) {
+        cover.replaceChildren(document.createTextNode('🎵'));
+        cover.classList.add('placeholder');
+      }
+    },
+
+    renderTrack(data) {
+      const wrap = $('#navidrome-player');
+      if (!wrap) return;
+      wrap.classList.remove('idle');
+      wrap.classList.toggle('playing', !!data.playing);
+
+      // Cover (Base64-DataURL oder Emoji)
+      const cover = wrap.querySelector('.np-cover');
+      cover.replaceChildren();
+      cover.classList.remove('placeholder');
+      if (data.coverUrl) {
+        const img = document.createElement('img');
+        img.src = data.coverUrl;
+        img.alt = data.title || '';
+        img.loading = 'lazy';
+        img.referrerPolicy = 'no-referrer';
+        cover.appendChild(img);
+      } else {
+        cover.appendChild(document.createTextNode('🎵'));
+        cover.classList.add('placeholder');
+      }
+
+      const titleEl = wrap.querySelector('.np-title');
+      const artistEl = wrap.querySelector('.np-artist');
+      if (titleEl) titleEl.textContent = data.title || 'Unbekannt';
+      if (artistEl) artistEl.textContent = data.artist || (data.album || '');
+
+      // Progress (position / duration)
+      const bar = wrap.querySelector('.np-progress-bar');
+      if (bar) {
+        const dur = Math.max(1, parseInt(data.duration || 0, 10));
+        const pos = Math.min(dur, parseInt(data.position || data.minutesAgo || 0, 10));
+        // "position" bei Subsonic ist oft elapsed seconds; falls duration=0, Progress ausblenden
+        if (dur <= 0) {
+          bar.style.width = '0%';
+        } else {
+          bar.style.width = Math.min(100, (pos / dur) * 100).toFixed(2) + '%';
+        }
+      }
+    },
+
+    async control(action) {
+      if (!this.isEnabled()) return;
+      try {
+        await fetch(this.cfg.proxyUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': window.SUPABASE_CONFIG?.anonKey || '',
+          },
+          body: JSON.stringify({ action: 'control', controlAction: action }),
+        });
+      } catch (e) {
+        console.warn('[navidrome] control failed', e);
+      }
+    },
+  };
+
+  function bindPlayerControls() {
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-np-action]');
+      if (!btn) return;
+      const action = btn.dataset.npAction;
+      np.control(action);
+    });
+  }
+
   function init() {
     if (window.db) {
       render();
@@ -186,6 +322,9 @@
           render();
         });
       }
+      // Navidrome-Player (falls aktiviert)
+      np.start();
+      bindPlayerControls();
     }
   }
 
