@@ -231,7 +231,21 @@ EOF
 
 # Default-Site deaktivieren, unsere aktivieren
 rm -f /etc/nginx/sites-enabled/default
-ln -sf "$NGINX_CONF" "$NGINX_LINK"
+
+# nginx-Site enablen via nginx_ensite (falls verfuegbar), sonst per Symlink
+if command -v nginx_ensite >/dev/null 2>&1; then
+    nginx_ensite "${NGINX_SITE_NAME}"
+    log_ok "Site '${NGINX_SITE_NAME}' via nginx_ensite aktiviert"
+else
+    ln -sf "$NGINX_CONF" "$NGINX_LINK"
+    log_ok "Site '${NGINX_SITE_NAME}' via Symlink aktiviert: ${NGINX_LINK}"
+fi
+
+# Sicherstellen, dass der Link tatsaechlich existiert
+if [[ ! -L "$NGINX_LINK" ]]; then
+    log_error "Konnte Site nicht aktivieren — ${NGINX_LINK} existiert nicht"
+    exit 1
+fi
 
 # WICHTIG: Wenn /etc/nginx/nginx.conf einen globalen 'root'-Eintrag
 # (z.B. /var/www/html) hat, ueberschreibt dieser unseren server-block-root.
@@ -244,6 +258,18 @@ if [[ -f "$NGINX_MAIN" ]] && grep -qE '^\s*root\s+/var/www/html' "$NGINX_MAIN"; 
     sed -i 's|^\(\s*\)root\s\+/var/www/html;|\1# root /var/www/html;  # disabled by openweb installer|' "$NGINX_MAIN"
     log_ok "Globaler root in nginx.conf auskommentiert"
 fi
+
+# Sicherstellen, dass nginx.conf die sites-enabled einbindet
+if [[ -f "$NGINX_MAIN" ]] && ! grep -q 'include /etc/nginx/sites-enabled/\*' "$NGINX_MAIN"; then
+    log_warn "nginx.conf bindet sites-enabled nicht ein — wird hinzugefügt..."
+    # Im 'http {}'-Block am Ende einfuegen
+    sed -i '/^http {/a \    include /etc/nginx/sites-enabled/*;' "$NGINX_MAIN"
+    log_ok "include sites-enabled/* zu nginx.conf hinzugefügt"
+fi
+
+# nginx-Service selbst aktivieren (Boot-Start)
+systemctl enable nginx
+log_ok "nginx-Service ist aktiviert (startet bei Boot)"
 
 # nginx testen + reload
 nginx -t
