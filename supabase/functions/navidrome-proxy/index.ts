@@ -257,13 +257,19 @@ async function getNowPlaying() {
       };
     }
 
-    // 2) Fallback: getScrobbles (letzte gespielte Tracks, egal welcher Client)
+    // 2) Fallback: getAlbumList2 (neuestes Album + erster Song daraus)
+    const album = await getLatestAlbumSong();
+    if (album) {
+      return Object.assign({}, album, { source: 'latestAlbum', url: serverUrl });
+    }
+
+    // 3) Fallback: getScrobbles (zuletzt gespielt)
     const scrobbles = await getRecentScrobbles(1);
     if (scrobbles) {
       return Object.assign({}, scrobbles, { source: 'scrobbles', url: serverUrl });
     }
 
-    // 3) Letzter Fallback: getRandomSongs (zeigt einen Song aus deiner Library)
+    // 4) Letzter Fallback: getRandomSongs
     const random = await getRandomSong();
     if (random) {
       return Object.assign({}, random, { source: 'random', url: serverUrl });
@@ -273,6 +279,40 @@ async function getNowPlaying() {
   } catch (err) {
     console.error('nowPlaying failed:', err && err.message);
     return { playing: false, error: err && err.message, url: serverUrl };
+  }
+}
+
+// Hol den ersten Song des neuesten Albums
+async function getLatestAlbumSong() {
+  try {
+    const params = await subsonicParams({ type: 'newest', size: 1 });
+    const data   = await navFetch('getAlbumList2', params);
+    const resp   = data && data['subsonic-response'];
+    const album  = resp && resp.albumList2 && resp.albumList2.album && resp.albumList2.album[0];
+    if (!album) return null;
+    // Songs des Albums laden
+    const songParams = await subsonicParams({ id: album.id });
+    const songData   = await navFetch('getAlbum', songParams);
+    const songResp   = songData && songData['subsonic-response'];
+    const songs      = songResp && songResp.album && songResp.album.song;
+    const first      = Array.isArray(songs) ? songs[0] : null;
+    if (!first) return null;
+    const coverUrl = (first.coverArt || album.coverArt) ? await getCoverArt(first.coverArt || album.coverArt, 220) : '';
+    return {
+      playing:    false,
+      recentPlay: true,
+      title:      String(first.title  || ''),
+      artist:     String(first.artist || album.artist || ''),
+      album:      String(first.album  || album.title  || ''),
+      duration:   Number(first.duration || 0) || 0,
+      position:   0,
+      coverUrl:   coverUrl,
+      player:     '',
+      minutesAgo: 0,
+    };
+  } catch (e) {
+    console.error('getLatestAlbumSong failed:', e && e.message);
+    return null;
   }
 }
 
