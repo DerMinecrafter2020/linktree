@@ -788,6 +788,38 @@ else
     log_warn "Erster Update-Check fehlgeschlagen — prüfe ${LOG_FILE}"
 fi
 
+# --- Domain-Abfrage (fuer nginx server_name + spateren Certbot-Hinweis) ---
+DOMAIN=""
+EXISTING_DOMAIN=$(grep -oE "server_name\s+[^;]+;" "$NGINX_CONF" 2>/dev/null | head -1 | awk '{print $2}')
+
+if [[ -n "$EXISTING_DOMAIN" && "$EXISTING_DOMAIN" != "_" ]]; then
+    echo ""
+    echo -n "  Domain erkannt (${EXISTING_DOMAIN}). Aendern? (j/N): "
+    read -r CHANGE_DOMAIN
+    if [[ "$CHANGE_DOMAIN" =~ ^[jJyY]$ ]]; then
+        echo -n "  Domain (z.B. meine.domain.de, leer fuer keine): "
+        read -r DOMAIN
+    else
+        DOMAIN="$EXISTING_DOMAIN"
+    fi
+else
+    echo ""
+    echo -n "  Domain (z.B. meine.domain.de, leer fuer keine — Default '_' bleibt): "
+    read -r DOMAIN
+fi
+
+# nginx server_name aktualisieren, wenn Domain angegeben
+if [[ -n "$DOMAIN" ]]; then
+    log_info "Setze nginx server_name auf '$DOMAIN'..."
+    sed -i "s/^\(\s*\)server_name\s\+\(_\|.*\);/\1server_name $DOMAIN;/" "$NGINX_CONF"
+    if nginx -t 2>/dev/null; then
+        systemctl reload nginx
+        log_ok "nginx server_name aktualisiert"
+    else
+        log_warn "nginx config-Test fehlgeschlagen — bitte manuell pruefen"
+    fi
+fi
+
 # --- Zusammenfassung ---
 # URL-Erkennung: lokale IP(s), öffentliche IP, und Domain-Hinweis
 LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
@@ -816,6 +848,9 @@ ${BLUE}--- Webseite erreichbar unter: ---${NC}
 EOF
 
 # URL-Liste ausgeben
+if [[ -n "$DOMAIN" ]]; then
+    echo -e "  ${GREEN}Domain:   ${NC}  http://${DOMAIN}/"
+fi
 if [[ -n "$PUBLIC_IP" ]]; then
     echo -e "  ${GREEN}Öffentlich:${NC}  http://${PUBLIC_IP}/"
 fi
@@ -833,17 +868,39 @@ cat <<EOF
     curl -I http://localhost/         # sollte HTTP/1.1 200 OK liefern
     curl http://localhost/ | head -5   # sollte <!DOCTYPE html> zeigen
 
-${YELLOW}Wichtig:${NC}
-  - Trage die echten Navidrome-Daten und Supabase-Keys in
-    ${INSTALL_DIR}/config.js ein (oder setze sie als Supabase-Secrets).
-  - Wenn du eine Domain hast, richte sie als A-Record auf die
-    öffentliche IP ein und nutze dann Certbot für HTTPS:
-      sudo apt install certbot python3-certbot-nginx
-      sudo certbot --nginx -d deine.domain.de
+${YELLOW}HTTPS / SSL Cert (OPTIONAL — manuell einrichten wenn gewuenscht):${NC}
+  Das Skript fragt KEIN SSL-Zertifikat ab. Wenn du HTTPS willst:
+EOF
 
-  ${YELLOW}Firewall:${NC}  ufw muss Port 80 (und ggf. 443) offen haben:
-    sudo ufw status           # sollte 'Nginx Full' / '80,443/tcp' zeigen
-    sudo ufw allow 80/tcp     # falls nicht
+if [[ -n "$DOMAIN" ]]; then
+    cat <<EOF
+    1) DNS A-Record setzen: $DOMAIN -> ${PUBLIC_IP:-<oeffentliche-IP>}
+    2) Certbot installieren:
+         sudo apt install certbot python3-certbot-nginx
+    3) Zertifikat holen:
+         sudo certbot --nginx -d $DOMAIN
+    4) Auto-Renewal testen:
+         sudo certbot renew --dry-run
+
+EOF
+else
+    cat <<EOF
+    1) Domain kaufen + DNS A-Record auf oeffentliche IP setzen
+    2) install.sh erneut ausfuehren mit Domain eingeben
+    3) Certbot installieren:
+         sudo apt install certbot python3-certbot-nginx
+    4) Zertifikat holen:
+         sudo certbot --nginx -d deine.domain.de
+    5) Auto-Renewal testen:
+         sudo certbot renew --dry-run
+
+EOF
+fi
+
+cat <<EOF
+${YELLOW}Firewall:${NC}  ufw muss Port 80 (und ggf. 443) offen haben:
+  sudo ufw status           # sollte 'Nginx Full' / '80,443/tcp' zeigen
+  sudo ufw allow 80/tcp     # falls nicht
 
   Nützliche Befehle:
     systemctl status openweb-updater.timer
