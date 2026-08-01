@@ -402,17 +402,19 @@
           body: JSON.stringify({ action: 'nowPlaying' }),
         });
         const json = await r.json();
-        // Kein Track-Data -> Idle
-        if (!r.ok || !json.ok || !json.data) {
+        // BINÄRE LOGIK:
+        //  - Server sagt playing=true (und nicht paused) -> Track anzeigen
+        //  - Server sagt playing=false / paused / stopped -> Player ausblenden
+        // Wir zeigen pausierte/stopped Tracks NICHT mehr an.
+        const data = json?.data;
+        if (!r.ok || !json.ok || !data || data.playing !== true || data.paused === true) {
           this.currentTrack = null;
           localStorage.removeItem(NP_POS_STORAGE_KEY);
           this.renderIdle();
           return;
         }
-        // Server hat einen Track-Eintrag (kann playing ODER paused sein)
-        const newTrack = json.data;
+        const newTrack = data;
         let newServerPos = Number(newTrack.position || 0);
-        const isPaused = !!newTrack.paused;
 
         // Fallback: Wenn Server-Position 0 ist (kurz nach Track-Start),
         // nutzen wir localStorage-Position als Schaetzung.
@@ -509,11 +511,6 @@
       if (!wrap) return;
       wrap.classList.remove('idle');
       wrap.classList.add('playing');
-      if (data.paused) {
-        wrap.classList.add('paused');
-      } else {
-        wrap.classList.remove('paused');
-      }
 
       // Cover (Base64-DataURL oder Emoji)
       const cover = wrap.querySelector('.np-cover');
@@ -533,9 +530,7 @@
 
       const titleEl = wrap.querySelector('.np-title');
       const artistEl = wrap.querySelector('.np-artist');
-      // Bei Pause zeigen wir Titel mit Pause-Praefix
-      const prefix = data.paused ? '⏸ ' : '';
-      if (titleEl) titleEl.textContent = prefix + (data.title || 'Unbekannt');
+      if (titleEl) titleEl.textContent = data.title || 'Unbekannt';
       if (artistEl) artistEl.textContent = data.artist || (data.album || '');
 
       // Zeitanzeige initial setzen (wird dann von updateProgress() jede Sekunde aktualisiert)
