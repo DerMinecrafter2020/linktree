@@ -48,9 +48,9 @@
   }
 
   if (!SUPABASE_URL || !SUPABASE_KEY || SUPABASE_KEY.startsWith('HIER_')) {
-    console.warn('[db] Supabase ist nicht konfiguriert. Trage die Daten in config.js ein.');
+    console.warn('[db] Supabase ist nicht konfiguriert. Bitte URL + Key im Admin-Panel eintragen.');
     window.sb = null;
-    window.db = mockDb();
+    window.db = needsSetupDb();
     return;
   }
 
@@ -246,92 +246,24 @@
   }
 
   // =========================================================
-  // Mock-DB: lokale Fallback-Lösung, falls Supabase nicht
-  // konfiguriert ist. Daten liegen in localStorage.
+  // needsSetupDb: Supabase ist nicht konfiguriert
   // =========================================================
-  function mockDb() {
-    const STORAGE_KEY = 'linktree-mock-db';
-    const defaultData = {
-      profile: {
-        id: 1,
-        name: '@corneliusahner',
-        handle: 'Cornelius Ahner',
-        bio: 'Azubi, 21 Jahre alt',
-        avatar: 'CA'
-      },
-      links: [
-        { id: cryptoId(), title: 'Instagram', subtitle: '@cornelius_0511', url: 'https://www.instagram.com/cornelius_0511/', icon: '📸', position: 0, is_active: true, open_new: true },
-        { id: cryptoId(), title: 'GitHub',    subtitle: 'Projekte auf Github', url: 'https://github.com/DerMinecrafter2020', icon: '💻', position: 1, is_active: true, open_new: true },
-        { id: cryptoId(), title: 'Kontakt',   subtitle: 'admin@derminecrafter2020.com', url: 'mailto:admin@derminecrafter2020.com', icon: '✉️', position: 2, is_active: true, open_new: false }
-      ]
-    };
-
-    function cryptoId() {
-      if (window.crypto?.randomUUID) return crypto.randomUUID();
-      return 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    }
-
-    function load() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return structuredClone(defaultData);
-        return JSON.parse(raw);
-      } catch { return structuredClone(defaultData); }
-    }
-    function save(state) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    }
-
+  // Wir geben eine DB zurueck, deren Methoden klar signalisieren,
+  // dass Supabase konfiguriert werden muss. Das Admin-Panel zeigt
+  // dann ein Setup-Formular mit URL + Anon-Key Eingabefeldern.
+  function needsSetupDb() {
+    const err = new Error('Supabase nicht konfiguriert — bitte im Setup-Form eintragen');
     return {
       isMock: true,
-
-      async getProfile() {
-        return load().profile;
-      },
-
-      async saveProfile(profile) {
-        const state = load();
-        state.profile = { ...state.profile, ...profile };
-        save(state);
-      },
-
-      async listLinks() {
-        return load().links.sort((a, b) => a.position - b.position);
-      },
-
-      async createLink(link) {
-        const state = load();
-        const next = { id: cryptoId(), is_active: true, open_new: true, position: state.links.length, ...link };
-        state.links.push(next);
-        save(state);
-        return next;
-      },
-
-      async updateLink(id, patch) {
-        const state = load();
-        const i = state.links.findIndex((l) => l.id === id);
-        if (i >= 0) { state.links[i] = { ...state.links[i], ...patch }; save(state); }
-      },
-
-      async deleteLink(id) {
-        const state = load();
-        state.links = state.links.filter((l) => l.id !== id);
-        save(state);
-      },
-
-      async reorderLinks(orderedIds) {
-        const state = load();
-        orderedIds.forEach((id, idx) => {
-          const link = state.links.find((l) => l.id === id);
-          if (link) link.position = idx;
-        });
-        save(state);
-      },
-
-      subscribe() {
-        // localStorage hat keine Realtime-Subscriptions
-        return { unsubscribe() {} };
-      }
+      needsSetup: true,
+      async getProfile() { throw err; },
+      async saveProfile() { throw err; },
+      async listLinks() { throw err; },
+      async createLink() { throw err; },
+      async updateLink() { throw err; },
+      async deleteLink() { throw err; },
+      async reorderLinks() { throw err; },
+      subscribe() { return { unsubscribe() {} }; }
     };
   }
 })();

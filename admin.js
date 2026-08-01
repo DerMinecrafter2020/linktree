@@ -388,7 +388,7 @@ async function pbkdf2(password, saltB64, iterations) {
       el.textContent = '● Supabase';
     } else if (state === 'mock') {
       el.classList.add('mock');
-      el.textContent = '● localStorage';
+      el.textContent = '● Setup fehlt';
     } else {
       el.classList.add('err');
       el.textContent = '● Offline';
@@ -402,9 +402,82 @@ async function pbkdf2(password, saltB64, iterations) {
       setEl.textContent = state === 'ok'
         ? '✅ Mit Supabase verbunden. Daten werden in der Cloud gespeichert.'
         : state === 'mock'
-        ? '⚠️ Supabase nicht konfiguriert. Daten liegen nur lokal (Browser).'
-        : '❌ Keine Verbindung. Prüfe config.js und Internet.';
+        ? '⚠️ Supabase nicht konfiguriert. Bitte URL + Anon-Key unten eintragen.'
+        : '❌ Keine Verbindung. Prüfe Internet.';
       urlEl.textContent = cfg?.url || '(keine URL)';
+    }
+  }
+
+  // =========================================================
+  // SETUP-FORM (wenn Supabase nicht konfiguriert ist)
+  // =========================================================
+  // Wenn window.db.needsSetup === true, zeigen wir ein Formular an,
+  // in dem der User Supabase-URL + Anon-Key eintippt. Diese werden
+  // via SupabaseAPI.saveConfig() an die save-config Edge-Function
+  // geschickt, die /var/html/config.js auf dem Server aktualisiert.
+  // Danach: Seite neu laden, dann ist Supabase verfuegbar.
+  function showSetupForm() {
+    // Overlay wie Login-Overlay
+    let modal = document.getElementById('supabase-setup-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'supabase-setup-modal';
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;overflow:auto;';
+      modal.innerHTML = `
+        <div style="background:var(--bg-1,#1a1a2e);color:var(--text,#fff);padding:30px;border-radius:14px;max-width:520px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.5);">
+          <h2 style="margin:0 0 8px;font-size:20px;color:var(--neon-pink,#ff2bd6);">🔧 Supabase konfigurieren</h2>
+          <p style="margin:0 0 18px;font-size:14px;color:var(--text-dim,#aaa);line-height:1.5;">
+            Bitte trage deine Supabase-Projekt-URL und den anon-Key ein.
+            Diese werden in <code>config.js</code> auf dem Server gespeichert.
+          </p>
+          <form id="supabase-setup-form">
+            <label style="display:block;margin-bottom:14px;font-size:13px;">
+              <span style="display:block;margin-bottom:6px;color:var(--text-dim,#aaa);">Supabase URL</span>
+              <input type="url" name="url" required placeholder="https://xxxxxxxxxxxx.supabase.co"
+                style="width:100%;padding:10px;background:var(--bg-2,#0f0f1e);border:1px solid var(--border,#333);border-radius:6px;color:var(--text,#fff);font-size:14px;font-family:monospace;">
+            </label>
+            <label style="display:block;margin-bottom:18px;font-size:13px;">
+              <span style="display:block;margin-bottom:6px;color:var(--text-dim,#aaa);">anon-key (public)</span>
+              <input type="text" name="anonKey" required placeholder="eyJhbGciOi..."
+                style="width:100%;padding:10px;background:var(--bg-2,#0f0f1e);border:1px solid var(--border,#333);border-radius:6px;color:var(--text,#fff);font-size:13px;font-family:monospace;">
+            </label>
+            <label style="display:block;margin-bottom:18px;font-size:13px;">
+              <span style="display:block;margin-bottom:6px;color:var(--text-dim,#aaa);">Shared Secret (optional — vom Server-Admin)</span>
+              <input type="password" name="secret" placeholder="leer lassen falls nicht gesetzt"
+                style="width:100%;padding:10px;background:var(--bg-2,#0f0f1e);border:1px solid var(--border,#333);border-radius:6px;color:var(--text,#fff);font-size:14px;">
+            </label>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+              <button type="submit" class="btn primary"
+                style="padding:10px 20px;background:var(--neon-cyan,#00f0ff);color:#000;border:none;border-radius:6px;font-weight:600;cursor:pointer;">
+                Speichern & neu laden
+              </button>
+            </div>
+            <p id="supabase-setup-error" style="margin:10px 0 0;color:#ff5050;font-size:12px;"></p>
+          </form>
+        </div>
+      `;
+      document.body.appendChild(modal);
+
+      document.getElementById('supabase-setup-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const url = form.url.value.trim();
+        const anonKey = form.anonKey.value.trim();
+        const secret = form.secret.value.trim();
+        const errEl = document.getElementById('supabase-setup-error');
+        errEl.textContent = '';
+
+        try {
+          errEl.textContent = 'Speichere...';
+          await window.SupabaseAPI.saveConfig({ url, anonKey, secret });
+          errEl.textContent = 'Gespeichert! Lade neu...';
+          errEl.style.color = '#0f0';
+          setTimeout(() => window.location.reload(), 1500);
+        } catch (err) {
+          errEl.style.color = '#ff5050';
+          errEl.textContent = 'Fehler: ' + err.message;
+        }
+      });
     }
   }
 
@@ -1570,6 +1643,14 @@ async function pbkdf2(password, saltB64, iterations) {
     bindData();
     bindSettings();
     bindNavidrome();
+
+    // Setup-Form zeigen, wenn Supabase nicht konfiguriert ist
+    if (window.db && window.db.needsSetup) {
+      $('#login-overlay').hidden = true;
+      $('#app').hidden = false;
+      showSetupForm();
+      return;
+    }
 
     // Auto-Login, falls Session aktiv
     if (hasValidSession()) {

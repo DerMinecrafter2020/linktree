@@ -76,6 +76,13 @@ do_install_cli() {
     install_supabase_cli
     if command -v supabase >/dev/null 2>&1; then
         log_ok "supabase CLI jetzt verfügbar: $(supabase --version 2>/dev/null | head -n1)"
+
+        # Auch save-config Edge-Function deployen (für das Admin-Setup-Form)
+        if [[ -d "${INSTALL_DIR}/supabase/functions/save-config" ]]; then
+            log_info "Deploye save-config Edge-Function..."
+            (cd "$INSTALL_DIR" && supabase functions deploy save-config --project-ref "$SUPABASE_PROJECT_REF" 2>&1) || \
+                log_warn "save-config konnte nicht deployed werden"
+        fi
     else
         log_warn "CLI konnte nicht installiert werden"
     fi
