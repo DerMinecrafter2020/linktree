@@ -527,10 +527,12 @@
       wrap.classList.remove('idle');
       wrap.classList.remove('playing');
       wrap.classList.add('paused');
-      // Cover beibehalten (nicht zuruecksetzen)
-      // Position NICHT fortschalten (soll eingefroren sein)
+      // Position EINFRIEREN: setze progressStartedAt so, dass die interpolierte
+      // Position exakt gleich der aktuellen Position ist.
       const dur = Number(this.currentTrack.duration || 0);
       const pos = Math.min(dur, Number(this.currentTrack.position || 0));
+      this.progressStartedAt = Date.now();
+      this.initialPosition = pos;
       const bar = wrap.querySelector('.np-progress-bar');
       if (bar && dur > 0) {
         bar.style.width = ((pos / dur) * 100).toFixed(2) + '%';
