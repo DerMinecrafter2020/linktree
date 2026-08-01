@@ -93,8 +93,11 @@ function md5js(input) {
   function binlMD5(x, len) {
     x[len >> 5] |= 0x80 << (len % 32);
     x[(((len + 64) >>> 9) << 4) + 14] = len;
-    let i;
-    let olda, oldb, oldc, oldd;
+    let i, olda, oldb, oldc, oldd;
+    let a = 1732584193;
+    let b = -271733879;
+    let c = -1732584194;
+    let d = 271733878;
     for (i = 0; i < x.length; i += 16) {
       olda = a; oldb = b; oldc = c; oldd = d;
       a = md5ff(a, b, c, d, x[i],      7, -680876936);
