@@ -472,7 +472,7 @@ fi
 # Erkennen, ob Platzhalter vorhanden sind
 is_placeholder() {
     case "$1" in
-        ""|"__SET_ME_MANUALLY__"|"YOUR_USER"|"YOUR_PASS") return 0;;
+        ""|"__SET_ME_MANUALLY__"|"YOUR_USER"|"YOUR_PASS"|"YOUR-PROJECT"*|"YOUR-ANON-KEY"*|"admin123") return 0;;
         *) return 1;;
     esac
 }
