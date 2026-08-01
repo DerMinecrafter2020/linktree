@@ -294,11 +294,43 @@
           this.renderIdle();
           return;
         }
-        // Track-State speichern fuer lokale Progress-Interpolation
-        this.currentTrack = json.data;
-        this.progressStartedAt = Date.now();
-        this.initialPosition = Number(json.data.position || 0);
-        this.renderTrack(json.data);
+        // Wenn der gleiche Track noch laeuft, nur die Zeit-Basis neu setzen,
+        // wenn die Server-Position groesser ist als unsere bisher berechnete.
+        // Sonst waere ein Ruecksprung sichtbar (z. B. wenn Server langsamer tickt).
+        const newTrack = json.data;
+        const newServerPos = Number(newTrack.position || 0);
+        const isNewTrack = !this.currentTrack
+          || this.currentTrack.title !== newTrack.title
+          || this.currentTrack.album !== newTrack.album;
+
+        if (isNewTrack) {
+          // Neuer Track: Zeit-Basis neu setzen
+          this.currentTrack = newTrack;
+          this.progressStartedAt = Date.now();
+          this.initialPosition = newServerPos;
+        } else {
+          // Gleicher Track: vergleiche mit unserer lokalen Schaetzung
+          const elapsedSinceLast = (Date.now() - this.progressStartedAt) / 1000;
+          const localPos = this.initialPosition + elapsedSinceLast;
+          // Server-Position darf nicht vor unserer lokalen Schaetzung liegen,
+          // sonst wuerde der Balken zurueckspringen.
+          if (newServerPos >= localPos - 2) {  // 2s Toleranz fuer Netzwerk-Jitter
+            this.currentTrack = newTrack;
+            this.progressStartedAt = Date.now();
+            this.initialPosition = newServerPos;
+          } else {
+            // Server-Position liegt hinter unserer Schaetzung -> nur Track-Metadaten
+            // aktualisieren (Cover, Titel), aber Zeit-Basis beibehalten
+            this.currentTrack = Object.assign({}, this.currentTrack, {
+              title: newTrack.title,
+              artist: newTrack.artist,
+              album: newTrack.album,
+              coverUrl: newTrack.coverUrl,
+              duration: newTrack.duration,
+            });
+          }
+        }
+        this.renderTrack(this.currentTrack);
         this.updateProgress(); // sofort nach Server-Update synchronisieren
       } catch (err) {
         console.warn('[navidrome] poll failed:', err.message);
