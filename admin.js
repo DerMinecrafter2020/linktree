@@ -29,6 +29,7 @@
   const STORAGE_PW_HASH = 'linktree-admin-pw-hash';
   const STORAGE_PW_SALT = 'linktree-admin-pw-salt';
   const STORAGE_PW_ITER = 'linktree-admin-pw-iter';
+  const STORAGE_PW_ALGO = 'linktree-admin-pw-algo';  // 'pbkdf2' oder 'sha256'
   const STORAGE_PW_MUST_CHANGE = 'linktree-admin-pw-must-change';
   const DEFAULT_PASSWORD = 'admin123';
   const SESSION_KEY = 'linktree-admin-session';
@@ -49,28 +50,35 @@
 // Seite IMMER ueber HTTPS laufen.
 async function pbkdf2(password, saltB64, iterations) {
     if (window.crypto && window.crypto.subtle) {
-      const enc = new TextEncoder();
-      const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
-      const keyMaterial = await crypto.subtle.importKey(
-        'raw',
-        enc.encode(password),
-        { name: 'PBKDF2' },
-        false,
-        ['deriveBits']
-      );
-      const bits = await crypto.subtle.deriveBits(
-        { name: 'PBKDF2', salt, iterations, hash: PBKDF2_HASH },
-        keyMaterial,
-        PBKDF2_KEYLEN * 8
-      );
-      return bufferToBase64(bits);
+      try {
+        const enc = new TextEncoder();
+        const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
+        const keyMaterial = await crypto.subtle.importKey(
+          'raw',
+          enc.encode(password),
+          { name: 'PBKDF2' },
+          false,
+          ['deriveBits']
+        );
+        const bits = await crypto.subtle.deriveBits(
+          { name: 'PBKDF2', salt, iterations, hash: PBKDF2_HASH },
+          keyMaterial,
+          PBKDF2_KEYLEN * 8
+        );
+        return { hash: bufferToBase64(bits), algo: 'pbkdf2' };
+      } catch (e) {
+        console.warn('[security] PBKDF2 fehlgeschlagen, fallback auf SHA256:', e.message);
+        // Fallthrough zu SHA-256
+      }
     }
     // Fallback: simple SHA-256(salt + password) — nur fuer unsichere Origins
-    console.warn('[security] Web Crypto nicht verfuegbar — verwende unsicheren SHA256-Fallback. Seite ueber HTTPS aufrufen!');
+    if (!window.crypto || !window.crypto.subtle) {
+      console.warn('[security] Web Crypto nicht verfuegbar — verwende unsicheren SHA256-Fallback. Seite ueber HTTPS aufrufen!');
+    }
     const enc = new TextEncoder();
     const data = enc.encode(saltB64 + ':' + password);
     const hashBuf = await crypto.subtle.digest('SHA-256', data);
-    return bufferToBase64(hashBuf);
+    return { hash: bufferToBase64(hashBuf), algo: 'sha256' };
   }
 
   function bufferToBase64(buf) {
@@ -124,10 +132,11 @@ async function pbkdf2(password, saltB64, iterations) {
         document.body.appendChild(banner);
       }
       const salt = randomSalt();
-      const hash = await pbkdf2(DEFAULT_PASSWORD, salt, PBKDF2_ITERATIONS);
+      const result = await pbkdf2(DEFAULT_PASSWORD, salt, PBKDF2_ITERATIONS);
       localStorage.setItem(STORAGE_PW_SALT, salt);
       localStorage.setItem(STORAGE_PW_ITER, String(PBKDF2_ITERATIONS));
-      localStorage.setItem(STORAGE_PW_HASH, hash);
+      localStorage.setItem(STORAGE_PW_HASH, result.hash);
+      localStorage.setItem(STORAGE_PW_ALGO, result.algo);
       // Beim ersten Login MUSS das Passwort geaendert werden
       localStorage.setItem(STORAGE_PW_MUST_CHANGE, '1');
     }
@@ -137,24 +146,33 @@ async function pbkdf2(password, saltB64, iterations) {
     return {
       hash: localStorage.getItem(STORAGE_PW_HASH),
       salt: localStorage.getItem(STORAGE_PW_SALT),
-      iter: Number(localStorage.getItem(STORAGE_PW_ITER)) || PBKDF2_ITERATIONS
+      iter: Number(localStorage.getItem(STORAGE_PW_ITER)) || PBKDF2_ITERATIONS,
+      algo: localStorage.getItem(STORAGE_PW_ALGO) || 'pbkdf2'
     };
   }
 
   async function verifyPassword(input) {
     if (!input) return false;
-    const { hash, salt, iter } = await getStoredPasswordHash();
+    const { hash, salt, iter, algo } = await getStoredPasswordHash();
     if (!hash || !salt) return false;
-    const candidate = await pbkdf2(String(input), salt, iter);
-    return timingSafeEqual(candidate, hash);
+    const result = await pbkdf2(String(input), salt, iter);
+    // Algorithmus muss gleich sein wie beim Erstellen des Hashes
+    // (sonst Mismatch bei PBKDF2-vs-SHA256-Fallback)
+    const storedAlgo = algo || 'pbkdf2';
+    if (result.algo !== storedAlgo) {
+      console.warn(`[security] Hash-Algorithmus Mismatch: stored=${storedAlgo}, computed=${result.algo}. Login mit altem Passwort nicht moeglich.`);
+      return false;
+    }
+    return timingSafeEqual(result.hash, hash);
   }
 
   async function setPassword(newPw) {
     const salt = randomSalt();
-    const hash = await pbkdf2(newPw, salt, PBKDF2_ITERATIONS);
+    const result = await pbkdf2(newPw, salt, PBKDF2_ITERATIONS);
     localStorage.setItem(STORAGE_PW_SALT, salt);
     localStorage.setItem(STORAGE_PW_ITER, String(PBKDF2_ITERATIONS));
-    localStorage.setItem(STORAGE_PW_HASH, hash);
+    localStorage.setItem(STORAGE_PW_HASH, result.hash);
+    localStorage.setItem(STORAGE_PW_ALGO, result.algo);
     // Nach Passwort-Aenderung ist der Force-Change-Flag weg
     localStorage.removeItem(STORAGE_PW_MUST_CHANGE);
   }
