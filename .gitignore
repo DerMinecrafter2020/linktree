@@ -4,11 +4,10 @@
 # Sensible Daten (Supabase-Keys, anon-Key, service_role) NIEMALS einchecken.
 
 # --- Lokale Server-Konfiguration --------------------------------------
-# config.js WIRD im Repo getrackt (mit Platzhaltern), damit die
-# Seite auch ohne install.sh funktioniert (Demo-Mode).
-# install.sh ersetzt die Platzhalter mit echten Werten.
-# config.local.js wird vom install.sh als Backup angelegt und
-# NICHT getrackt — darin stehen dann die echten Secrets.
+# config.js enthaelt Supabase-Keys, Navidrome-Credentials und
+# das Admin-Passwort. Wird vom install.sh erzeugt und NIE
+# committed — config.example.js dient als Template.
+config.js
 config.local.js
 
 # --- Lokale Test-/Debug-Skripte -------------------------------------------
