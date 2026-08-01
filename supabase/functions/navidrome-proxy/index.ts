@@ -37,10 +37,20 @@ const CORS_BASE = {
 
 function corsFor(req) {
   const origin = req.headers.get('origin') || '';
-  const allowed = ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin);
+  // Wenn ALLOWED_ORIGINS nicht gesetzt ist: lokale Dev-Origins
+  // automatisch erlauben (localhost / 127.0.0.1 auf beliebigen Ports).
+  // Sonst: nur explizit konfigurierte Origins.
+  let allowed;
+  if (ALLOWED_ORIGINS.length === 0) {
+    allowed = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  } else {
+    allowed = ALLOWED_ORIGINS.includes(origin);
+  }
   return {
     ...CORS_BASE,
-    'Access-Control-Allow-Origin': allowed ? (origin || '*') : 'null',
+    // Wichtig: Origin immer explizit zurueckgeben (nie '*'), sonst
+    // blockt der Browser sobald Credentials/Custom-Headers im Spiel sind.
+    'Access-Control-Allow-Origin': allowed ? origin : 'null',
     'Vary': 'Origin',
   };
 }
@@ -229,7 +239,7 @@ async function getNowPlaying() {
     const resp  = data && data['subsonic-response'];
     const entry = resp && resp.nowPlaying && resp.nowPlaying.entry && resp.nowPlaying.entry[0];
 
-    if (!entry) return { playing: false };
+    if (!entry) return { playing: false, url: NAVIDROME_URL.replace(/\/+$/, '') };
 
     const coverUrl = entry.coverArt ? await getCoverArt(entry.coverArt, 220) : '';
     const player   = entry.player || {};
