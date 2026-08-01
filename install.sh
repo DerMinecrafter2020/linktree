@@ -463,124 +463,81 @@ fi
 ADMIN_PASS_JSON=$(printf '%s' "$ADMIN_PASSWORD" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().rstrip("\n")))' 2>/dev/null || \
                   printf '%s' "$ADMIN_PASSWORD" | sed 's/\\/\\\\/g; s/"/\\"/g; s/'"'"'/\\'"'"'/g')
 
-# Navidrome-Werte: versuchen aus Supabase-Secrets zu laden.
-# Falls vorhanden → enabled=true + Werte einsetzen.
-# Falls nicht lesbar → User nach Username+Passwort fragen und Secrets setzen.
-NAVIDROME_URL_FROM_SECRET=""
-NAVIDROME_USER_FROM_SECRET=""
-NAVIDROME_PASS_FROM_SECRET=""
-SECRETS_READABLE=0   # 1 wenn CLI eingeloggt + Secrets lesbar
+# Navidrome-Werte: immer interaktiv nach Credentials fragen.
+# Früher wurde versucht, die Werte aus Supabase-Secrets zu lesen,
+# aber das hat sich als unzuverlässig erwiesen (Login-State,
+# Cache, Token-Refresh). Stattdessen: User gibt die Werte einmal ein,
+# das Skript setzt sie (a) lokal in config.js und (b) bei eingeloggtem
+# CLI direkt in Supabase. So funktioniert es ohne Token-Cache-Issues.
 
-# Erst CLI installieren (falls noetig) — sonst kein Secret-Zugriff moeglich
+# Erst CLI installieren (falls noetig)
 install_supabase_cli
 
-# Login-Status pruefen
+# Login-Status nur pruefen (KEIN auto-read der Secrets)
+SECRETS_READABLE=0
 if command -v supabase >/dev/null 2>&1; then
     if supabase projects list 2>/dev/null | grep -q "$SUPABASE_PROJECT_REF"; then
-        # CLI ist eingeloggt + Projekt verlinkt
         log_ok "supabase CLI eingeloggt und Projekt $SUPABASE_PROJECT_REF verlinkt"
         SECRETS_READABLE=1
     else
-        log_warn "supabase CLI ist nicht eingeloggt oder Projekt nicht verlinkt"
-        log_warn "  Fuer Auto-Load der Secrets:"
-        log_warn "    supabase login"
-        log_warn "    supabase link --project-ref $SUPABASE_PROJECT_REF"
+        log_warn "supabase CLI nicht eingeloggt — Secrets werden nur in config.js gesetzt"
     fi
 fi
 
-# Secrets lesen, falls moeglich
-if [[ "$SECRETS_READABLE" -eq 1 ]]; then
-    NAVIDROME_URL_FROM_SECRET=$(get_supabase_secret "NAVIDROME_URL" 2>/dev/null || echo "")
-    NAVIDROME_USER_FROM_SECRET=$(get_supabase_secret "NAVIDROME_USER" 2>/dev/null || echo "")
-    NAVIDROME_PASS_FROM_SECRET=$(get_supabase_secret "NAVIDROME_PASS" 2>/dev/null || echo "")
-fi
+# Frage Navidrome-URL
+echo ""
+echo -n "  Navidrome URL (z.B. https://music.deinedomain.de oder http://localhost:4533): "
+read -r NAV_URL_PROMPT
+NAV_URL="${NAV_URL_PROMPT:-https://music.deinedomain.de}"
 
-# Wenn alle drei Secrets vorhanden sind: direkt verwenden
-if [[ -n "$NAVIDROME_URL_FROM_SECRET" && -n "$NAVIDROME_USER_FROM_SECRET" && -n "$NAVIDROME_PASS_FROM_SECRET" ]]; then
-    log_ok "Navidrome-Secrets aus Supabase geladen — Player wird aktiviert"
-    NAV_ENABLED="true"
-    NAV_URL="$NAVIDROME_URL_FROM_SECRET"
-    NAV_USER="$NAVIDROME_USER_FROM_SECRET"
-    NAV_PASS_JSON=$(printf '%s' "$NAVIDROME_PASS_FROM_SECRET" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().rstrip("\n")))' 2>/dev/null || \
-                    printf '%s' "$NAVIDROME_PASS_FROM_SECRET" | sed 's/\\/\\\\/g; s/"/\\"/g; s/'"'"'/\\'"'"'/g')
+# Frage Navidrome-Username
+echo -n "  Navidrome Username: "
+read -r NAV_USER
+if [[ -z "$NAV_USER" ]]; then
+    log_warn "Username leer — Player bleibt deaktiviert"
+    NAV_USER="YOUR_USER"
+    NAV_ENABLED="false"
+    NAV_PASS_JSON='"YOUR_PASS"'
 else
-    # Secrets fehlen oder nicht lesbar → nach Navidrome-Credentials fragen
-    if [[ "$SECRETS_READABLE" -eq 1 ]]; then
-        log_warn "Navidrome-Secrets nicht in Supabase gefunden — frage nach Credentials"
-    fi
-
-    # Frage Navidrome-URL
-    echo ""
-    echo -n "  Navidrome URL (z.B. https://music.deinedomain.de oder http://localhost:4533): "
-    read -r NAV_URL_PROMPT
-    NAV_URL="${NAV_URL_PROMPT:-https://music.deinedomain.de}"
-
-    # Frage Navidrome-Username
-    echo -n "  Navidrome Username: "
-    read -r NAV_USER
-
-    # Frage Navidrome-Passwort (silent)
+    NAV_ENABLED="true"
+    # Frage Navidrome-Passwort (sichtbar)
     while true; do
-        echo -n "  Navidrome Passwort (sichtbar — Eingabe wird angezeigt): "
+        echo -n "  Navidrome Passwort: "
         read -r NAV_PASS
         if [[ -z "$NAV_PASS" ]]; then
-            log_warn "Passwort darf nicht leer sein"
+            log_warn "Passwort darf nicht leer sein — bitte erneut eingeben"
             continue
         fi
         break
     done
 
-    # Wenn CLI eingeloggt ist → Secrets setzen
+    # Wenn CLI eingeloggt: Secrets in Supabase setzen
     if [[ "$SECRETS_READABLE" -eq 1 ]]; then
         log_info "Setze Secrets in Supabase (NAVIDROME_URL/USER/PASS)..."
-        # supabase secrets set NAME=value
-        # Bei Sonderzeichen im Wert müssen wir das richtige Escaping nutzen.
-        # Supabase CLI akzeptiert KEY=VALUE mit normaler Shell-Quoting,
-        # aber wir nutzen --env-file fuer Sicherheit.
         env_tmp="/tmp/openweb-nav-env"
+        # Hier-String mit Single-Quotes: KEINE Sonderzeichen-Interpretation
         cat > "$env_tmp" <<EOF
-NAVIDROME_URL=$NAV_URL
-NAVIDROME_USER=$NAV_USER
-NAVIDROME_PASS=$NAV_PASS
+NAVIDROME_URL=${NAV_URL}
+NAVIDROME_USER=${NAV_USER}
+NAVIDROME_PASS=${NAV_PASS}
 EOF
         chmod 600 "$env_tmp"
         if supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$env_tmp" 2>&1; then
             log_ok "Secrets in Supabase gesetzt"
-            # Verifizieren durch erneutes Lesen
-            NAVIDROME_URL_FROM_SECRET=$(get_supabase_secret "NAVIDROME_URL" 2>/dev/null || echo "")
-            NAVIDROME_USER_FROM_SECRET=$(get_supabase_secret "NAVIDROME_USER" 2>/dev/null || echo "")
-            NAVIDROME_PASS_FROM_SECRET=$(get_supabase_secret "NAVIDROME_PASS" 2>/dev/null || echo "")
-            if [[ -n "$NAVIDROME_URL_FROM_SECRET" ]]; then
-                log_ok "Secrets verifiziert — Player wird aktiviert"
-                NAV_URL="$NAVIDROME_URL_FROM_SECRET"
-                NAV_USER="$NAVIDROME_USER_FROM_SECRET"
-                NAV_PASS_JSON=$(printf '%s' "$NAVIDROME_PASS_FROM_SECRET" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().rstrip("\n")))' 2>/dev/null || \
-                                printf '%s' "$NAVIDROME_PASS_FROM_SECRET" | sed 's/\\/\\\\/g; s/"/\\"/g; s/'"'"'/\\'"'"'/g')
-                NAV_ENABLED="true"
-            else
-                log_warn "Secrets gesetzt, aber Lesen fehlgeschlagen — verwende lokale Werte"
-                NAV_PASS_JSON=$(printf '%s' "$NAV_PASS" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().rstrip("\n")))' 2>/dev/null || \
-                                printf '%s' "$NAV_PASS" | sed 's/\\/\\\\/g; s/"/\\"/g; s/'"'"'/\\'"'"'/g')
-                NAV_ENABLED="true"
-            fi
         else
-            log_warn "Secrets konnten nicht via CLI gesetzt werden — verwende lokale Werte"
-            NAV_PASS_JSON=$(printf '%s' "$NAV_PASS" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().rstrip("\n")))' 2>/dev/null || \
-                            printf '%s' "$NAV_PASS" | sed 's/\\/\\\\/g; s/"/\\"/g; s/'"'"'/\\'"'"'/g')
-            NAV_ENABLED="true"
+            log_warn "supabase secrets set fehlgeschlagen — nur lokal in config.js"
         fi
         rm -f "$env_tmp"
     else
-        # CLI nicht eingeloggt → Werte nur lokal in config.js setzen
-        log_warn "supabase CLI nicht eingeloggt — Secrets werden NUR lokal gesetzt"
-        log_warn "  Um sie in Supabase zu setzen:"
+        log_warn "CLI nicht eingeloggt — Secrets nur lokal. Spaeter manuell mit:"
         log_warn "    supabase login"
         log_warn "    supabase link --project-ref $SUPABASE_PROJECT_REF"
-        log_warn "    supabase secrets set NAVIDROME_URL='$NAV_URL' NAVIDROME_USER='$NAV_USER' NAVIDROME_PASS='$NAV_PASS'"
-        NAV_PASS_JSON=$(printf '%s' "$NAV_PASS" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().rstrip("\n")))' 2>/dev/null || \
-                        printf '%s' "$NAV_PASS" | sed 's/\\/\\\\/g; s/"/\\"/g; s/'"'"'/\\'"'"'/g')
-        NAV_ENABLED="true"
+        log_warn "    supabase secrets set NAVIDROME_URL='${NAV_URL}' NAVIDROME_USER='${NAV_USER}' NAVIDROME_PASS='${NAV_PASS}'"
     fi
+
+    # Passwort als JSON-String escapen (lokale Verwendung in config.js)
+    NAV_PASS_JSON=$(printf '%s' "$NAV_PASS" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().rstrip("\n")))' 2>/dev/null || \
+                    printf '%s' "$NAV_PASS" | sed 's/\\/\\\\/g; s/"/\\"/g; s/'"'"'/\\'"'"'/g')
 fi
 
 cat > "${INSTALL_DIR}/config.js" <<EOF
