@@ -3,6 +3,11 @@
 # =========================================================
 # Sensible Daten (Supabase-Keys, anon-Key, service_role) NIEMALS einchecken.
 
+# --- Lokale Server-Konfiguration (PRO-Geraet-spezifisch) -----------------
+# config.js enthaelt Supabase-Keys, Navidrome-Credentials und
+# das Admin-Passwort. Wird vom install.sh erzeugt.
+config.js
+
 # --- Lokale Test-/Debug-Skripte -------------------------------------------
 test-attack.bat
 final-check.bat

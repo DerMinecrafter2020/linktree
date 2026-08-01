@@ -442,6 +442,16 @@ fi
 # Wir generieren hier eine lokale config.js, die das echte Passwort enthält.
 log_info "Erstelle lokale config.js mit Admin-Passwort..."
 
+# Wenn config.js noch nicht existiert (frischer Klon), aus config.example.js kopieren
+if [[ ! -f "${INSTALL_DIR}/config.js" ]]; then
+    if [[ -f "${INSTALL_DIR}/config.example.js" ]]; then
+        cp "${INSTALL_DIR}/config.example.js" "${INSTALL_DIR}/config.js"
+        log_ok "config.js aus config.example.js erstellt (frischer Klon)"
+    else
+        log_warn "Weder config.js noch config.example.js vorhanden — erstelle leeres Template"
+    fi
+fi
+
 # Wenn schon eine config.js mit echten Daten existiert, behalten wir sie.
 # So gehen Werte aus früheren install-Läufen nicht verloren.
 # Ausnahme: 'neuinstallieren' ueberschreibt alles ohne Rueckfrage.
