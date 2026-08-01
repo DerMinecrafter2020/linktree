@@ -1,0 +1,197 @@
+-- =========================================================
+-- Supabase SQL-Setup
+-- =========================================================
+-- Führe dieses Skript EINMAL im Supabase SQL-Editor aus:
+--   https://app.supabase.com → SQL Editor → New Query → Einfügen → Run
+-- =========================================================
+
+-- 1) Tabelle für das Profil (es gibt nur eine Zeile mit id = 1)
+create table if not exists public.profile (
+  id          int          primary key default 1,
+  name        text         not null default '@corneliusahner',
+  handle      text         not null default 'Cornelius Ahner',
+  bio         text         not null default 'Azubi, 21 Jahre alt',
+  avatar      text         not null default 'CA',
+  avatar_url  text         null,
+  updated_at  timestamptz  not null default now(),
+  constraint profile_singleton check (id = 1)
+);
+
+-- Falls die Tabelle schon existiert (z.B. Wiederholungslauf), fehlende Spalte ergänzen
+alter table public.profile
+  add column if not exists avatar_url text;
+
+insert into public.profile (id, name, handle, bio, avatar)
+values (1, '@corneliusahner', 'Cornelius Ahner', 'Azubi, 21 Jahre alt', 'CA')
+on conflict (id) do nothing;
+
+-- 2) Tabelle für die Links
+create table if not exists public.links (
+  id          uuid         primary key default gen_random_uuid(),
+  title       text         not null,
+  subtitle    text         not null default '',
+  url         text         not null,
+  icon        text         not null default '🔗',
+  position    int          not null default 0,
+  is_active   boolean      not null default true,
+  open_new    boolean      not null default true,
+  created_at  timestamptz  not null default now(),
+  updated_at  timestamptz  not null default now()
+);
+
+create index if not exists links_position_idx on public.links (position);
+
+-- 3) Trigger: updated_at automatisch setzen
+create or replace function public.set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_links_updated_at on public.links;
+create trigger trg_links_updated_at
+  before update on public.links
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_profile_updated_at on public.profile;
+create trigger trg_profile_updated_at
+  before update on public.profile
+  for each row execute function public.set_updated_at();
+
+-- 4) Row Level Security aktivieren
+alter table public.profile enable row level security;
+alter table public.links   enable row level security;
+
+-- 5) Policies: Jeder darf lesen (öffentliche Seite), Schreiben erfordert
+--    ein gültiges "admin_token" (custom claim im JWT, gesetzt via RPC).
+--
+--    Flow:
+--    1. App ruft `verify_admin_password(password text)` auf
+--    2. Wenn das Passwort stimmt → set_session_admin() setzt ein
+--       Statement-Timeout-Session-Tag + Claims via JWT-Issuer
+--    3. Schreib-Policies prüfen `auth.jwt()->>'role' = 'admin'`
+--
+--    Da wir aktuell nur Client-Auth nutzen, verwenden wir einen
+--    pragmatischen Ansatz: Schreibrechte via Edge-Function /
+--    service_role. Hier sind die Policies schon RLS-strict
+--    vorbereitet, sodass anon KEINEN Schreibzugriff hat.
+drop policy if exists "profile read"   on public.profile;
+drop policy if exists "profile write"  on public.profile;
+drop policy if exists "links read"     on public.links;
+drop policy if exists "links write"    on public.links;
+drop policy if exists "links insert"   on public.links;
+drop policy if exists "links update"   on public.links;
+drop policy if exists "links delete"   on public.links;
+
+-- Public-Read für alle (anon + authenticated)
+create policy "profile read"  on public.profile for select to anon, authenticated using (true);
+create policy "links read"    on public.links   for select to anon, authenticated using (true);
+
+-- =========================================================
+-- WICHTIG: Schreib-Policies gelten NUR, wenn ein JWT mit
+--   role = 'admin' als Custom-Claim vorhanden ist.
+--   Anon-User (auch wenn sie per anon-Key schreiben wollen)
+--   haben per Definition KEINEN JWT mit role='admin' → blockiert.
+--
+-- Da unser Edge-Function 'admin-proxy' direkt mit dem
+-- SERVICE_ROLE_KEY schreibt, umgehen wir die RLS ohnehin.
+-- Die Policies hier sind eine Belt-and-Suspenders-Maßnahme
+-- für den Fall, dass jemand den anon-Key leakiert.
+-- =========================================================
+create policy "profile write" on public.profile
+  for all to authenticated
+  using ((auth.jwt() ->> 'role')::text = 'admin')
+  with check ((auth.jwt() ->> 'role')::text = 'admin');
+
+create policy "links insert" on public.links
+  for insert to authenticated
+  with check ((auth.jwt() ->> 'role')::text = 'admin');
+
+create policy "links update" on public.links
+  for update to authenticated
+  using ((auth.jwt() ->> 'role')::text = 'admin')
+  with check ((auth.jwt() ->> 'role')::text = 'admin');
+
+create policy "links delete" on public.links
+  for delete to authenticated
+  using ((auth.jwt() ->> 'role')::text = 'admin');
+
+-- Defense-in-Depth: explizit für anon DENY
+-- (anon sollte zwar schon durch das Fehlen einer Policy geblockt
+-- sein, aber so ist die Absicht eindeutig dokumentiert)
+drop policy if exists "anon deny all profile" on public.profile;
+drop policy if exists "anon deny all links" on public.links;
+create policy "anon deny all profile" on public.profile for all to anon using (false) with check (false);
+create policy "anon deny all links"   on public.links   for all to anon using (false) with check (false);
+
+-- =========================================================
+-- Größen-Limits als CHECK-Constraints (DoS-Schutz)
+-- =========================================================
+alter table public.profile
+  drop constraint if exists profile_name_len,
+  drop constraint if exists profile_handle_len,
+  drop constraint if exists profile_bio_len,
+  drop constraint if exists profile_avatar_len,
+  drop constraint if exists profile_avatar_url_len;
+
+alter table public.profile
+  add constraint profile_name_len       check (char_length(name)       <= 80),
+  add constraint profile_handle_len     check (char_length(handle)     <= 80),
+  add constraint profile_bio_len        check (char_length(bio)        <= 280),
+  add constraint profile_avatar_len     check (char_length(avatar)     <= 8),
+  add constraint profile_avatar_url_len check (avatar_url is null or char_length(avatar_url) <= 700_000); -- ~500KB Base64
+
+alter table public.links
+  drop constraint if exists links_title_len,
+  drop constraint if exists links_subtitle_len,
+  drop constraint if exists links_url_len,
+  drop constraint if exists links_icon_len;
+
+alter table public.links
+  add constraint links_title_len    check (char_length(title)    <= 200),
+  add constraint links_subtitle_len check (char_length(subtitle) <= 300),
+  add constraint links_url_len     check (char_length(url)      <= 500),
+  add constraint links_icon_len    check (char_length(icon)     <= 200);
+
+-- URL-Protokoll-Check (nur http/https/mailto)
+alter table public.links
+  drop constraint if exists links_url_proto;
+alter table public.links
+  add constraint links_url_proto check (
+    url ~* '^https?://' or url ~* '^mailto:'
+  );
+
+-- 6) Realtime aktivieren (optional, damit Änderungen live auf der Hauptseite ankommen)
+alter publication supabase_realtime add table public.profile;
+alter publication supabase_realtime add table public.links;
+
+-- =========================================================
+-- 7) Admin-Auth: Passwort serverseitig gehasht (PBKDF2-SHA256)
+-- =========================================================
+-- Der Klartext liegt NUR im Edge-Function-Aufruf (TLS-verschlüsselt).
+-- In der DB stehen: Hash (Base64), Salt (Base64), Iterationen, Algorithmus.
+create table if not exists public.admin_auth (
+  id           int          primary key default 1,
+  algo         text         not null default 'PBKDF2-SHA256',
+  iterations   int          not null default 210000,
+  salt         text         not null,
+  password_hash text        not null,
+  updated_at   timestamptz  not null default now(),
+  constraint admin_auth_singleton check (id = 1)
+);
+
+-- Initial-Seed mit Default-Passwort "admin123":
+--   Salt (Base64): 16 Bytes aus crypto.getRandomValues(), deterministisch gesalzen
+--   Hash = PBKDF2-SHA256("admin123", salt, 210000)
+-- Der genaue Wert wird beim ersten Deploy der Edge-Function 'auth-init' erzeugt
+-- (siehe supabase/functions/auth-init/index.ts). Hier nur Platzhalter:
+insert into public.admin_auth (id, algo, iterations, salt, password_hash)
+values (1, 'PBKDF2-SHA256', 210000, 'PLACEHOLDER', 'PLACEHOLDER')
+on conflict (id) do nothing;
+
+-- RLS: niemand liest oder schreibt direkt. Nur Service-Role (via Edge-Function).
+alter table public.admin_auth enable row level security;
+drop policy if exists "admin_auth all" on public.admin_auth;
+create policy "admin_auth deny all" on public.admin_auth for all to anon, authenticated using (false) with check (false);

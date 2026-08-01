@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a0a14" />
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' https://cdn.jsdelivr.net;
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src 'self' https://fonts.gstatic.com;
+    img-src 'self' data: https: blob:;
+    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdn.jsdelivr.net;
+    frame-ancestors 'none';
+    base-uri 'self';
+    form-action 'self';
+    object-src 'none';
+  " />
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+  <meta http-equiv="Permissions-Policy" content="geolocation=(), microphone=(), camera=(), payment=()" />
+  <title>Admin · Cornelius Ahner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+
+  <!-- =========================================================
+       LOGIN-MODAL
+       ========================================================= -->
+  <div id="login-overlay" class="login-overlay">
+    <div class="login-card">
+      <div class="login-ring"></div>
+      <h1>🔐 Admin</h1>
+      <p>Bitte Passwort eingeben</p>
+      <form id="login-form" autocomplete="off">
+        <!-- Honeypot: Bots füllen das Feld aus, Menschen nicht -->
+        <input type="text" name="website" tabindex="-1" autocomplete="off"
+               style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" aria-hidden="true" />
+        <input type="password" id="login-password" placeholder="Passwort" required
+               autocomplete="current-password" />
+        <button type="submit">Anmelden</button>
+        <p id="login-error" class="login-error"></p>
+      </form>
+      <small>Hinweis: Standard-Passwort ist <code>admin123</code> – beim ersten Login als PBKDF2-Hash gespeichert. Ändern unter <strong>Einstellungen → Passwort ändern</strong>.</small>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       HAUPT-LAYOUT
+       ========================================================= -->
+  <div id="app" class="app" hidden>
+
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span>Link Admin</span>
+      </div>
+      <nav class="side-nav">
+        <button class="side-btn active" data-tab="links">🔗 Links</button>
+        <button class="side-btn" data-tab="profile">👤 Profil</button>
+        <button class="side-btn" data-tab="data">💾 Daten</button>
+        <button class="side-btn" data-tab="settings">⚙️ Einstellungen</button>
+      </nav>
+      <div class="side-footer">
+        <a href="index.html" target="_blank" class="side-link">↗ Seite öffnen</a>
+        <button id="logout-btn" class="side-link">↩ Logout</button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="content-head">
+        <h2 id="tab-title">Links</h2>
+        <span id="connection-state" class="connection-state">…</span>
+      </header>
+
+      <!-- ==================== TAB: LINKS ==================== -->
+      <section class="tab" data-tab="links">
+        <div class="toolbar">
+          <button id="add-link-btn" class="btn primary">+ Neuer Link</button>
+          <small class="hint">Tipp: Pfeile oder Drag &amp; Drop zum Sortieren</small>
+        </div>
+        <ul id="links-list" class="links-list"></ul>
+      </section>
+
+      <!-- ==================== TAB: PROFIL ==================== -->
+      <section class="tab" data-tab="profile" hidden>
+        <form id="profile-form" class="form">
+
+          <!-- ===== Avatar-Upload ===== -->
+          <div class="avatar-upload">
+            <div class="avatar-preview" id="avatar-preview" aria-label="Avatar-Vorschau">
+              <span id="avatar-preview-text">CA</span>
+              <img id="avatar-preview-img" alt="" hidden />
+              <button type="button" class="avatar-remove" id="avatar-remove" title="Bild entfernen" hidden>✕</button>
+            </div>
+            <div class="avatar-upload-controls">
+              <label for="avatar-file" class="btn">📷 Bild hochladen</label>
+              <input id="avatar-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+              <p class="hint">PNG, JPG, WebP oder GIF · max. 5 MB · wird automatisch auf 512×512 verkleinert</p>
+              <label class="avatar-fallback-row">
+                <input type="checkbox" id="avatar-use-text" />
+                <span>Fallback-Buchstaben verwenden (statt Bild)</span>
+              </label>
+              <input name="avatar" type="text" maxlength="2" placeholder="CA" class="avatar-text-input" />
+            </div>
+          </div>
+
+          <label>
+            <span>Name (Anzeige-Titel)</span>
+            <input name="name" type="text" placeholder="@corneliusahner" />
+          </label>
+          <label>
+            <span>Handle (Untertitel)</span>
+            <input name="handle" type="text" placeholder="Cornelius Ahner" />
+          </label>
+          <label>
+            <span>Bio</span>
+            <textarea name="bio" rows="3" placeholder="Azubi, 21 Jahre alt"></textarea>
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Speichern</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- ==================== TAB: DATEN ==================== -->
+      <section class="tab" data-tab="data" hidden>
+        <div class="card-block">
+          <h3>📤 Export</h3>
+          <p>Lade alle Einstellungen und Links als JSON-Datei herunter.</p>
+          <button id="export-btn" class="btn">JSON exportieren</button>
+        </div>
+        <div class="card-block">
+          <h3>📥 Import</h3>
+          <p>Spielt eine zuvor exportierte JSON-Datei wieder ein.</p>
+          <input type="file" id="import-input" accept="application/json" hidden />
+          <button id="import-btn" class="btn">JSON importieren</button>
+        </div>
+        <div class="card-block danger">
+          <h3>🗑️ Zurücksetzen</h3>
+          <p>Setzt alle Links und das Profil auf den Auslieferungszustand zurück.</p>
+          <button id="reset-btn" class="btn danger">Alles zurücksetzen</button>
+        </div>
+      </section>
+
+      <!-- ==================== TAB: SETTINGS ==================== -->
+      <section class="tab" data-tab="settings" hidden>
+        <div class="card-block">
+          <h3>🔌 Verbindung</h3>
+          <p id="settings-connection">…</p>
+          <code id="settings-url">…</code>
+        </div>
+        <div class="card-block">
+          <h3>🔑 Passwort ändern</h3>
+          <p id="change-pw-hint">Passwort wird in <code>localStorage</code> gehasht (PBKDF2)</p>
+          <form id="change-pw-form" class="form inline">
+            <input type="password" name="old" placeholder="Aktuelles Passwort" autocomplete="current-password" />
+            <input type="password" name="new" placeholder="Neues Passwort (min. 8 Zeichen)" required autocomplete="new-password" />
+            <button class="btn">Ändern</button>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- =========================================================
+       LINK-EDITOR (MODAL)
+       ========================================================= -->
+  <dialog id="link-dialog" class="dialog">
+    <form id="link-form" method="dialog" class="form">
+      <h3 id="link-dialog-title">Neuer Link</h3>
+
+      <label>
+        <span>Titel</span>
+        <input name="title" type="text" required placeholder="z. B. YouTube" />
+      </label>
+      <label>
+        <span>Untertitel</span>
+        <input name="subtitle" type="text" placeholder="z. B. Mein Kanal" />
+      </label>
+      <label>
+        <span>URL</span>
+        <input name="url" type="url" required placeholder="https://…" />
+      </label>
+      <label>
+        <span>Icon (Emoji, Bild-URL oder Marken-Name)</span>
+        <div class="icon-picker">
+          <input name="icon" type="text" placeholder="🔗 / https://… / instagram" autocomplete="off" />
+          <button type="button" id="icon-picker-toggle" class="icon-picker-btn" title="Icon auswählen">🎨</button>
+        </div>
+        <div id="icon-picker-panel" class="icon-picker-panel" hidden>
+          <input type="text" id="icon-search" class="icon-search" placeholder="Suche: instagram, github, youtube …" />
+          <div class="icon-preview">
+            <span class="icon-preview-label">Vorschau:</span>
+            <span id="icon-preview-target" class="icon-preview-target"></span>
+            <code id="icon-preview-name" class="icon-preview-name">—</code>
+          </div>
+          <div id="icon-grid" class="icon-grid">
+            <div class="icon-empty">Tippe oben, um Icons zu suchen …</div>
+          </div>
+          <div class="icon-suggested">
+            <span>Vorschläge:</span>
+            <div id="icon-suggested-list"></div>
+          </div>
+        </div>
+      </label>
+      <label class="row">
+        <input name="is_active" type="checkbox" checked />
+        <span>Aktiv (auf der Seite anzeigen)</span>
+      </label>
+      <label class="row">
+        <input name="open_new" type="checkbox" checked />
+        <span>In neuem Tab öffnen</span>
+      </label>
+
+      <div class="form-actions">
+        <button type="button" id="link-cancel" class="btn ghost">Abbrechen</button>
+        <button type="submit" class="btn primary">Speichern</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="config.js"></script>
+  <script src="supabase-client.js"></script>
+  <script src="icons.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

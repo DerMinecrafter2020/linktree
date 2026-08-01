@@ -1,0 +1,46 @@
+# =========================================================
+# .gitignore — OpenWeb
+# =========================================================
+# Sensible Daten (Supabase-Keys, anon-Key, service_role) NIEMALS einchecken.
+
+# --- Lokale Test-/Debug-Skripte -------------------------------------------
+test-attack.bat
+final-check.bat
+retest.bat
+inspect-rls.ps1
+inspect2.bat
+check-policies.bat
+security-test.ps1
+
+# --- Temporäre Logs/Outputs ----------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env
+.env.*
+!.env.example
+
+# --- Node / Build-Artefakte ---------------------------------------------
+node_modules/
+dist/
+build/
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- Supabase Edge Function lokale Deploy-Artefakte ----------------------
+supabase/.branches/
+supabase/.temp/
+supabase/.env
+
+# --- Datenbank-Dumps -----------------------------------------------------
+*.sql.bak
+*.dump
+
+# --- Editor --------------------------------------------------------------
+.vscode/*
+!.vscode/settings.json
