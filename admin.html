@@ -121,15 +121,6 @@
             <textarea name="bio" rows="3" placeholder="Azubi, 21 Jahre alt"></textarea>
           </label>
 
-          <!-- ===== Theme-Auswahl (Live-Vorschau) ===== -->
-          <fieldset class="theme-picker">
-            <legend>🎨 Theme</legend>
-            <div id="theme-grid" class="theme-grid" role="radiogroup" aria-label="Theme auswählen">
-              <!-- wird durch admin.js befuellt -->
-            </div>
-            <p class="hint">Die Vorschau ist sofort sichtbar. Beim Speichern wird das Theme dauerhaft angewendet.</p>
-          </fieldset>
-
           <div class="form-actions">
             <button type="submit" class="btn primary">Speichern</button>
           </div>
@@ -288,8 +279,17 @@ supabase secrets set ALLOWED_ORIGINS="http://localhost:5500,https://deine-domain
 
   <script src="config.js"></script>
   <script src="supabase-client.js"></script>
-  <script src="themes.js"></script>
   <script src="icons.js"></script>
+  <script src="api/supabase/_shared.js"></script>
+  <script src="api/supabase/admin-proxy.js"></script>
+  <script src="api/supabase/auth-login.js"></script>
+  <script src="api/supabase/auth-change-password.js"></script>
+  <script src="api/navidrome/_shared.js"></script>
+  <script src="api/navidrome/client.js"></script>
+  <script src="api/navidrome/status.js"></script>
+  <script src="api/navidrome/nowplaying.js"></script>
+  <script src="api/navidrome/control.js"></script>
+  <script src="api/navidrome/coverart.js"></script>
   <script src="admin.js"></script>
 </body>
 </html>

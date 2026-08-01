@@ -87,27 +87,14 @@
     if (!ADMIN_PROXY_URL) {
       throw new Error('adminProxyUrl nicht konfiguriert — siehe supabase/functions/admin-proxy/README');
     }
-    const headers = {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_KEY,
-    };
-    const body = { action, data };
-    if (AUTH_ENABLED) {
-      // JWT im Authorization-Header (Edge-Function liest ihn dort)
-      headers['Authorization'] = `Bearer ${token}`;
-    } else {
-      // Legacy-Fallback: anon + token im Body
-      headers['Authorization'] = `Bearer ${SUPABASE_KEY}`;
-      body.token = token;
-    }
-    const res = await fetch(ADMIN_PROXY_URL, {
-      method: 'POST', headers, body: JSON.stringify(body),
+    return await window.SupabaseAPI.adminProxy({
+      url: ADMIN_PROXY_URL,
+      token: token,
+      action: action,
+      data: data,
+      authEnabled: AUTH_ENABLED,
+      anonKey: SUPABASE_KEY,
     });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || `HTTP ${res.status}`);
-    }
-    return json.data;
   }
 
   // =========================================================
@@ -119,34 +106,24 @@
   // Siehe DEPLOYMENT.md Schritt 4.
   async function authLogin(password, honeypot) {
     if (!AUTH_LOGIN_URL) throw new Error('authLoginUrl nicht konfiguriert');
-    const res = await fetch(AUTH_LOGIN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: String(password || ''), website: honeypot || '' }),
+    return await window.SupabaseAPI.authLogin({
+      url: AUTH_LOGIN_URL,
+      password: password,
+      honeypot: honeypot,
+      onToken: (token, expiresAt) => setToken(token, expiresAt),
     });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || `login failed (${res.status})`);
-    }
-    // JWT speichern
-    setToken(data.token, data.expiresAt);
-    return data;
   }
 
   async function authChangePassword(oldPassword, newPassword) {
     if (!AUTH_CHANGE_PW) throw new Error('authChangePasswordUrl nicht konfiguriert');
     const token = getToken();
     if (!token) throw new Error('nicht eingeloggt');
-    const res = await fetch(AUTH_CHANGE_PW, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+    return await window.SupabaseAPI.authChangePassword({
+      url: AUTH_CHANGE_PW,
+      token: token,
+      oldPassword: oldPassword,
+      newPassword: newPassword,
     });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || `change failed (${res.status})`);
-    }
-    return data;
   }
 
   function createDb(client) {

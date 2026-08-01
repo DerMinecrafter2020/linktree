@@ -49,21 +49,14 @@
          =========================================================
          Erscheint nur, wenn NAVIDROME_CONFIG.enabled = true.
          Polling-Intervall siehe config.js (pollIntervalSec). -->
-    <section id="navidrome-player" class="np-player idle" aria-label="Aktuell gespielter Track" hidden>
+    <section id="navidrome-player" class="np-player np-compact idle" aria-label="Aktuell gespielter Track" hidden>
       <div class="np-cover" aria-hidden="true"></div>
       <div class="np-info">
-        <div class="np-title">Verbinde mit Navidrome…</div>
+        <a href="#" target="_blank" rel="noopener noreferrer" class="np-title">Verbinde mit Navidrome…</a>
         <div class="np-artist">—</div>
         <div class="np-progress" aria-label="Fortschritt">
           <div class="np-progress-bar"></div>
         </div>
-        <div class="np-time"><span class="np-time-pos">0:00</span><span class="np-time-dur">0:00</span></div>
-      </div>
-      <div class="np-controls" aria-label="Player-Steuerung">
-        <button type="button" data-np-action="previous" class="np-btn" aria-label="Vorheriger Titel">⏮</button>
-        <button type="button" data-np-action="play"     class="np-btn" aria-label="Play">▶</button>
-        <button type="button" data-np-action="pause"    class="np-btn" aria-label="Pause">⏸</button>
-        <button type="button" data-np-action="next"     class="np-btn" aria-label="Nächster Titel">⏭</button>
       </div>
     </section>
 
@@ -77,11 +70,20 @@
     </footer>
   </main>
 
-  <!-- Reihenfolge: config → supabase-client → themes → icons → app -->
+  <!-- Reihenfolge: config → supabase-client → icons → api/supabase → api/navidrome → app -->
   <script src="config.js"></script>
   <script src="supabase-client.js"></script>
-  <script src="themes.js"></script>
   <script src="icons.js"></script>
+  <script src="api/supabase/_shared.js"></script>
+  <script src="api/supabase/admin-proxy.js"></script>
+  <script src="api/supabase/auth-login.js"></script>
+  <script src="api/supabase/auth-change-password.js"></script>
+  <script src="api/navidrome/_shared.js"></script>
+  <script src="api/navidrome/client.js"></script>
+  <script src="api/navidrome/status.js"></script>
+  <script src="api/navidrome/nowplaying.js"></script>
+  <script src="api/navidrome/control.js"></script>
+  <script src="api/navidrome/coverart.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

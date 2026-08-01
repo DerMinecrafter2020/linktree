@@ -507,13 +507,6 @@
         bio:    safeText(fd.get('bio'),   280),
         avatar: avatarClean
       };
-      // Theme nur mitsenden, wenn es in der Whitelist steht (gegen beliebige Strings aus dem DOM)
-      const themeId = (state.profile?.theme ?? 'neon');
-      if (window.THEMES?.isValid(themeId)) {
-        profile.theme = themeId;
-      } else {
-        profile.theme = 'neon';
-      }
       // avatar_url: explizit prüfen (DataURL oder null)
       if (state.profile?.avatar_url !== undefined) {
         const av = state.profile.avatar_url;
@@ -556,65 +549,6 @@
     f.bio.value     = state.profile.bio || '';
     f.avatar.value  = state.profile.avatar || '';
     updateAvatarPreview(state.profile.avatar_url ? { dataUrl: state.profile.avatar_url } : null);
-    // Theme-Auswahl rendern + Live-Preview anwenden
-    renderThemePicker();
-  }
-
-  // =========================================================
-  // THEME-AUSWAHL (mit Live-Vorschau)
-  // =========================================================
-  function renderThemePicker() {
-    const grid = $('#theme-grid');
-    if (!grid || !window.THEMES) return;
-    const current = window.THEMES.isValid(state.profile?.theme) ? state.profile.theme : 'neon';
-
-    grid.innerHTML = '';
-    for (const t of window.THEMES.LIST) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'theme-card' + (t.id === current ? ' selected' : '');
-      btn.dataset.theme = t.id;
-      btn.setAttribute('role', 'radio');
-      btn.setAttribute('aria-checked', String(t.id === current));
-      btn.title = t.name;
-
-      // Vorschau-Swatch
-      const swatch = document.createElement('span');
-      swatch.className = 'theme-swatch';
-      swatch.style.background = `linear-gradient(135deg, ${t.vars['--neon-pink']}, ${t.vars['--neon-cyan']})`;
-
-      // Label
-      const label = document.createElement('span');
-      label.className = 'theme-label';
-      const emoji = document.createElement('span');
-      emoji.className = 'theme-emoji';
-      emoji.textContent = t.emoji;
-      const name = document.createElement('span');
-      name.className = 'theme-name';
-      name.textContent = t.name;
-      label.append(emoji, name);
-
-      btn.append(swatch, label);
-
-      // Live-Preview beim Klick
-      btn.addEventListener('click', () => {
-        // 1. state aktualisieren (wird beim Save mitgeschickt)
-        state.profile = { ...(state.profile || {}), theme: t.id };
-        // 2. Visuelle Selektion im Grid
-        grid.querySelectorAll('.theme-card').forEach(c => {
-          c.classList.toggle('selected', c.dataset.theme === t.id);
-          c.setAttribute('aria-checked', String(c.dataset.theme === t.id));
-        });
-        // 3. Sofort anwenden (Vorschau) — KEIN Reload noetig
-        window.THEMES.apply(t.id);
-      });
-      grid.appendChild(btn);
-    }
-  }
-
-  function bindThemePicker() {
-    // Initiale Vorschau, sobald das Grid existiert.
-    // renderThemePicker() wird in renderProfile() aufgerufen.
   }
 
   // =========================================================
@@ -1413,41 +1347,32 @@
       }
       status.textContent = 'Prüfe…';
       try {
+        // Temporär die im Formular eingetragene URL als aktive Proxy-URL setzen,
+        // damit NavidromeAPI.post() dorthin sendet (statt zu window.NAVIDROME_CONFIG.proxyUrl)
+        const savedProxyUrl = window.NAVIDROME_CONFIG?.proxyUrl;
+        window.NAVIDROME_CONFIG = window.NAVIDROME_CONFIG || {};
+        window.NAVIDROME_CONFIG.proxyUrl = proxyUrl;
+
         // 1) Status (Secrets vorhanden?)
-        const r1 = await fetch(proxyUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: window.SUPABASE_CONFIG?.anonKey || '',
-            'Authorization': 'Bearer ' + (window.SUPABASE_CONFIG?.anonKey || ''),
-          },
-          body: JSON.stringify({ action: 'status' }),
-        });
-        const j1 = await r1.json().catch(() => ({}));
-        if (!r1.ok || !j1.ok || !j1.data?.configured) {
+        const s1 = await window.NavidromeAPI.status();
+        if (!s1 || !s1.configured) {
           status.innerHTML = '❌ Secrets fehlen in Supabase.<br>Lege sie an mit:<br><code>supabase secrets set NAVIDROME_URL=…</code> etc.';
+          window.NAVIDROME_CONFIG.proxyUrl = savedProxyUrl;
           return;
         }
         // 2) NowPlaying (liefert echte Daten)
-        const r2 = await fetch(proxyUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: window.SUPABASE_CONFIG?.anonKey || '',
-            'Authorization': 'Bearer ' + (window.SUPABASE_CONFIG?.anonKey || ''),
-          },
-          body: JSON.stringify({ action: 'nowPlaying' }),
-        });
-        const j2 = await r2.json().catch(() => ({}));
-        if (!r2.ok || !j2.ok) {
-          status.textContent = '❌ ' + (j2.error || ('HTTP ' + r2.status));
+        const s2 = await window.NavidromeAPI.nowPlaying();
+        if (!s2) {
+          status.textContent = '❌ Status-Call fehlgeschlagen';
+          window.NAVIDROME_CONFIG.proxyUrl = savedProxyUrl;
           return;
         }
-        if (j2.data?.playing) {
-          status.textContent = '✅ ' + j2.data.url + ' — spielt: ' + j2.data.title + ' (' + j2.data.artist + ')';
+        if (s2.playing) {
+          status.textContent = '✅ ' + s2.url + ' — spielt: ' + s2.title + ' (' + s2.artist + ')';
         } else {
-          status.textContent = '✅ ' + j2.data.url + ' — momentan läuft nichts';
+          status.textContent = '✅ ' + s2.url + ' — momentan läuft nichts';
         }
+        window.NAVIDROME_CONFIG.proxyUrl = savedProxyUrl;
       } catch (err) {
         status.textContent = '❌ ' + (err.message || 'Netzwerkfehler');
       }
@@ -1488,7 +1413,6 @@
     bindTabs();
     bindProfile();
     bindAvatarUpload();
-    bindThemePicker();
     bindLinks();
     bindLinkDialog();
     initIconPicker();

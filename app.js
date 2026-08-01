@@ -74,12 +74,6 @@
     const profile = await window.db.getProfile();
     const links   = await window.db.listLinks();
 
-    // Theme aus DB anwenden (Whitelist geprüft, sonst Default 'neon')
-    if (window.THEMES) {
-      const id = window.THEMES.isValid(profile?.theme) ? profile.theme : 'neon';
-      window.THEMES.apply(id);
-    }
-
     // Profil
     if (profile) {
       const avatarEl = $('.avatar');
@@ -356,10 +350,6 @@
         const pct = Math.min(100, (position / duration) * 100);
         bar.style.width = pct.toFixed(2) + '%';
       }
-
-      // Zeitanzeige unter der Progress-Bar aktualisieren
-      const timePos = wrap.querySelector('.np-time-pos');
-      if (timePos) timePos.textContent = formatTime(position);
     },
 
     // Prueft, ob der Track stale ist (lange keine Position-Aenderung)
@@ -396,25 +386,19 @@
 
     async tick() {
       try {
-        const r = await fetch(this.cfg.proxyUrl, {
-          method: 'POST',
-          headers: this._authHeaders(),
-          body: JSON.stringify({ action: 'nowPlaying' }),
-        });
-        const json = await r.json();
+        const newTrack = await window.NavidromeAPI.nowPlaying();
         // BINÄRE LOGIK:
         //  - Server sagt playing=true (und nicht paused) -> Track anzeigen
         //  - Server sagt playing=false / paused / stopped -> Player ausblenden
         // Wir zeigen pausierte/stopped Tracks NICHT mehr an.
-        const data = json?.data;
-        if (!r.ok || !json.ok || !data || data.playing !== true || data.paused === true) {
+        if (!newTrack || newTrack.playing !== true || newTrack.paused === true) {
           this.currentTrack = null;
           localStorage.removeItem(NP_POS_STORAGE_KEY);
           this.renderIdle();
           return;
         }
-        const newTrack = data;
         let newServerPos = Number(newTrack.position || 0);
+        const isPaused = !!newTrack.paused;
 
         // Fallback: Wenn Server-Position 0 ist (kurz nach Track-Start),
         // nutzen wir localStorage-Position als Schaetzung.
@@ -492,13 +476,9 @@
         cover.replaceChildren(document.createTextNode('🎵'));
         cover.classList.add('placeholder');
       }
-      // Zeit zuruecksetzen
+      // Progress-Bar zuruecksetzen
       const bar = wrap.querySelector('.np-progress-bar');
       if (bar) bar.style.width = '0%';
-      const timePos = wrap.querySelector('.np-time-pos');
-      const timeDur = wrap.querySelector('.np-time-dur');
-      if (timePos) timePos.textContent = '0:00';
-      if (timeDur) timeDur.textContent = '0:00';
     },
 
     // renderPaused entfernt: wir zeigen pausierten Track nicht mehr an.
@@ -533,47 +513,17 @@
       if (titleEl) titleEl.textContent = data.title || 'Unbekannt';
       if (artistEl) artistEl.textContent = data.artist || (data.album || '');
 
-      // Zeitanzeige initial setzen (wird dann von updateProgress() jede Sekunde aktualisiert)
-      const durNum = Number(data.duration || 0) || 0;
-      const posNum = Number(data.position || 0) || 0;
-      const timePos = wrap.querySelector('.np-time-pos');
-      const timeDur = wrap.querySelector('.np-time-dur');
-      if (timePos) timePos.textContent = formatTime(posNum);
-      if (timeDur) timeDur.textContent = formatTime(durNum);
+      // Titel verlinkt zur Navidrome-WebUI (oder wo der User es eingestellt hat)
+      if (titleEl) {
+        titleEl.href = data.streamUrl || data.webUrl || '#';
+      }
     },
 
     async control(action) {
       if (!this.isEnabled()) return;
-      try {
-        await fetch(this.cfg.proxyUrl, {
-          method: 'POST',
-          headers: this._authHeaders(),
-          body: JSON.stringify({ action: 'control', controlAction: action }),
-        });
-      } catch (e) {
-        console.warn('[navidrome] control failed', e);
-      }
-    },
-
-    // Supabase Edge Functions verlangen sowohl 'apikey' als auch
-    // 'Authorization: Bearer <key>' — fehlt eins davon: HTTP 401.
-    _authHeaders() {
-      const key = window.SUPABASE_CONFIG?.anonKey || '';
-      return {
-        'Content-Type': 'application/json',
-        'apikey': key,
-        'Authorization': 'Bearer ' + key,
-      };
+      await window.NavidromeAPI.control(action);
     },
   };
-
-  // Formatiert Sekunden als mm:ss
-  function formatTime(sec) {
-    sec = Math.max(0, Math.floor(sec));
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return m + ':' + (s < 10 ? '0' : '') + s;
-  }
 
   function init() {
     if (window.db) {

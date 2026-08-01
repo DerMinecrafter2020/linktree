@@ -223,6 +223,11 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+  display: block;
+  text-decoration: none;
+}
+.np-title:hover {
+  color: var(--neon-cyan, #00f0ff);
 }
 .np-artist {
   font-size: 13px;

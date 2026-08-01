@@ -325,6 +325,10 @@ async function getPlayQueueForUser() {
       player:     String(current.username || ''),
       minutesAgo: 0,
       url:        serverUrl,
+      // Direkt-Link zur Navidrome-WebUI (Subsonic "show" endpoint)
+      webUrl:     serverUrl + '/app/#/album/' + encodeURIComponent(String(current.albumId || '')),
+      // Direkt-Link zum Stream (Subsonic "stream" endpoint)
+      streamUrl:  serverUrl + '/rest/stream?id=' + encodeURIComponent(String(currentId)) + '&view=OpenWeb',
     };
   } catch (e) {
     console.error('getPlayQueue failed:', e && e.message);
@@ -338,6 +342,7 @@ async function buildPlayingEntry(entry, source, serverUrl) {
   const minutesAgoNum = Number(entry.minutesAgo || 0) || 0;
   const durationNum = Number(entry.duration || 0) || 0;
   const positionNum = Number(player.position || minutesAgoNum) || 0;
+  const trackId = String(entry.id || '');
   return {
     playing:    true,
     source:     source,
@@ -350,6 +355,10 @@ async function buildPlayingEntry(entry, source, serverUrl) {
     player:     String(player.name  || ''),
     minutesAgo: minutesAgoNum,
     url:        serverUrl,
+    // Direkt-Link zur Navidrome-WebUI (Album-Seite)
+    webUrl:     serverUrl + '/app/#/album/' + encodeURIComponent(String(entry.albumId || '')),
+    // Direkt-Link zum Stream (Subsonic "stream" endpoint)
+    streamUrl:  serverUrl + '/rest/stream?id=' + encodeURIComponent(trackId) + '&view=OpenWeb',
   };
 }
 
