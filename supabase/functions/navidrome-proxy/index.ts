@@ -227,35 +227,83 @@ async function navFetch(path, params) {
 
 // ACTION: nowPlaying
 async function getNowPlaying() {
+  const serverUrl = NAVIDROME_URL.replace(/\/+$/, '');
   try {
+    // 1) Versuche zuerst getNowPlaying (liefert nur aktive Player)
     const params = await subsonicParams();
     const data   = await navFetch('getNowPlaying', params);
 
     const resp  = data && data['subsonic-response'];
     const entry = resp && resp.nowPlaying && resp.nowPlaying.entry && resp.nowPlaying.entry[0];
 
-    if (!entry) return { playing: false, url: NAVIDROME_URL.replace(/\/+$/, '') };
+    if (entry) {
+      const coverUrl = entry.coverArt ? await getCoverArt(entry.coverArt, 220) : '';
+      const player   = entry.player || {};
+      const minutesAgoNum = Number(entry.minutesAgo || 0) || 0;
+      const durationNum   = Number(entry.duration   || 0) || 0;
+      const positionNum   = Number(player.position  || minutesAgoNum) || 0;
+      return {
+        playing:    true,
+        source:     'nowPlaying',
+        title:      String(entry.title  || ''),
+        artist:     String(entry.artist || ''),
+        album:      String(entry.album  || ''),
+        duration:   durationNum,
+        position:   positionNum,
+        coverUrl:   coverUrl,
+        player:     String(player.name  || ''),
+        minutesAgo: minutesAgoNum,
+        url:        serverUrl,
+      };
+    }
+
+    // 2) Fallback: getScrobbles (letzte gespielte Tracks, egal welcher Client)
+    const scrobbles = await getRecentScrobbles(1);
+    if (scrobbles) {
+      return Object.assign({}, scrobbles, { source: 'scrobbles', url: serverUrl });
+    }
+
+    return { playing: false, url: serverUrl };
+  } catch (err) {
+    console.error('nowPlaying failed:', err && err.message);
+    return { playing: false, error: err && err.message, url: serverUrl };
+  }
+}
+
+// Hol den zuletzt gespielten Track via Scrobbles (fuer Fallback wenn
+// kein Player aktiv verbunden ist, z. B. wenn User mit Mobile-App spielt).
+async function getRecentScrobbles(count) {
+  const c = Math.min(50, Math.max(1, count || 1));
+  try {
+    const params = await subsonicParams({ count: c });
+    const data   = await navFetch('getScrobbles', params);
+    const resp   = data && data['subsonic-response'];
+    const entry   = resp && resp.scrobbles && resp.scrobbles.entry && resp.scrobbles.entry[0];
+    if (!entry) return null;
 
     const coverUrl = entry.coverArt ? await getCoverArt(entry.coverArt, 220) : '';
-    const player   = entry.player || {};
-    const minutesAgoNum = Number(entry.minutesAgo || 0) || 0;
-    const durationNum   = Number(entry.duration   || 0) || 0;
-    const positionNum   = Number(player.position  || minutesAgoNum) || 0;
-
+    const dateStr  = entry.playedAt || '';
+    // "minutesAgo" aus ISO-Timestamp ableiten
+    let minutesAgo = 0;
+    if (dateStr) {
+      const t = Date.parse(dateStr);
+      if (!isNaN(t)) minutesAgo = Math.max(0, Math.floor((Date.now() - t) / 60000));
+    }
     return {
-      playing:    true,
+      playing:    false,             // scrobble ist ein "vorhin gespielt", nicht "spielt jetzt"
+      recentPlay: true,
       title:      String(entry.title  || ''),
       artist:     String(entry.artist || ''),
       album:      String(entry.album  || ''),
-      duration:   durationNum,
-      position:   positionNum,
+      duration:   Number(entry.duration || 0) || 0,
+      position:   0,
       coverUrl:   coverUrl,
-      player:     String(player.name  || ''),
-      minutesAgo: minutesAgoNum,
+      player:     '',
+      minutesAgo: minutesAgo,
     };
-  } catch (err) {
-    console.error('nowPlaying failed:', err && err.message);
-    return { playing: false, error: err && err.message };
+  } catch (e) {
+    console.error('getRecentScrobbles failed:', e && e.message);
+    return null;
   }
 }
 

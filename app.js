@@ -255,11 +255,18 @@
           body: JSON.stringify({ action: 'nowPlaying' }),
         });
         const json = await r.json();
-        if (!r.ok || !json.ok || !json.data?.playing) {
+        if (!r.ok || !json.ok) {
           this.renderIdle();
           return;
         }
-        this.renderTrack(json.data);
+        // playing=true → live, recentPlay=true → Scrobble-Fallback
+        if (json.data?.playing) {
+          this.renderTrack(json.data, { live: true });
+        } else if (json.data?.recentPlay) {
+          this.renderTrack(json.data, { live: false, minutesAgo: json.data.minutesAgo });
+        } else {
+          this.renderIdle();
+        }
       } catch (err) {
         console.warn('[navidrome] poll failed:', err.message);
         this.renderIdle();
@@ -270,6 +277,7 @@
       const wrap = $('#navidrome-player');
       if (!wrap) return;
       wrap.classList.add('idle');
+      wrap.classList.remove('playing', 'recent');
       const titleEl = wrap.querySelector('.np-title');
       const artistEl = wrap.querySelector('.np-artist');
       if (titleEl) titleEl.textContent = 'Momentan läuft nichts';
@@ -281,11 +289,13 @@
       }
     },
 
-    renderTrack(data) {
+    renderTrack(data, opts) {
       const wrap = $('#navidrome-player');
       if (!wrap) return;
+      const live = !!(opts && opts.live);
       wrap.classList.remove('idle');
-      wrap.classList.toggle('playing', !!data.playing);
+      wrap.classList.toggle('playing', live);
+      wrap.classList.toggle('recent', !live);
 
       // Cover (Base64-DataURL oder Emoji)
       const cover = wrap.querySelector('.np-cover');
@@ -306,15 +316,21 @@
       const titleEl = wrap.querySelector('.np-title');
       const artistEl = wrap.querySelector('.np-artist');
       if (titleEl) titleEl.textContent = data.title || 'Unbekannt';
-      if (artistEl) artistEl.textContent = data.artist || (data.album || '');
+
+      // Artist-Zeile: bei Scrobbles zusätzlich "vor X min" anzeigen
+      let artistLine = data.artist || (data.album || '');
+      if (!live && (opts && typeof opts.minutesAgo === 'number')) {
+        const ago = opts.minutesAgo;
+        artistLine = (artistLine ? artistLine + ' · ' : '') + humanAgo(ago);
+      }
+      if (artistEl) artistEl.textContent = artistLine || '';
 
       // Progress (position / duration)
       const bar = wrap.querySelector('.np-progress-bar');
       if (bar) {
         const dur = Math.max(1, parseInt(data.duration || 0, 10));
-        const pos = Math.min(dur, parseInt(data.position || data.minutesAgo || 0, 10));
-        // "position" bei Subsonic ist oft elapsed seconds; falls duration=0, Progress ausblenden
-        if (dur <= 0) {
+        const pos = Math.min(dur, parseInt(data.position || (live ? data.minutesAgo : 0) || 0, 10));
+        if (dur <= 0 || !live) {
           bar.style.width = '0%';
         } else {
           bar.style.width = Math.min(100, (pos / dur) * 100).toFixed(2) + '%';
@@ -346,6 +362,16 @@
       };
     },
   };
+
+  // "vor 5 min" / "vor 2 h" Formatierung
+  function humanAgo(mins) {
+    if (mins < 1) return 'gerade eben';
+    if (mins < 60) return 'vor ' + mins + ' min';
+    const h = Math.floor(mins / 60);
+    if (h < 24) return 'vor ' + h + ' h';
+    const d = Math.floor(h / 24);
+    return 'vor ' + d + (d === 1 ? ' Tag' : ' Tagen');
+  }
 
   function bindPlayerControls() {
     document.addEventListener('click', (e) => {
