@@ -61,6 +61,7 @@
       <nav class="side-nav">
         <button class="side-btn active" data-tab="links">🔗 Links</button>
         <button class="side-btn" data-tab="profile">👤 Profil</button>
+        <button class="side-btn" data-tab="music">🎵 Musik</button>
         <button class="side-btn" data-tab="data">💾 Daten</button>
         <button class="side-btn" data-tab="settings">⚙️ Einstellungen</button>
       </nav>
@@ -134,6 +135,61 @@
             <button type="submit" class="btn primary">Speichern</button>
           </div>
         </form>
+      </section>
+
+      <!-- ==================== TAB: MUSIK (NAVIDROME) ==================== -->
+      <section class="tab" data-tab="music" hidden>
+        <div class="card-block">
+          <h3>🎵 Navidrome / Subsonic</h3>
+          <p>Verbindet die Hauptseite mit deinem Navidrome-Server. Die Werte werden in <code>localStorage</code> gespeichert (nicht in Supabase, damit sie nicht öffentlich leak­en).</p>
+
+          <form id="navidrome-form" class="form">
+            <label class="row">
+              <input type="checkbox" name="enabled" />
+              <span>Player aktivieren</span>
+            </label>
+            <label>
+              <span>Server-URL</span>
+              <input name="url" type="url" placeholder="https://navidrome.example.com" />
+            </label>
+            <label>
+              <span>Username</span>
+              <input name="user" type="text" autocomplete="off" />
+            </label>
+            <label>
+              <span>Passwort</span>
+              <input name="pass" type="password" autocomplete="off" />
+            </label>
+            <label>
+              <span>Proxy-URL (Edge-Function)</span>
+              <input name="proxyUrl" type="url" placeholder="https://…/functions/v1/navidrome-proxy" />
+            </label>
+            <label>
+              <span>Polling-Intervall (Sekunden)</span>
+              <input name="pollIntervalSec" type="number" min="10" max="600" step="5" />
+            </label>
+
+            <div class="form-actions">
+              <button type="button" id="navidrome-test-btn" class="btn ghost">Verbindung testen</button>
+              <button type="submit" class="btn primary">Speichern</button>
+            </div>
+            <p id="navidrome-status" class="hint" aria-live="polite"></p>
+          </form>
+        </div>
+
+        <div class="card-block">
+          <h3>ℹ️ Deployment-Hinweise</h3>
+          <ol class="hint" style="line-height:1.7">
+            <li>Edge-Function deployen:<br><code>supabase functions deploy navidrome-proxy</code></li>
+            <li>Secrets setzen:<br>
+              <code>supabase secrets set NAVIDROME_URL=…</code><br>
+              <code>supabase secrets set NAVIDROME_USER=…</code><br>
+              <code>supabase secrets set NAVIDROME_PASS=…</code><br>
+              <code>supabase secrets set ALLOWED_ORIGINS=https://deine-domain.de</code>
+            </li>
+            <li>Player auf der Hauptseite erscheint automatisch, wenn oben "Aktivieren" gesetzt und alle Felder gefüllt sind.</li>
+          </ol>
+        </div>
       </section>
 
       <!-- ==================== TAB: DATEN ==================== -->

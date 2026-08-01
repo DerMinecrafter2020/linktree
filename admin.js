@@ -1328,6 +1328,130 @@
   // =========================================================
   // INIT
   // =========================================================
+  // =========================================================
+  // NAVIDROME (Tab "Musik")
+  // =========================================================
+  // Werte landen in localStorage (nicht in Supabase) — sind also nur
+  // für diesen Browser sichtbar und niemals öffentlich erreichbar.
+  const NP_STORAGE_KEY = 'openweb-navidrome-config';
+
+  function loadNavidromeConfig() {
+    try {
+      const raw = localStorage.getItem(NP_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      // Whitelist pro Feld
+      return {
+        enabled: !!parsed.enabled,
+        url: typeof parsed.url === 'string' ? parsed.url : '',
+        user: typeof parsed.user === 'string' ? parsed.user : '',
+        pass: typeof parsed.pass === 'string' ? parsed.pass : '',
+        proxyUrl: typeof parsed.proxyUrl === 'string' ? parsed.proxyUrl : '',
+        pollIntervalSec: Math.min(600, Math.max(10, parseInt(parsed.pollIntervalSec || 30, 10) || 30)),
+      };
+    } catch (_) { return null; }
+  }
+
+  function saveNavidromeConfig(cfg) {
+    localStorage.setItem(NP_STORAGE_KEY, JSON.stringify(cfg));
+    // Auch in window.NAVIDROME_CONFIG schreiben, damit die Hauptseite
+    // bei Reload den gleichen Stand hat (wenn sie später geladen wird)
+    window.NAVIDROME_CONFIG = Object.assign({}, window.NAVIDROME_CONFIG || {}, cfg);
+  }
+
+  function renderNavidromeForm() {
+    const form = $('#navidrome-form');
+    if (!form) return;
+    const cfg = loadNavidromeConfig() || {
+      enabled: false,
+      url: '',
+      user: '',
+      pass: '',
+      proxyUrl: (window.SUPABASE_CONFIG?.url
+        ? window.SUPABASE_CONFIG.url.replace(/\/$/, '') + '/functions/v1/navidrome-proxy'
+        : ''),
+      pollIntervalSec: 30,
+    };
+    form.enabled.checked        = !!cfg.enabled;
+    form.url.value              = cfg.url;
+    form.user.value             = cfg.user;
+    form.pass.value             = cfg.pass;
+    form.proxyUrl.value         = cfg.proxyUrl;
+    form.pollIntervalSec.value  = cfg.pollIntervalSec;
+  }
+
+  function bindNavidrome() {
+    const form = $('#navidrome-form');
+    if (!form) return;
+    renderNavidromeForm();
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      // Validierung
+      const url = (form.url.value || '').trim();
+      const user = (form.user.value || '').trim();
+      const pass = form.pass.value || '';
+      const proxyUrl = (form.proxyUrl.value || '').trim();
+      const poll = parseInt(form.pollIntervalSec.value || '30', 10) || 30;
+
+      // Whitelist-URLs (kein javascript:/data:/file:)
+      if (url && !/^https?:\/\//i.test(url)) {
+        toast('Server-URL muss mit http(s) beginnen', true);
+        return;
+      }
+      if (proxyUrl && !/^https?:\/\//i.test(proxyUrl)) {
+        toast('Proxy-URL muss mit http(s) beginnen', true);
+        return;
+      }
+      if (form.enabled.checked && (!url || !user || !pass || !proxyUrl)) {
+        toast('Bitte alle Felder ausfüllen oder Player deaktivieren', true);
+        return;
+      }
+
+      saveNavidromeConfig({
+        enabled: !!form.enabled.checked,
+        url, user, pass, proxyUrl,
+        pollIntervalSec: Math.min(600, Math.max(10, poll)),
+      });
+      toast('🎵 Navidrome-Einstellungen gespeichert (lokal)');
+    });
+
+    $('#navidrome-test-btn')?.addEventListener('click', async () => {
+      const status = $('#navidrome-status');
+      status.textContent = 'Teste Verbindung…';
+      const cfg = {
+        enabled: form.enabled.checked,
+        url: form.url.value.trim(),
+        user: form.user.value.trim(),
+        pass: form.pass.value,
+        proxyUrl: form.proxyUrl.value.trim(),
+      };
+      if (!cfg.proxyUrl) {
+        status.textContent = '❌ Proxy-URL fehlt';
+        return;
+      }
+      try {
+        const r = await fetch(cfg.proxyUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: window.SUPABASE_CONFIG?.anonKey || '' },
+          body: JSON.stringify({ action: 'nowPlaying' }),
+        });
+        const json = await r.json().catch(() => ({}));
+        if (!r.ok || json.ok === false) {
+          status.textContent = '❌ ' + (json.error || ('HTTP ' + r.status));
+          return;
+        }
+        if (json.data?.playing) {
+          status.textContent = '✅ Verbindung OK — spielt gerade: ' + json.data.title + ' (' + json.data.artist + ')';
+        } else {
+          status.textContent = '✅ Verbindung OK — momentan läuft nichts auf dem Server';
+        }
+      } catch (err) {
+        status.textContent = '❌ ' + (err.message || 'Netzwerkfehler');
+      }
+    });
+  }
+
   async function initApp() {
     try {
       if (window.db.isMock) setConnection('mock');
@@ -1368,6 +1492,7 @@
     initIconPicker();
     bindData();
     bindSettings();
+    bindNavidrome();
 
     // Auto-Login, falls Session aktiv
     if (hasValidSession()) {

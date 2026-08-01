@@ -35,12 +35,21 @@
 
   <main class="card">
 
+    <header class="profile">
+      <div class="avatar-wrap">
+        <div class="avatar-ring"></div>
+        <div class="avatar" aria-label="Profilbild">CA</div>
+      </div>
+      <h1 class="name">@corneliusahner</h1>
+      <p class="handle">Cornelius Ahner</p>
+      <p class="bio">Azubi, 21 Jahre alt</p>
+    </header>
+
     <!-- =========================================================
-         NAVIDROME / SUBSONIC PLAYER (Spotify-Style)
+         NAVIDROME PLAYER (Spotify-Style)
          =========================================================
-         Wird per JS ein-/ausgeblendet je nach NAVIDROME_CONFIG.enabled.
-         Polling-Intervall siehe config.js (pollIntervalSec).
-         Verwendet Edge-Function `navidrome-proxy` für CORS-Schutz. -->
+         Erscheint nur, wenn NAVIDROME_CONFIG.enabled = true.
+         Polling-Intervall siehe config.js (pollIntervalSec). -->
     <section id="navidrome-player" class="np-player idle" aria-label="Aktuell gespielter Track" hidden>
       <div class="np-cover" aria-hidden="true"></div>
       <div class="np-info">
@@ -57,16 +66,6 @@
         <button type="button" data-np-action="next"     class="np-btn" aria-label="Nächster Titel">⏭</button>
       </div>
     </section>
-
-    <header class="profile">
-      <div class="avatar-wrap">
-        <div class="avatar-ring"></div>
-        <div class="avatar" aria-label="Profilbild">CA</div>
-      </div>
-      <h1 class="name">@corneliusahner</h1>
-      <p class="handle">Cornelius Ahner</p>
-      <p class="bio">Azubi, 21 Jahre alt</p>
-    </header>
 
     <nav class="links" aria-label="Wichtige Links">
       <!-- Links werden dynamisch aus Supabase / localStorage geladen -->
