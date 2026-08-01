@@ -64,6 +64,20 @@ prompt_admin_password() {
     log_info "Konfiguration: Admin-Passwort für /admin.html"
     echo ""
 
+    # Falls schon ein echtes Passwort in config.js existiert, nachfragen ob
+    # ein neues gesetzt werden soll. So wird der User bei Re-Runs nicht
+    # jedes Mal zur Passwort-Eingabe gezwungen.
+    if [[ -n "${EXISTING_ADMIN_PW:-}" ]] && ! is_placeholder "${EXISTING_ADMIN_PW:-}"; then
+        echo -n "  Bestehendes Passwort erkannt. Neues Passwort setzen? (j/N): "
+        read -r CHANGE_PW
+        if [[ ! "$CHANGE_PW" =~ ^[jJyY]$ ]]; then
+            log_info "  bestehendes Passwort wird beibehalten"
+            ADMIN_PASSWORD="$EXISTING_ADMIN_PW"
+            return 0
+        fi
+        log_info "  OK, neues Passwort wird gesetzt"
+    fi
+
     while true; do
         echo -n "  Admin-Passwort (min. 16 Zeichen, Enter zum Überspringen): "
         if [[ -t 0 ]]; then
@@ -101,8 +115,6 @@ prompt_admin_password() {
     done
 }
 
-prompt_admin_password
-
 # --- Schritt 3: /var/html vorbereiten + Repo klonen/updaten ---
 log_info "Bereite ${INSTALL_DIR} vor und klone GitHub-Repo..."
 
@@ -133,18 +145,52 @@ fi
 # Wir generieren hier eine lokale config.js, die das echte Passwort enthält.
 log_info "Erstelle lokale config.js mit Admin-Passwort..."
 
-# Anon-Key + URL aus dem User erfragen oder Defaults verwenden
-echo ""
-echo "  Supabase-Konfiguration:"
-echo -n "  Supabase URL [https://fxywervpqojpjwreymdp.supabase.co]: "
-read SUPABASE_URL
-SUPABASE_URL=${SUPABASE_URL:-https://fxywervpqojpjwreymdp.supabase.co}
+# Wenn schon eine config.js mit echten Daten existiert, behalten wir sie.
+# So gehen Werte aus früheren install-Läufen nicht verloren.
+EXISTING_CONFIG="${INSTALL_DIR}/config.js"
+EXISTING_URL=""
+EXISTING_ANON_KEY=""
+EXISTING_ADMIN_PW=""
+if [[ -f "$EXISTING_CONFIG" ]]; then
+    # Bestehende Werte extrahieren (vorsichtig, ohne JS zu eval)
+    EXISTING_URL=$(grep -oE "url:\s*'[^']*'" "$EXISTING_CONFIG" 2>/dev/null | head -1 | sed "s/url:\s*'//;s/'$//")
+    EXISTING_ANON_KEY=$(grep -oE "anonKey:\s*'[^']*'" "$EXISTING_CONFIG" 2>/dev/null | head -1 | sed "s/anonKey:\s*'//;s/'$//")
+    EXISTING_ADMIN_PW=$(grep -oE "ADMIN_DEFAULT_PASSWORD\s*=\s*'[^']*'" "$EXISTING_CONFIG" 2>/dev/null | head -1 | sed "s/ADMIN_DEFAULT_PASSWORD\s*=\s*'//;s/'$//")
+    EXISTING_ADMIN_PW=${EXISTING_ADMIN_PW:-$(grep -oE "ADMIN_DEFAULT_PASSWORD\s*=\s*\"[^\"]*\"" "$EXISTING_CONFIG" 2>/dev/null | head -1 | sed 's/ADMIN_DEFAULT_PASSWORD\s*=\s*"//;s/"$//')}
+fi
 
-echo -n "  Supabase anon-key: "
-read SUPABASE_ANON_KEY
-if [[ -z "$SUPABASE_ANON_KEY" ]]; then
-    log_warn "Kein anon-key gesetzt — du musst ihn nachträglich in ${INSTALL_DIR}/config.js eintragen"
-    SUPABASE_ANON_KEY="__SET_ME_MANUALLY__"
+# Erkennen, ob Platzhalter vorhanden sind
+is_placeholder() {
+    case "$1" in
+        ""|"__SET_ME_MANUALLY__"|"YOUR_USER"|"YOUR_PASS") return 0;;
+        *) return 1;;
+    esac
+}
+
+# Jetzt erst das Passwort-Prompt — es kennt jetzt die EXISTING_*-Werte
+prompt_admin_password
+
+# Supabase-URL: bestehender Wert nur behalten, wenn kein Platzhalter
+if [[ -n "$EXISTING_URL" ]] && ! is_placeholder "$EXISTING_URL"; then
+    SUPABASE_URL="$EXISTING_URL"
+    log_info "  bestehende Supabase-URL behalten: $SUPABASE_URL"
+else
+    echo -n "  Supabase URL [https://fxywervpqojpjwreymdp.supabase.co]: "
+    read SUPABASE_URL
+    SUPABASE_URL=${SUPABASE_URL:-https://fxywervpqojpjwreymdp.supabase.co}
+fi
+
+# Supabase anon-key: bestehender Wert nur behalten, wenn kein Platzhalter
+if [[ -n "$EXISTING_ANON_KEY" ]] && ! is_placeholder "$EXISTING_ANON_KEY"; then
+    SUPABASE_ANON_KEY="$EXISTING_ANON_KEY"
+    log_info "  bestehender anon-key behalten (${#SUPABASE_ANON_KEY} Zeichen)"
+else
+    echo -n "  Supabase anon-key: "
+    read SUPABASE_ANON_KEY
+    if [[ -z "$SUPABASE_ANON_KEY" ]]; then
+        log_warn "Kein anon-key gesetzt — du musst ihn nachträglich in ${INSTALL_DIR}/config.js eintragen"
+        SUPABASE_ANON_KEY="__SET_ME_MANUALLY__"
+    fi
 fi
 
 # Passwort als JSON-String escapen
