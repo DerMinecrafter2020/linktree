@@ -186,6 +186,10 @@
   //   1. config.js (NAVIDROME_CONFIG)        — Defaults / Platzhalter
   //   2. localStorage 'openweb-navidrome-config' — vom Admin gespeichert
   const NP_STORAGE_KEY = 'openweb-navidrome-config';
+  // Persistenz der letzten bekannten Track-Position, damit beim Reload
+  // die Sekunden weiterlaufen (Navidrome liefert oft position=0 wenn
+  // gerade erst gestartet, obwohl wir schon 30s hoeren).
+  const NP_POS_STORAGE_KEY = 'openweb-navidrome-pos';
 
   function loadNavidromeFromStorage() {
     try {
@@ -198,6 +202,32 @@
         pollIntervalSec: Math.min(600, Math.max(10, parseInt(parsed.pollIntervalSec || 30, 10) || 30)),
       };
     } catch (_) { return null; }
+  }
+
+  // Liest die zuletzt bekannte Track-Position aus dem localStorage.
+  // Format: { title, artist, album, duration, position, savedAt }
+  function loadLastPosition() {
+    try {
+      const raw = localStorage.getItem(NP_POS_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !parsed.title) return null;
+      return parsed;
+    } catch (_) { return null; }
+  }
+
+  function saveLastPosition(track) {
+    if (!track) return;
+    try {
+      localStorage.setItem(NP_POS_STORAGE_KEY, JSON.stringify({
+        title: track.title || '',
+        artist: track.artist || '',
+        album: track.album || '',
+        duration: track.duration || 0,
+        position: track.position || 0,
+        savedAt: Date.now(),
+      }));
+    } catch (_) { /* ignore quota errors */ }
   }
 
   function mergeNavidromeConfig() {
@@ -240,12 +270,38 @@
       const wrap = $('#navidrome-player');
       if (!wrap) return;
       wrap.hidden = false;
+      // Sofort die letzte bekannte Position anzeigen (sonst springt die
+      // Bar beim Reload auf 0 zurueck, bis der erste Server-Tick kommt).
+      this.bootstrapFromLocalStorage();
       await this.tick();
       // Server-Polling: langsamer (Standard 30s)
       const pollInterval = Math.max(10, this.cfg.pollIntervalSec || 30) * 1000;
       this.pollTimer = setInterval(() => this.tick(), pollInterval);
       // Lokales Progress-Polling: jede Sekunde, fuer die Bar-Animation
       this.progressTimer = setInterval(() => this.updateProgress(), 1000);
+    },
+
+    // Beim Reload: sofort die letzte bekannte Track-Position anzeigen,
+    // damit der Balken nicht von 0 startet.
+    bootstrapFromLocalStorage() {
+      const last = loadLastPosition();
+      if (!last) return;
+      // Wenn die gespeicherte Position aelter als 10 Minuten ist,
+      // ist sie wahrscheinlich zu alt — wir zeigen sie trotzdem an,
+      // aber beim ersten Server-Tick wird sie ueberschrieben.
+      const minutesAgo = (Date.now() - (last.savedAt || 0)) / 60000;
+      const estimatedPos = (last.position || 0) + minutesAgo;
+      this.currentTrack = {
+        title:    last.title,
+        artist:   last.artist,
+        album:    last.album,
+        duration: last.duration || 0,
+        position: estimatedPos,
+      };
+      this.progressStartedAt = Date.now();
+      this.initialPosition = estimatedPos;
+      this.renderTrack(this.currentTrack);
+      this.updateProgress();
     },
 
     stop() {
@@ -298,7 +354,28 @@
         // wenn die Server-Position groesser ist als unsere bisher berechnete.
         // Sonst waere ein Ruecksprung sichtbar (z. B. wenn Server langsamer tickt).
         const newTrack = json.data;
-        const newServerPos = Number(newTrack.position || 0);
+        let newServerPos = Number(newTrack.position || 0);
+
+        // Fallback: Wenn Server-Position 0 ist (Navidrome liefert das oft direkt
+        // nach Track-Start), pruefen wir localStorage auf eine reale Position.
+        // Wir nutzen sie nur, wenn der Titel uebereinstimmt und die Position
+        // juenger als 2 Minuten ist (sonst ist es ein anderer Durchlauf).
+        if (newServerPos <= 1) {
+          const last = loadLastPosition();
+          if (last
+              && last.title === newTrack.title
+              && last.album === newTrack.album
+              && last.position > 1
+              && (Date.now() - (last.savedAt || 0)) < 2 * 60 * 1000) {
+            // Geschätzte Position: last.position + verstrichene Zeit seit save
+            const minutesAgo = (Date.now() - last.savedAt) / 1000;
+            const estimated = last.position + minutesAgo;
+            if (estimated < Number(newTrack.duration || 9999)) {
+              newServerPos = estimated;
+            }
+          }
+        }
+
         const isNewTrack = !this.currentTrack
           || this.currentTrack.title !== newTrack.title
           || this.currentTrack.album !== newTrack.album;
@@ -329,6 +406,10 @@
               duration: newTrack.duration,
             });
           }
+        }
+        // Position fuer Reload-Fallback speichern (nur wenn > 1)
+        if (this.currentTrack.position > 1) {
+          saveLastPosition(this.currentTrack);
         }
         this.renderTrack(this.currentTrack);
         this.updateProgress(); // sofort nach Server-Update synchronisieren
@@ -424,15 +505,6 @@
     return m + ':' + (s < 10 ? '0' : '') + s;
   }
 
-  function bindPlayerControls() {
-    document.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-np-action]');
-      if (!btn) return;
-      const action = btn.dataset.npAction;
-      np.control(action);
-    });
-  }
-
   function init() {
     if (window.db) {
       render();
@@ -446,7 +518,6 @@
       // Navidrome-Player (falls aktiviert)
       np.init();
       np.start();
-      bindPlayerControls();
     }
   }
 
@@ -468,7 +539,6 @@
   // damit das UI auch ohne DB-Verbindung den gespeicherten Status zeigt.
   np.init();
   if (np.isEnabled()) {
-    bindPlayerControls();
-    // Später (sobald Supabase geladen) startet init() das Polling
+    np.start();
   }
 })();
