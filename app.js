@@ -249,6 +249,9 @@
     currentTrack: null,    // letzter Track-Stand vom Server
     progressStartedAt: 0, // Date.now() als Basis fuer lokale Interpolation
     initialPosition: 0,   // Position vom Server beim letzten Tick
+    lastServerPos: 0,     // letzte vom Server gemeldete Position (fuer Pause-Erkennung)
+    lastServerPosAt: 0,   // wann wurde lastServerPos zuletzt aktualisiert
+    pausedConfirmed: false,// bestaetigt pausiert durch 2 gleiche Ticks
 
     init() {
       this.cfg = mergeNavidromeConfig();
@@ -458,16 +461,37 @@
           this.currentTrack = newTrack;
           this.progressStartedAt = Date.now();
           this.initialPosition = newServerPos;
+          this.lastServerPos = newServerPos;
+          this.lastServerPosAt = Date.now();
+          this.pausedConfirmed = false;
         } else {
           // Gleicher Track: vergleiche mit unserer lokalen Schaetzung
           const elapsedSinceLast = (Date.now() - this.progressStartedAt) / 1000;
           const localPos = this.initialPosition + elapsedSinceLast;
+
+          // PAUSE-ERKENNUNG: Wenn die Server-Position gleich bleibt UND
+          // wir gerade eine Bewegung hatten, ist das wahrscheinlich Pause.
+          // Wir brauchen 2 gleiche Ticks (10s), um sicher zu sein.
+          if (newServerPos === this.lastServerPos && this.lastServerPos > 1
+              && (Date.now() - this.lastServerPosAt) > 5000
+              && !this.pausedConfirmed) {
+            // Position hat sich seit letztem Tick nicht bewegt -> pausiert
+            this.pausedConfirmed = true;
+            this.currentTrack = Object.assign({}, this.currentTrack, { paused: true });
+            this.progressStartedAt = Date.now();
+            this.initialPosition = newServerPos;
+            this.renderPaused();
+            // Wichtig: kein renderTrack(), sonst springt der Balken weiter
+            return;
+          }
+
           // Server-Position darf nicht vor unserer lokalen Schaetzung liegen,
           // sonst wuerde der Balken zurueckspringen.
           if (newServerPos >= localPos - 2) {  // 2s Toleranz fuer Netzwerk-Jitter
             this.currentTrack = newTrack;
             this.progressStartedAt = Date.now();
             this.initialPosition = newServerPos;
+            this.pausedConfirmed = false;
           } else {
             // Server-Position liegt hinter unserer Schaetzung -> nur Track-Metadaten
             // aktualisieren (Cover, Titel), aber Zeit-Basis beibehalten
@@ -475,10 +499,12 @@
               title: newTrack.title,
               artist: newTrack.artist,
               album: newTrack.album,
-              coverUrl: newTrack.coverUrl,
+              coverUrl: this.currentTrack.coverUrl,
               duration: newTrack.duration,
             });
           }
+          this.lastServerPos = newServerPos;
+          this.lastServerPosAt = Date.now();
         }
         // Position fuer Reload-Fallback speichern (nur wenn > 1)
         if (this.currentTrack.position > 1) {
