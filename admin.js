@@ -1433,7 +1433,11 @@
       try {
         const r = await fetch(cfg.proxyUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', apikey: window.SUPABASE_CONFIG?.anonKey || '' },
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: window.SUPABASE_CONFIG?.anonKey || '',
+            'Authorization': 'Bearer ' + (window.SUPABASE_CONFIG?.anonKey || ''),
+          },
           body: JSON.stringify({ action: 'nowPlaying' }),
         });
         const json = await r.json().catch(() => ({}));

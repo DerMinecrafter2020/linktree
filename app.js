@@ -212,14 +212,11 @@
       try {
         const r = await fetch(this.cfg.proxyUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': window.SUPABASE_CONFIG?.anonKey || '',
-          },
+          headers: this._authHeaders(),
           body: JSON.stringify({ action: 'nowPlaying' }),
         });
         const json = await r.json();
-        if (!json.ok || !json.data?.playing) {
+        if (!r.ok || !json.ok || !json.data?.playing) {
           this.renderIdle();
           return;
         }
@@ -291,15 +288,23 @@
       try {
         await fetch(this.cfg.proxyUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': window.SUPABASE_CONFIG?.anonKey || '',
-          },
+          headers: this._authHeaders(),
           body: JSON.stringify({ action: 'control', controlAction: action }),
         });
       } catch (e) {
         console.warn('[navidrome] control failed', e);
       }
+    },
+
+    // Supabase Edge Functions verlangen sowohl 'apikey' als auch
+    // 'Authorization: Bearer <key>' — fehlt eins davon: HTTP 401.
+    _authHeaders() {
+      const key = window.SUPABASE_CONFIG?.anonKey || '';
+      return {
+        'Content-Type': 'application/json',
+        'apikey': key,
+        'Authorization': 'Bearer ' + key,
+      };
     },
   };
 
