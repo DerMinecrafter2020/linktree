@@ -46,11 +46,172 @@ log_ok()      { echo -e "${GREEN}[ OK ]${NC} $*"; }
 log_warn()    { echo -e "${YELLOW}[WARN]${NC} $*"; }
 log_error()   { echo -e "${RED}[FAIL]${NC} $*" >&2; }
 
+# =========================================================
+# Modi-Funktionen (nur Definition; am Anfang aufgerufen)
+# =========================================================
+
+# 1) Update von GitHub
+do_update() {
+    if [[ ! -d "${INSTALL_DIR}/.git" ]]; then
+        log_error "Kein Git-Repo unter ${INSTALL_DIR} — bitte erst installieren"
+        exit 1
+    fi
+    log_info "Update von ${REPO_URL}..."
+    cd "$INSTALL_DIR"
+    git reset --hard HEAD >/dev/null
+    if git pull --ff-only origin main; then
+        log_ok "Repo aktualisiert"
+        nginx -t && systemctl reload nginx || true
+        log_ok "nginx neu geladen"
+    else
+        log_error "git pull fehlgeschlagen"
+        exit 1
+    fi
+}
+
+# 2) Supabase CLI installieren / reparieren
+do_install_cli() {
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get install -y -qq curl ca-certificates >/dev/null 2>&1 || true
+    install_supabase_cli
+    if command -v supabase >/dev/null 2>&1; then
+        log_ok "supabase CLI jetzt verfügbar: $(supabase --version 2>/dev/null | head -n1)"
+    else
+        log_warn "CLI konnte nicht installiert werden"
+    fi
+}
+
+# 3) Skript selbst updaten
+do_update_self() {
+    log_info "Aktuelle Version von GitHub holen..."
+    local tmp
+    tmp=$(mktemp /tmp/openweb-install.XXXXXX.sh)
+    if curl -fsSL "https://raw.githubusercontent.com/DerMinecrafter2020/linktree/main/install.sh" -o "$tmp"; then
+        # Backup
+        local backup="/etc/openweb-install.sh.backup.$(date +%s)"
+        cp -f "$0" "$backup" 2>/dev/null || true
+        cp -f "$tmp" "$0"
+        chmod +x "$0"
+        rm -f "$tmp"
+        log_ok "Skript aktualisiert. Backup: $backup"
+        log_info "Starte mit: sudo bash install.sh"
+        exec bash "$0"
+    else
+        log_error "Download fehlgeschlagen"
+        rm -f "$tmp"
+        exit 1
+    fi
+}
+
+# 4) Alles deinstallieren
+do_uninstall() {
+    log_warn "Deinstallation: OpenWeb wird vollständig entfernt!"
+    echo ""
+    echo -n "  Bist du sicher? Tippe 'JA' zum Bestätigen: "
+    read -r CONFIRM
+    [[ "$CONFIRM" == "JA" ]] || { log_info "Abgebrochen"; exit 0; }
+
+    log_info "Stoppe Auto-Update-Timer..."
+    systemctl stop    openweb-updater.timer 2>/dev/null || true
+    systemctl disable openweb-updater.timer 2>/dev/null || true
+
+    log_info "Entferne systemd-Units..."
+    rm -f "$SYSTEMD_SERVICE" "$SYSTEMD_TIMER"
+    systemctl daemon-reload
+
+    log_info "Entferne Update-Skript..."
+    rm -f "$UPDATE_SCRIPT"
+
+    log_info "Deaktiviere nginx-Site..."
+    if [[ -L "$NGINX_LINK" ]]; then rm -f "$NGINX_LINK"; fi
+    if [[ -f "$NGINX_CONF" ]]; then rm -f "$NGINX_CONF"; fi
+    # Default-Site wieder aktivieren
+    if [[ ! -e /etc/nginx/sites-enabled/default ]]; then
+        ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default 2>/dev/null || true
+    fi
+    nginx -t && systemctl reload nginx || true
+
+    log_info "Entferne Webseite (${INSTALL_DIR})..."
+    if [[ -d "$INSTALL_DIR" ]]; then
+        # Backup mit Timestamp
+        local backup="/var/html.backup.$(date +%s)"
+        mv "$INSTALL_DIR" "$backup" 2>/dev/null || rm -rf "$INSTALL_DIR"
+        log_ok "Backup: $backup"
+    fi
+
+    log_info "Entferne Logs und Lock-Files..."
+    rm -f "$LOG_FILE" /var/lock/openweb-update.lock
+
+    log_ok "OpenWeb wurde deinstalliert."
+    log_info "nginx + supabase-cli wurden NICHT entfernt (sind separate Pakete)."
+    log_info "Falls du auch nginx komplett entfernen willst:"
+    log_info "  apt remove --purge nginx"
+}
+
 # --- Root-Check ---
 if [[ $EUID -ne 0 ]]; then
     log_error "Bitte als root ausführen: sudo bash $0"
     exit 1
 fi
+
+# --- Modus-Wahl: interaktives Menü oder Kommandozeilen-Argument ---
+# Erlaubt direkten Aufruf:  sudo bash install.sh neuinstallieren
+# Oder interaktiv:          sudo bash install.sh
+if [[ $# -ge 1 ]]; then
+    MODE="$1"
+else
+    cat <<EOF
+
+${GREEN}============================================================${NC}
+${GREEN} OpenWeb Installer / Manager${NC}
+${GREEN}============================================================${NC}
+
+EOF
+    PS3="  Wähle eine Option: "
+    select opt in \
+        "Neuinstallieren (fragt alle Werte neu ab)" \
+        "Update von GitHub pushen" \
+        "Supabase CLI installieren / reparieren" \
+        "Skript selbst updaten" \
+        "Alles deinstallieren" \
+        "Beenden"
+    do
+        case "$REPLY" in
+            1) MODE="neuinstallieren" ;;
+            2) MODE="update" ;;
+            3) MODE="install-cli" ;;
+            4) MODE="update-self" ;;
+            5) MODE="uninstall" ;;
+            6) log_info "Abbruch"; exit 0 ;;
+            *) log_warn "Ungültige Auswahl: $REPLY"; continue ;;
+        esac
+        break
+    done
+fi
+
+log_info "Modus: $MODE"
+
+# === Modi, die ohne install auskommen ===
+case "$MODE" in
+    update)
+        do_update
+        exit 0
+        ;;
+    update-self)
+        do_update_self
+        exit 0
+        ;;
+    uninstall)
+        do_uninstall
+        exit 0
+        ;;
+    install-cli)
+        do_install_cli
+        exit 0
+        ;;
+esac
+
+# === Standard-Pfad: install (auch fuer 'neuinstallieren') ===
 
 # --- Schritt 1: System-Abhängigkeiten installieren ---
 log_info "Installiere System-Abhängigkeiten (nginx, git, curl, ca-certificates)..."
@@ -69,7 +230,10 @@ prompt_admin_password() {
     # Falls schon ein echtes Passwort in config.js existiert, nachfragen ob
     # ein neues gesetzt werden soll. So wird der User bei Re-Runs nicht
     # jedes Mal zur Passwort-Eingabe gezwungen.
-    if [[ -n "${EXISTING_ADMIN_PW:-}" ]] && ! is_placeholder "${EXISTING_ADMIN_PW:-}"; then
+    # Bei 'neuinstallieren' wird IMMER neu gefragt.
+    if [[ "$MODE" != "neuinstallieren" \
+       && -n "${EXISTING_ADMIN_PW:-}" \
+       && ! is_placeholder "${EXISTING_ADMIN_PW:-}" ]]; then
         echo -n "  Bestehendes Passwort erkannt. Neues Passwort setzen? (j/N): "
         read -r CHANGE_PW
         if [[ ! "$CHANGE_PW" =~ ^[jJyY]$ ]]; then
@@ -149,16 +313,19 @@ log_info "Erstelle lokale config.js mit Admin-Passwort..."
 
 # Wenn schon eine config.js mit echten Daten existiert, behalten wir sie.
 # So gehen Werte aus früheren install-Läufen nicht verloren.
+# Ausnahme: 'neuinstallieren' ueberschreibt alles ohne Rueckfrage.
 EXISTING_CONFIG="${INSTALL_DIR}/config.js"
 EXISTING_URL=""
 EXISTING_ANON_KEY=""
 EXISTING_ADMIN_PW=""
-if [[ -f "$EXISTING_CONFIG" ]]; then
+if [[ "$MODE" != "neuinstallieren" && -f "$EXISTING_CONFIG" ]]; then
     # Bestehende Werte extrahieren (vorsichtig, ohne JS zu eval)
     EXISTING_URL=$(grep -oE "url:\s*'[^']*'" "$EXISTING_CONFIG" 2>/dev/null | head -1 | sed "s/url:\s*'//;s/'$//")
     EXISTING_ANON_KEY=$(grep -oE "anonKey:\s*'[^']*'" "$EXISTING_CONFIG" 2>/dev/null | head -1 | sed "s/anonKey:\s*'//;s/'$//")
     EXISTING_ADMIN_PW=$(grep -oE "ADMIN_DEFAULT_PASSWORD\s*=\s*'[^']*'" "$EXISTING_CONFIG" 2>/dev/null | head -1 | sed "s/ADMIN_DEFAULT_PASSWORD\s*=\s*'//;s/'$//")
     EXISTING_ADMIN_PW=${EXISTING_ADMIN_PW:-$(grep -oE "ADMIN_DEFAULT_PASSWORD\s*=\s*\"[^\"]*\"" "$EXISTING_CONFIG" 2>/dev/null | head -1 | sed 's/ADMIN_DEFAULT_PASSWORD\s*=\s*"//;s/"$//')}
+elif [[ "$MODE" == "neuinstallieren" ]]; then
+    log_info "  Modus 'neuinstallieren' — alle Werte werden neu abgefragt"
 fi
 
 # Erkennen, ob Platzhalter vorhanden sind
