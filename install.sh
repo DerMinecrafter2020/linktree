@@ -567,6 +567,7 @@ if [[ -z "$NAV_USER" ]]; then
     NAV_ENABLED="false"
     NAV_PASS_JSON='"YOUR_PASS"'
 else
+    # Default: AN. Im Admin-Panel kann der User den Player abschalten.
     NAV_ENABLED="true"
     # Frage Navidrome-Passwort (sichtbar)
     while true; do

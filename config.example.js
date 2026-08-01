@@ -29,7 +29,7 @@ window.SUPABASE_CONFIG = {
 //        supabase secrets set NAVIDROME_USER=alice
 //        supabase secrets set NAVIDROME_PASS=geheim123
 window.NAVIDROME_CONFIG = {
-  enabled: false,                                  // auf true setzen zum Aktivieren
+  enabled: true,                                   // Default: AN. Im Admin-Panel deaktivierbar.
   url: 'https://navidrome.example.com',
   user: 'YOUR_USER',
   pass: 'YOUR_PASS',

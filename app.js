@@ -197,10 +197,16 @@
   function mergeNavidromeConfig() {
     const base = window.NAVIDROME_CONFIG || {};
     const stored = loadNavidromeFromStorage();
-    if (!stored) return base;
+    // Default: enabled=true. User kann im Admin-Panel deaktivieren.
+    const enabled = stored && typeof stored.enabled === 'boolean'
+        ? stored.enabled
+        : true;  // ← Default AN
+    if (!stored) {
+      return Object.assign({}, base, { enabled: enabled });
+    }
     // localStorage ueberschreibt Defaults; URL/User/Pass kommen NIE in den Browser
     return Object.assign({}, base, {
-      enabled: stored.enabled || base.enabled,
+      enabled: enabled,
       proxyUrl: stored.proxyUrl || base.proxyUrl,
       pollIntervalSec: stored.pollIntervalSec || base.pollIntervalSec || 30,
     });
@@ -219,7 +225,7 @@
     isEnabled() {
       const c = this.cfg;
       if (!c) return false;
-      if (!c.enabled) return false;
+      // proxyUrl reicht — wenn gesetzt, versuchen wir zu connecten
       if (!c.proxyUrl) return false;
       // Platzhalter rausfiltern
       if ((c.proxyUrl || '').includes('YOUR-PROJECT')) return false;
