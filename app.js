@@ -261,9 +261,11 @@
         }
         // playing=true → live, recentPlay=true → Scrobble-Fallback
         if (json.data?.playing) {
-          this.renderTrack(json.data, { live: true });
+          this.renderTrack(json.data, { live: true, kind: 'live' });
         } else if (json.data?.recentPlay) {
-          this.renderTrack(json.data, { live: false, minutesAgo: json.data.minutesAgo });
+          this.renderTrack(json.data, { live: false, kind: 'recent', minutesAgo: json.data.minutesAgo });
+        } else if (json.data?.randomPick) {
+          this.renderTrack(json.data, { live: false, kind: 'random' });
         } else {
           this.renderIdle();
         }
@@ -293,9 +295,9 @@
       const wrap = $('#navidrome-player');
       if (!wrap) return;
       const live = !!(opts && opts.live);
-      wrap.classList.remove('idle');
-      wrap.classList.toggle('playing', live);
-      wrap.classList.toggle('recent', !live);
+      const kind = (opts && opts.kind) || (live ? 'live' : 'recent');
+      wrap.classList.remove('idle', 'playing', 'recent', 'random');
+      wrap.classList.add(kind);
 
       // Cover (Base64-DataURL oder Emoji)
       const cover = wrap.querySelector('.np-cover');
@@ -317,11 +319,15 @@
       const artistEl = wrap.querySelector('.np-artist');
       if (titleEl) titleEl.textContent = data.title || 'Unbekannt';
 
-      // Artist-Zeile: bei Scrobbles zusätzlich "vor X min" anzeigen
+      // Artist-Zeile: bei Scrobbles/Recent zusätzlich "vor X min" anzeigen,
+      // bei Random einen Hinweis "Aus deiner Library"
       let artistLine = data.artist || (data.album || '');
-      if (!live && (opts && typeof opts.minutesAgo === 'number')) {
-        const ago = opts.minutesAgo;
-        artistLine = (artistLine ? artistLine + ' · ' : '') + humanAgo(ago);
+      if (!live) {
+        if (kind === 'recent' && opts && typeof opts.minutesAgo === 'number') {
+          artistLine = (artistLine ? artistLine + ' · ' : '') + humanAgo(opts.minutesAgo);
+        } else if (kind === 'random') {
+          artistLine = (artistLine ? artistLine + ' · ' : '') + 'Aus deiner Library';
+        }
       }
       if (artistEl) artistEl.textContent = artistLine || '';
 

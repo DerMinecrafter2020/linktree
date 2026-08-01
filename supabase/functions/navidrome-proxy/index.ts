@@ -263,10 +263,43 @@ async function getNowPlaying() {
       return Object.assign({}, scrobbles, { source: 'scrobbles', url: serverUrl });
     }
 
+    // 3) Letzter Fallback: getRandomSongs (zeigt einen Song aus deiner Library)
+    const random = await getRandomSong();
+    if (random) {
+      return Object.assign({}, random, { source: 'random', url: serverUrl });
+    }
+
     return { playing: false, url: serverUrl };
   } catch (err) {
     console.error('nowPlaying failed:', err && err.message);
     return { playing: false, error: err && err.message, url: serverUrl };
+  }
+}
+
+// Hol einen zufaelligen Song aus der Library (letzter Fallback)
+async function getRandomSong() {
+  try {
+    const params = await subsonicParams({ size: 1 });
+    const data   = await navFetch('getRandomSongs', params);
+    const resp   = data && data['subsonic-response'];
+    const song   = resp && resp.randomSongs && resp.randomSongs.song && resp.randomSongs.song[0];
+    if (!song) return null;
+    const coverUrl = song.coverArt ? await getCoverArt(song.coverArt, 220) : '';
+    return {
+      playing:    false,
+      randomPick: true,
+      title:      String(song.title  || ''),
+      artist:     String(song.artist || ''),
+      album:      String(song.album  || ''),
+      duration:   Number(song.duration || 0) || 0,
+      position:   0,
+      coverUrl:   coverUrl,
+      player:     '',
+      minutesAgo: 0,
+    };
+  } catch (e) {
+    console.error('getRandomSong failed:', e && e.message);
+    return null;
   }
 }
 
