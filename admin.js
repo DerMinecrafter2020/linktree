@@ -97,8 +97,14 @@
   async function ensureDefaultHash() {
     // Wenn noch kein Hash existiert (Erstinstallation), lege Default an.
     if (!localStorage.getItem(STORAGE_PW_HASH)) {
+      // Default-Passwort: zuerst aus config.js (vom Install-Skript gesetzt),
+      // sonst der klassische Default 'admin123' (fuer lokale Entwicklung)
+      const defaultPw = (typeof window.ADMIN_DEFAULT_PASSWORD === 'string'
+                       && window.ADMIN_DEFAULT_PASSWORD.length >= 4)
+                       ? window.ADMIN_DEFAULT_PASSWORD
+                       : DEFAULT_PASSWORD;
       const salt = randomSalt();
-      const hash = await pbkdf2(DEFAULT_PASSWORD, salt, PBKDF2_ITERATIONS);
+      const hash = await pbkdf2(defaultPw, salt, PBKDF2_ITERATIONS);
       localStorage.setItem(STORAGE_PW_SALT, salt);
       localStorage.setItem(STORAGE_PW_ITER, String(PBKDF2_ITERATIONS));
       localStorage.setItem(STORAGE_PW_HASH, hash);
