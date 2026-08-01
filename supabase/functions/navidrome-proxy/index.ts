@@ -264,7 +264,18 @@ async function getNowPlaying() {
     });
 
     if (myEntries.length > 0) {
-      return buildPlayingEntry(myEntries[0], 'nowPlaying', serverUrl);
+      const entry = myEntries[0];
+      // WICHTIG: Navidrome's getNowPlaying listet auch PAUSIERTE Player mit
+      // playing=true. Wir muessen den 'state' checken: nur 'playing' oder
+      // 'paused' mit zunehmender Position anzeigen. Bei state='paused'
+      // oder state='stopped' zeigen wir Idle.
+      const state = String(entry.state || '').toLowerCase();
+      const minutesAgoNum = Number(entry.minutesAgo || 0) || 0;
+      // Wenn minutesAgo > 5 UND state != 'playing' -> effektiv gestoppt
+      if (state !== 'playing' && minutesAgoNum > 5) {
+        return { playing: false, url: serverUrl, reason: 'state=' + state + ' minutesAgo=' + minutesAgoNum };
+      }
+      return buildPlayingEntry(entry, 'nowPlaying', serverUrl);
     }
     // Falls kein Eintrag fuer unseren User, schauen wir in der eigenen
     // Play-Queue nach.
