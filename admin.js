@@ -819,13 +819,19 @@
     if (!panel || !toggle) return;
 
     // Vorschlagsliste initial rendern
-    suggested.innerHTML = POPULAR_IDS.map((id) => {
+    suggested.replaceChildren();
+    POPULAR_IDS.forEach((id) => {
       const info = window.ICON_LIBRARY[id];
-      return `<button data-icon="simpleicon:${id}">
-        <img src="${window.icons.url(id)}" alt="" />
-        ${info?.title || id}
-      </button>`;
-    }).join('');
+      const btn = document.createElement('button');
+      btn.dataset.icon = `simpleicon:${id}`;
+      const img = document.createElement('img');
+      img.src = window.icons.url(id);
+      img.alt = '';
+      btn.appendChild(img);
+      btn.appendChild(document.createTextNode(' ' + (info?.title || id)));
+      btn.addEventListener('click', () => selectIcon(`simpleicon:${id}`));
+      suggested.appendChild(btn);
+    });
 
     // Panel ein-/ausklappen
     toggle.addEventListener('click', () => {
@@ -888,11 +894,21 @@
 
     function updatePreview(value) {
       const parsed = window.icons.parse(value);
+      preview.replaceChildren();
       if (parsed.type === 'simpleicon') {
-        preview.innerHTML = `<img src="${parsed.url}" alt="" />`;
+        const img = document.createElement('img');
+        img.src = parsed.url;
+        img.alt = '';
+        img.onerror = () => img.replaceWith(document.createTextNode('❌'));
+        preview.appendChild(img);
         previewName.textContent = `simpleicon: ${parsed.label}`;
       } else if (parsed.type === 'url') {
-        preview.innerHTML = `<img src="${parsed.url}" alt="" onerror="this.replaceWith(document.createTextNode('❌'))" />`;
+        const img = document.createElement('img');
+        img.src = parsed.url;
+        img.alt = '';
+        img.referrerPolicy = 'no-referrer';
+        img.onerror = () => img.replaceWith(document.createTextNode('❌'));
+        preview.appendChild(img);
         previewName.textContent = parsed.url;
       } else {
         preview.textContent = parsed.value || '🔗';
@@ -922,15 +938,29 @@
       }
 
       if (unique.length === 0) {
-        grid.innerHTML = `<div class="icon-empty">Keine Treffer für „${escapeHtml(query)}"</div>`;
+        grid.replaceChildren();
+        const empty = document.createElement('div');
+        empty.className = 'icon-empty';
+        empty.textContent = `Keine Treffer für „${query}"`;
+        grid.appendChild(empty);
         return;
       }
 
-      grid.innerHTML = unique.slice(0, 200).map((e) => `
-        <div class="icon-cell" data-id="${e.id}" data-tip="${e.title}">
-          <img src="${window.icons.url(e.id)}" alt="${e.title}" loading="lazy" />
-        </div>
-      `).join('');
+      grid.replaceChildren();
+      unique.slice(0, 200).forEach((e) => {
+        const cell = document.createElement('div');
+        cell.className = 'icon-cell';
+        cell.dataset.id = e.id;
+        cell.dataset.tip = e.title;
+        const img = document.createElement('img');
+        img.src = window.icons.url(e.id);
+        img.alt = e.title;
+        img.loading = 'lazy';
+        img.onerror = () => img.replaceWith(document.createTextNode('🔗'));
+        cell.appendChild(img);
+        cell.addEventListener('click', () => selectIcon(`simpleicon:${e.id}`));
+        grid.appendChild(cell);
+      });
 
       // Aktuell gewählten Wert markieren
       const current = (input.value || '').startsWith('simpleicon:')
@@ -948,10 +978,17 @@
       const guess  = window.icons.detectFromUrl(url, title);
       if (guess && !input.value) {
         const info = window.ICON_LIBRARY[guess];
-        suggested.innerHTML += `<button data-icon="simpleicon:${guess}" style="border-color:var(--neon-cyan);color:var(--neon-cyan)">
-          <img src="${window.icons.url(guess)}" alt="" />
-          ✨ Empfohlen: ${info?.title || guess}
-        </button>`;
+        const btn = document.createElement('button');
+        btn.dataset.icon = `simpleicon:${guess}`;
+        btn.style.borderColor = 'var(--neon-cyan)';
+        btn.style.color = 'var(--neon-cyan)';
+        const img = document.createElement('img');
+        img.src = window.icons.url(guess);
+        img.alt = '';
+        btn.appendChild(img);
+        btn.appendChild(document.createTextNode(' ✨ Empfohlen: ' + (info?.title || guess)));
+        btn.addEventListener('click', () => selectIcon(`simpleicon:${guess}`));
+        suggested.appendChild(btn);
       }
     }
   }
@@ -963,11 +1000,21 @@
     const previewName = $('#icon-preview-name');
     if (!input || !preview) return;
     const parsed = window.icons.parse(input.value);
+    preview.replaceChildren();
     if (parsed.type === 'simpleicon') {
-      preview.innerHTML = `<img src="${parsed.url}" alt="" />`;
+      const img = document.createElement('img');
+      img.src = parsed.url;
+      img.alt = '';
+      img.onerror = () => img.replaceWith(document.createTextNode('❌'));
+      preview.appendChild(img);
       previewName.textContent = `simpleicon: ${parsed.label}`;
     } else if (parsed.type === 'url') {
-      preview.innerHTML = `<img src="${parsed.url}" alt="" onerror="this.replaceWith(document.createTextNode('❌'))" />`;
+      const img = document.createElement('img');
+      img.src = parsed.url;
+      img.alt = '';
+      img.referrerPolicy = 'no-referrer';
+      img.onerror = () => img.replaceWith(document.createTextNode('❌'));
+      preview.appendChild(img);
       previewName.textContent = parsed.url;
     } else {
       preview.textContent = parsed.value || '🔗';

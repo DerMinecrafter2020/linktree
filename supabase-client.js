@@ -58,9 +58,20 @@
   const script = document.createElement('script');
   script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
   script.onload = () => {
-    const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    window.sb = client;
-    window.db = createDb(client);
+    try {
+      const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      window.sb = client;
+      window.db = createDb(client);
+      window.dispatchEvent(new Event('supabase:ready'));
+    } catch (err) {
+      console.error('[db] Supabase init failed:', err);
+      window.db = mockDb();
+      window.dispatchEvent(new Event('supabase:ready'));
+    }
+  };
+  script.onerror = () => {
+    console.error('[db] Konnte Supabase-Lib nicht laden (offline?) — fallback auf Mock');
+    window.db = mockDb();
     window.dispatchEvent(new Event('supabase:ready'));
   };
   document.head.appendChild(script);
@@ -172,16 +183,17 @@
       },
 
       async saveProfile(profile) {
-        if (ADMIN_PROXY_URL) {
+        // Bei aktiviertem Edge-Auth: nur ueber Proxy schreiben
+        if (AUTH_ENABLED && ADMIN_PROXY_URL) {
           return adminProxy('saveProfile', profile, getToken());
         }
-        // Sicherheits-Fix: Ohne Proxy KEIN direkter anon-Write.
-        // Wer ohne Edge-Auth deployed, MUSS die SQL-Policies so eng
-        // wie möglich setzen (siehe supabase-setup.sql). Hier: hard fail.
-        throw new Error(
-          'Schreib-Operation blockiert: kein Edge-Proxy konfiguriert. ' +
-          'Aktiviere adminProxyUrl in config.js oder setze RLS-Policies explizit auf DENY für anon.'
-        );
+        // Fallback: ohne Edge-Auth direkt via REST schreiben.
+        // Voraussetzung: RLS-Policies muessen Schreibzugriff erlauben
+        // (siehe fix-policies.sql).
+        const { data, error } = await client
+          .from('profile').update(profile).eq('id', 1).select().maybeSingle();
+        if (error) throw error;
+        return data;
       },
 
       async listLinks() {
@@ -192,31 +204,45 @@
       },
 
       async createLink(link) {
-        if (ADMIN_PROXY_URL) {
+        if (AUTH_ENABLED && ADMIN_PROXY_URL) {
           return adminProxy('createLink', link, getToken());
         }
-        throw new Error('Schreib-Operation blockiert: kein Edge-Proxy konfiguriert.');
+        const { data, error } = await client
+          .from('links').insert(link).select().maybeSingle();
+        if (error) throw error;
+        return data;
       },
 
       async updateLink(id, patch) {
-        if (ADMIN_PROXY_URL) {
+        if (AUTH_ENABLED && ADMIN_PROXY_URL) {
           return adminProxy('updateLink', patch, getToken());
         }
-        throw new Error('Schreib-Operation blockiert: kein Edge-Proxy konfiguriert.');
+        const { data, error } = await client
+          .from('links').update(patch).eq('id', id).select().maybeSingle();
+        if (error) throw error;
+        return data;
       },
 
       async deleteLink(id) {
-        if (ADMIN_PROXY_URL) {
+        if (AUTH_ENABLED && ADMIN_PROXY_URL) {
           return adminProxy('deleteLink', null, getToken());
         }
-        throw new Error('Schreib-Operation blockiert: kein Edge-Proxy konfiguriert.');
+        const { error } = await client.from('links').delete().eq('id', id);
+        if (error) throw error;
+        return true;
       },
 
       async reorderLinks(orderedIds) {
-        if (ADMIN_PROXY_URL) {
+        if (AUTH_ENABLED && ADMIN_PROXY_URL) {
           return adminProxy('reorderLinks', { orderedIds }, getToken());
         }
-        throw new Error('Schreib-Operation blockiert: kein Edge-Proxy konfiguriert.');
+        // Sequenzielle Updates — eine Transaktion ist auf REST-Ebene nicht trivial
+        for (let i = 0; i < orderedIds.length; i++) {
+          const { error } = await client
+            .from('links').update({ position: i }).eq('id', orderedIds[i]);
+          if (error) throw error;
+        }
+        return true;
       },
 
       subscribe(onChange) {
