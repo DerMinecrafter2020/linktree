@@ -83,15 +83,19 @@
   // Edge-Function nutzt SERVICE_ROLE_KEY und JWT-Verifikation.
   //
   // Fallback (kein authEnabled): anon-Key + token im Body.
-  async function adminProxy(action, data, token) {
+  async function adminProxy(action, data, token, extra) {
     if (!ADMIN_PROXY_URL) {
       throw new Error('adminProxyUrl nicht konfiguriert — siehe supabase/functions/admin-proxy/README');
     }
+    // extra (z.B. { id }) wird als Top-Level-Feld gemerged, damit die
+    // Edge-Function es als body.id / body.X lesen kann.
+    // body.data bleibt separat (für validateLink etc.).
     return await window.SupabaseAPI.adminProxy({
       url: ADMIN_PROXY_URL,
       token: token,
       action: action,
-      data: data,
+      data: data || {},
+      extra: extra || {},
       authEnabled: AUTH_ENABLED,
       anonKey: SUPABASE_KEY,
     });
@@ -170,6 +174,12 @@
         const { data, error } = await client
           .from('profile').update(profile).eq('id', 1).select().maybeSingle();
         if (error) throw error;
+        if (!data) {
+          // RLS hat den Write stillschweigend geblockt. Das passiert wenn
+          // eine Tabelle RLS aktiv hat aber keine passende Policy für anon.
+          // Wir werfen einen klaren Fehler statt den User im Unklaren zu lassen.
+          throw new Error('saveProfile fehlgeschlagen: RLS-Policy blockt anon-Write. Setze adminProxyUrl + authEnabled=true oder lockere RLS-Policy.');
+        }
         return data;
       },
 
@@ -192,7 +202,8 @@
 
       async updateLink(id, patch) {
         if (AUTH_ENABLED && ADMIN_PROXY_URL) {
-          return adminProxy('updateLink', patch, getToken());
+          // id muss mitgeschickt werden — die Edge-Function liest body.id
+          return adminProxy('updateLink', patch, getToken(), { id: id });
         }
         const { data, error } = await client
           .from('links').update(patch).eq('id', id).select().maybeSingle();
@@ -202,7 +213,7 @@
 
       async deleteLink(id) {
         if (AUTH_ENABLED && ADMIN_PROXY_URL) {
-          return adminProxy('deleteLink', null, getToken());
+          return adminProxy('deleteLink', null, getToken(), { id: id });
         }
         const { error } = await client.from('links').delete().eq('id', id);
         if (error) throw error;
