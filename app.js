@@ -215,7 +215,10 @@
   const np = {
     cfg: null,
     pollTimer: null,
-    lastTitle: '',
+    progressTimer: null,
+    currentTrack: null,    // letzter Track-Stand vom Server
+    progressStartedAt: 0, // Date.now() als Basis fuer lokale Interpolation
+    initialPosition: 0,   // Position vom Server beim letzten Tick
 
     init() {
       this.cfg = mergeNavidromeConfig();
@@ -238,13 +241,44 @@
       if (!wrap) return;
       wrap.hidden = false;
       await this.tick();
-      const interval = Math.max(10, this.cfg.pollIntervalSec || 30) * 1000;
-      this.pollTimer = setInterval(() => this.tick(), interval);
+      // Server-Polling: langsamer (Standard 30s)
+      const pollInterval = Math.max(10, this.cfg.pollIntervalSec || 30) * 1000;
+      this.pollTimer = setInterval(() => this.tick(), pollInterval);
+      // Lokales Progress-Polling: jede Sekunde, fuer die Bar-Animation
+      this.progressTimer = setInterval(() => this.updateProgress(), 1000);
     },
 
     stop() {
       if (this.pollTimer) clearInterval(this.pollTimer);
+      if (this.progressTimer) clearInterval(this.progressTimer);
       this.pollTimer = null;
+      this.progressTimer = null;
+    },
+
+    // Aktualisiert nur den Progress-Balken lokal, ohne Server-Call.
+    // Interpoliert zwischen Server-Tick und jetzt.
+    updateProgress() {
+      if (!this.currentTrack) return;
+      const wrap = $('#navidrome-player');
+      if (!wrap) return;
+      const bar = wrap.querySelector('.np-progress-bar');
+      if (!bar) return;
+
+      const duration = Number(this.currentTrack.duration || 0);
+      let position;
+      if (duration <= 0) {
+        position = 0;
+        bar.style.width = '0%';
+      } else {
+        const elapsedSinceServer = (Date.now() - this.progressStartedAt) / 1000;
+        position = this.initialPosition + elapsedSinceServer;
+        const pct = Math.min(100, (position / duration) * 100);
+        bar.style.width = pct.toFixed(2) + '%';
+      }
+
+      // Zeitanzeige unter der Progress-Bar aktualisieren
+      const timePos = wrap.querySelector('.np-time-pos');
+      if (timePos) timePos.textContent = formatTime(position);
     },
 
     async tick() {
@@ -256,12 +290,19 @@
         });
         const json = await r.json();
         if (!r.ok || !json.ok || !json.data?.playing) {
+          this.currentTrack = null;
           this.renderIdle();
           return;
         }
+        // Track-State speichern fuer lokale Progress-Interpolation
+        this.currentTrack = json.data;
+        this.progressStartedAt = Date.now();
+        this.initialPosition = Number(json.data.position || 0);
         this.renderTrack(json.data);
+        this.updateProgress(); // sofort nach Server-Update synchronisieren
       } catch (err) {
         console.warn('[navidrome] poll failed:', err.message);
+        this.currentTrack = null;
         this.renderIdle();
       }
     },
@@ -309,17 +350,13 @@
       if (titleEl) titleEl.textContent = data.title || 'Unbekannt';
       if (artistEl) artistEl.textContent = data.artist || (data.album || '');
 
-      // Progress (position / duration)
-      const bar = wrap.querySelector('.np-progress-bar');
-      if (bar) {
-        const dur = Math.max(1, parseInt(data.duration || 0, 10));
-        const pos = Math.min(dur, parseInt(data.position || data.minutesAgo || 0, 10));
-        if (dur <= 0) {
-          bar.style.width = '0%';
-        } else {
-          bar.style.width = Math.min(100, (pos / dur) * 100).toFixed(2) + '%';
-        }
-      }
+      // Zeitanzeige initial setzen (wird dann von updateProgress() jede Sekunde aktualisiert)
+      const durNum = Number(data.duration || 0) || 0;
+      const posNum = Number(data.position || 0) || 0;
+      const timePos = wrap.querySelector('.np-time-pos');
+      const timeDur = wrap.querySelector('.np-time-dur');
+      if (timePos) timePos.textContent = formatTime(posNum);
+      if (timeDur) timeDur.textContent = formatTime(durNum);
     },
 
     async control(action) {
@@ -346,6 +383,14 @@
       };
     },
   };
+
+  // Formatiert Sekunden als mm:ss
+  function formatTime(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
 
   function bindPlayerControls() {
     document.addEventListener('click', (e) => {

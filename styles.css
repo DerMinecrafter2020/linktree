@@ -228,8 +228,20 @@ body {
   width: 0%;
   background: linear-gradient(90deg, var(--neon-pink), var(--neon-cyan));
   border-radius: 999px;
-  transition: width 0.6s ease;
+  transition: width 0.4s linear;
   box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+}
+
+.np-time {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 320px;
+  margin: 4px auto 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .np-controls {
