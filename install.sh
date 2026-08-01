@@ -148,6 +148,59 @@ do_uninstall() {
     log_info "  apt remove --purge nginx"
 }
 
+# 5) Supabase CLI installieren (von hier aufrufbar)
+install_supabase_cli() {
+    if [[ -x "$SUPABASE_CLI" ]] || command -v supabase >/dev/null 2>&1; then
+        log_ok "supabase CLI bereits vorhanden"
+        return 0
+    fi
+    log_info "supabase CLI nicht gefunden — versuche Installation..."
+
+    # Architektur erkennen
+    local arch
+    arch=$(uname -m)
+    case "$arch" in
+        x86_64) arch="amd64" ;;
+        aarch64|arm64) arch="arm64" ;;
+        *)
+            log_warn "Unbekannte Architektur '$arch' — CLI-Installation wird uebersprungen"
+            return 1
+            ;;
+    esac
+
+    # 1) Versuch: .deb herunterladen und installieren
+    local deb_url="https://github.com/supabase/cli/releases/latest/download/supabase_linux_${arch}.deb"
+    local deb_file="/tmp/supabase-cli.deb"
+
+    if curl -fsSL -o "$deb_file" "$deb_url" 2>/dev/null; then
+        if dpkg -i "$deb_file" 2>/dev/null; then
+            log_ok "supabase CLI via .deb installiert"
+            rm -f "$deb_file"
+            return 0
+        fi
+        rm -f "$deb_file"
+    fi
+
+    # 2) Versuch: .tar.gz herunterladen und nach /usr/local/bin entpacken
+    log_info "  .deb fehlgeschlagen, versuche tar.gz..."
+    local tar_url="https://github.com/supabase/cli/releases/latest/download/supabase_linux_${arch}.tar.gz"
+    local tar_file="/tmp/supabase-cli.tar.gz"
+
+    if curl -fsSL -o "$tar_file" "$tar_url" 2>/dev/null; then
+        if tar -xzf "$tar_file" -C /tmp/ 2>/dev/null && [[ -x /tmp/supabase ]]; then
+            mv /tmp/supabase /usr/local/bin/supabase
+            chmod +x /usr/local/bin/supabase
+            log_ok "supabase CLI via tar.gz nach /usr/local/bin installiert"
+            rm -f "$tar_file"
+            return 0
+        fi
+    fi
+    rm -f "$tar_file"
+
+    log_warn "CLI-Installation fehlgeschlagen — Navidrome-Secrets koennen nicht aus Supabase geladen werden"
+    return 1
+}
+
 # --- Root-Check ---
 if [[ $EUID -ne 0 ]]; then
     log_error "Bitte als root ausführen: sudo bash $0"
@@ -358,60 +411,7 @@ get_supabase_secret() {
     return 1
 }
 
-# Supabase CLI installieren (falls noch nicht da).
-# Verwendet das offizielle .deb-Paket (Debian/Ubuntu) statt einer kaputten
-# curl-Pipe-Installation.
-install_supabase_cli() {
-    if [[ -x "$SUPABASE_CLI" ]] || command -v supabase >/dev/null 2>&1; then
-        log_ok "supabase CLI bereits vorhanden"
-        return 0
-    fi
-    log_info "supabase CLI nicht gefunden — versuche Installation..."
-
-    # Architektur erkennen
-    local arch
-    arch=$(uname -m)
-    case "$arch" in
-        x86_64) arch="amd64" ;;
-        aarch64|arm64) arch="arm64" ;;
-        *)
-            log_warn "Unbekannte Architektur '$arch' — CLI-Installation wird uebersprungen"
-            return 1
-            ;;
-    esac
-
-    # 1) Versuch: .deb herunterladen und installieren
-    local deb_url="https://github.com/supabase/cli/releases/latest/download/supabase_linux_${arch}.deb"
-    local deb_file="/tmp/supabase-cli.deb"
-
-    if curl -fsSL -o "$deb_file" "$deb_url" 2>/dev/null; then
-        if dpkg -i "$deb_file" 2>/dev/null; then
-            log_ok "supabase CLI via .deb installiert"
-            rm -f "$deb_file"
-            return 0
-        fi
-        rm -f "$deb_file"
-    fi
-
-    # 2) Versuch: .tar.gz herunterladen und nach /usr/local/bin entpacken
-    log_info "  .deb fehlgeschlagen, versuche tar.gz..."
-    local tar_url="https://github.com/supabase/cli/releases/latest/download/supabase_linux_${arch}.tar.gz"
-    local tar_file="/tmp/supabase-cli.tar.gz"
-
-    if curl -fsSL -o "$tar_file" "$tar_url" 2>/dev/null; then
-        if tar -xzf "$tar_file" -C /tmp/ 2>/dev/null && [[ -x /tmp/supabase ]]; then
-            mv /tmp/supabase /usr/local/bin/supabase
-            chmod +x /usr/local/bin/supabase
-            log_ok "supabase CLI via tar.gz nach /usr/local/bin installiert"
-            rm -f "$tar_file"
-            return 0
-        fi
-    fi
-    rm -f "$tar_file"
-
-    log_warn "CLI-Installation fehlgeschlagen — Navidrome-Secrets koennen nicht aus Supabase geladen werden"
-    return 1
-}
+# (install_supabase_cli() ist weiter oben definiert — siehe Modi-Funktionen)
 
 # Jetzt erst das Passwort-Prompt — es kennt jetzt die EXISTING_*-Werte
 prompt_admin_password
