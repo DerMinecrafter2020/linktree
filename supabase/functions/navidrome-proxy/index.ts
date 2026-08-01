@@ -9,41 +9,26 @@
 //   supabase secrets set NAVIDROME_URL=https://navidrome.example.com
 //   supabase secrets set NAVIDROME_USER=alice
 //   supabase secrets set NAVIDROME_PASS=geheim123
+//   supabase secrets set ALLOWED_ORIGINS=https://deine-domain.de
 //
 // Aufruf von der App:
 //   POST {SUPABASE_URL}/functions/v1/navidrome-proxy
 //   Header: apikey: <anon-key>
 //   Body:   { "action": "nowPlaying" }
-//           { "action": "coverArt", id: "..." }   (gibt Base64-DataURL zurück)
-//           { "action": "control", action: "play|pause|next|previous" }
+//           { "action": "coverArt", "id": "..." }
+//           { "action": "control", "controlAction": "play|pause|next|previous" }
 //
-// Antwort (action=nowPlaying):
-//   200 {
-//     ok: true,
-//     data: {
-//       playing: true|false,
-//       title: "...",
-//       artist: "...",
-//       album: "...",
-//       coverUrl: "data:image/...",   // Base64-DataURL, ggf. leer
-//       duration: 240,
-//       position: 80,
-//       player: "Web Player"
-//     }
-//   }
-//
-// Subsonic-API:
-//   https://www.subsonic.org/pages/api.jsp
+// Subsonic-API: https://www.subsonic.org/pages/api.jsp
 // =========================================================
-//
-// @ts-nocheck
-const NAVIDROME_URL  = Deno.env.get('NAVIDROME_URL')  || '';
-const NAVIDROME_USER = Deno.env.get('NAVIDROME_USER') || '';
-const NAVIDROME_PASS = Deno.env.get('NAVIDROME_PASS') || '';
-const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').filter(Boolean);
 
-const SUB_VERSION   = '1.16.1';
-const CLIENT_NAME   = 'openweb-linktree';
+// @ts-nocheck
+const NAVIDROME_URL    = Deno.env.get('NAVIDROME_URL')    || '';
+const NAVIDROME_USER   = Deno.env.get('NAVIDROME_USER')   || '';
+const NAVIDROME_PASS   = Deno.env.get('NAVIDROME_PASS')   || '';
+const ALLOWED_ORIGINS  = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').map((s) => s.trim()).filter(Boolean);
+
+const SUB_VERSION = '1.16.1';
+const CLIENT_NAME = 'openweb-linktree';
 
 const CORS_BASE = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -56,6 +41,7 @@ function corsFor(req) {
   return {
     ...CORS_BASE,
     'Access-Control-Allow-Origin': allowed ? (origin || '*') : 'null',
+    'Vary': 'Origin',
   };
 }
 
@@ -66,7 +52,7 @@ function json(data, status, req) {
   });
 }
 
-// Hilfsfunktion: MD5-Token für Subsonic-Auth
+// MD5 (Subsonic token = md5(password + salt))
 async function md5(str) {
   const bytes = await crypto.subtle.digest('MD5', new TextEncoder().encode(str));
   return Array.from(new Uint8Array(bytes))
@@ -74,108 +60,124 @@ async function md5(str) {
     .join('');
 }
 
-// Subsonic-Query-String (token-Version mit md5(pass+salt))
-async function subsonicParams(extra = {}) {
-  const salt = crypto.randomUUID().replace(/-/g, '');
+function randomSalt() {
+  const arr = new Uint8Array(16);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function subsonicParams(extra) {
+  const extraObj = extra || {};
+  const salt = randomSalt();
   const token = await md5(NAVIDROME_PASS + salt);
-  return new URLSearchParams({
+  const params = new URLSearchParams({
     u: NAVIDROME_USER,
     t: token,
     s: salt,
     v: SUB_VERSION,
     c: CLIENT_NAME,
     f: 'json',
-    ...extra,
   });
+  for (const key of Object.keys(extraObj)) {
+    if (extraObj[key] !== undefined && extraObj[key] !== null) {
+      params.set(key, String(extraObj[key]));
+    }
+  }
+  return params;
 }
 
-// Generischer Fetch-Wrapper für Navidrome
+// ArrayBuffer -> base64 (chunked, vermeidet "Maximum call stack" bei grossen Bildern)
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
 async function navFetch(path, params) {
   if (!NAVIDROME_URL || !NAVIDROME_USER || !NAVIDROME_PASS) {
     throw new Error('Navidrome nicht konfiguriert (Secrets NAVIDROME_URL/USER/PASS fehlen)');
   }
-  const url = `${NAVIDROME_URL.replace(/\/$/, '')}/rest/${path}?${params.toString()}`;
+  const base = NAVIDROME_URL.replace(/\/+$/, '');
+  const url  = base + '/rest/' + path + '?' + params.toString();
   const r = await fetch(url, { method: 'GET' });
-  if (!r.ok) throw new Error(`Navidrome ${path} HTTP ${r.status}`);
+  if (!r.ok) throw new Error('Navidrome ' + path + ' HTTP ' + r.status);
   return r.json();
 }
 
-// =========================================================
-// ACTIONS
-// =========================================================
-
-// 1) nowPlaying — verbundene Player abfragen
+// ACTION: nowPlaying
 async function getNowPlaying() {
   try {
     const params = await subsonicParams();
-    const json = await navFetch('getNowPlaying', params);
-    const entry = json?.subsonic‑response?.nowPlaying?.entry?.[0];
-    if (!entry) {
-      return { playing: false };
-    }
-    const coverUrl = entry.coverArt
-      ? await getCoverArt(entry.coverArt, 220)
-      : '';
+    const data   = await navFetch('getNowPlaying', params);
+
+    const resp  = data && data['subsonic-response'];
+    const entry = resp && resp.nowPlaying && resp.nowPlaying.entry && resp.nowPlaying.entry[0];
+
+    if (!entry) return { playing: false };
+
+    const coverUrl = entry.coverArt ? await getCoverArt(entry.coverArt, 220) : '';
+    const player   = entry.player || {};
+    const minutesAgoNum = Number(entry.minutesAgo || 0) || 0;
+    const durationNum   = Number(entry.duration   || 0) || 0;
+    const positionNum   = Number(player.position  || minutesAgoNum) || 0;
+
     return {
-      playing: true,
-      title:       entry.title       || '',
-      artist:      entry.artist      || '',
-      album:       entry.album       || '',
-      duration:    parseInt(entry.duration || '0', 10),
-      position:    parseInt(entry.player?.position || entry.minutesAgo || '0', 10),
-      coverUrl,
-      player:      entry.player?.name || '',
-      minutesAgo:  parseInt(entry.minutesAgo || '0', 10),
+      playing:    true,
+      title:      String(entry.title  || ''),
+      artist:     String(entry.artist || ''),
+      album:      String(entry.album  || ''),
+      duration:   durationNum,
+      position:   positionNum,
+      coverUrl:   coverUrl,
+      player:     String(player.name  || ''),
+      minutesAgo: minutesAgoNum,
     };
   } catch (err) {
-    // Fallback: versuche alternativ "getRandomSongs" oder gib klare Antwort
-    console.error('nowPlaying failed:', err.message);
-    return { playing: false, error: err.message };
+    console.error('nowPlaying failed:', err && err.message);
+    return { playing: false, error: err && err.message };
   }
 }
 
-// 2) coverArt — Cover als DataURL
-async function getCoverArt(id, size = 220) {
+// ACTION: coverArt
+async function getCoverArt(id, size) {
   if (!id) return '';
+  const sizeNum = Number(size) || 220;
   try {
-    const params = await subsonicParams({ id, size });
-    const url = `${NAVIDROME_URL.replace(/\/$/, '')}/rest/getCoverArt?${params.toString()}`;
-    const r = await fetch(url);
+    const params = await subsonicParams({ id: id, size: sizeNum });
+    const base   = NAVIDROME_URL.replace(/\/+$/, '');
+    const url    = base + '/rest/getCoverArt?' + params.toString();
+    const r      = await fetch(url);
     if (!r.ok) return '';
     const ct = r.headers.get('content-type') || 'image/jpeg';
+    if (!/^image\/(png|jpeg|jpg|webp|gif)$/i.test(ct)) return '';
     const buf = await r.arrayBuffer();
-    // Größenlimit: max 600KB raw → ~800KB base64
-    if (buf.byteLength > 600_000) return '';
-    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-    return `data:${ct};base64,${b64}`;
+    if (buf.byteLength > 600000) return '';
+    return 'data:' + ct + ';base64,' + arrayBufferToBase64(buf);
   } catch (e) {
-    console.error('coverArt failed:', e.message);
+    console.error('coverArt failed:', e && e.message);
     return '';
   }
 }
 
-// 3) control — Wiedergabe steuern
+// ACTION: control
 async function controlPlayer(action) {
-  const map = {
-    play:     'play',
-    pause:    'pause',
-    next:     'next',
-    previous: 'previous',
-  };
+  const map = { play: 'play', pause: 'pause', next: 'next', previous: 'previous' };
   const mapped = map[action];
-  if (!mapped) throw new Error(`unsupported action: ${action}`);
+  if (!mapped) throw new Error('unsupported action: ' + action);
   const params = await subsonicParams({ action: mapped });
-  const json = await navFetch('control', params);
-  if (json?.subsonic‑response?.status === 'ok') return true;
-  if (json?.subsonic‑response?.error) {
-    throw new Error(json.subsonic‑response.error.message || 'control failed');
+  const data   = await navFetch('control', params);
+  const resp   = data && data['subsonic-response'];
+  if (resp && resp.error) {
+    throw new Error(resp.error.message || 'control failed');
   }
   return true;
 }
 
-// =========================================================
 // ROUTER
-// =========================================================
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsFor(req) });
@@ -186,12 +188,13 @@ Deno.serve(async (req) => {
 
   let body = {};
   try {
-    body = await req.json();
-  } catch {
+    const text = await req.text();
+    if (text) body = JSON.parse(text);
+  } catch (_) {
     return json({ ok: false, error: 'invalid JSON body' }, 400, req);
   }
 
-  const { action } = body;
+  const action = body.action;
   try {
     let data;
     switch (action) {
@@ -199,17 +202,17 @@ Deno.serve(async (req) => {
         data = await getNowPlaying();
         break;
       case 'coverArt':
-        data = { coverUrl: await getCoverArt(body.id, body.size || 220) };
+        data = { coverUrl: await getCoverArt(body.id, body.size) };
         break;
       case 'control':
         data = await controlPlayer(body.controlAction);
         break;
       default:
-        return json({ ok: false, error: `unknown action: ${action}` }, 400, req);
+        return json({ ok: false, error: 'unknown action: ' + action }, 400, req);
     }
-    return json({ ok: true, data }, 200, req);
+    return json({ ok: true, data: data }, 200, req);
   } catch (err) {
-    console.error(`action=${action} failed:`, err.message);
-    return json({ ok: false, error: err.message }, 500, req);
+    console.error('action=' + action + ' failed:', err && err.message);
+    return json({ ok: false, error: err && err.message }, 500, req);
   }
 });
