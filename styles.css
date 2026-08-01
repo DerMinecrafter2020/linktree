@@ -199,23 +199,6 @@ body {
 .np-player.playing .np-cover {
   animation: np-spin 12s linear infinite;
 }
-.np-player.paused .np-cover {
-  animation: none;
-  opacity: 0.85;
-  position: relative;
-}
-.np-player.paused .np-cover::after {
-  content: '⏸';
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
-  color: white;
-  font-size: 36px;
-  border-radius: 50%;
-}
 .np-player.idle .np-cover {
   animation: none;
   opacity: 0.6;

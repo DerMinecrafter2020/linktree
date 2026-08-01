@@ -249,9 +249,6 @@
     currentTrack: null,    // letzter Track-Stand vom Server
     progressStartedAt: 0, // Date.now() als Basis fuer lokale Interpolation
     initialPosition: 0,   // Position vom Server beim letzten Tick
-    lastServerPos: 0,     // letzte vom Server gemeldete Position (fuer Pause-Erkennung)
-    lastServerPosAt: 0,   // wann wurde lastServerPos zuletzt aktualisiert
-    pausedConfirmed: false,// bestaetigt pausiert durch 2 gleiche Ticks
 
     init() {
       this.cfg = mergeNavidromeConfig();
@@ -405,37 +402,23 @@
           body: JSON.stringify({ action: 'nowPlaying' }),
         });
         const json = await r.json();
+        // Einfache Regel: Server sagt "playing" -> zeige Track.
+        // Sonst (kein Player, pausiert, gestoppt) -> Player ausblenden.
+        // Wir zeigen KEINEN pausierten Track an, da Navidrome
+        // bei Pause weiter playing:true sendet aber die Position nicht
+        // mehr vorwaerts geht. Der User moechte einfach nichts sehen.
         if (!r.ok || !json.ok || !json.data?.playing) {
-          // Server meldet: kein aktiver Player (kann Pause ODER Stop sein).
-          // Wir behalten den letzten Track sichtbar — mit Pause-Indikator.
-          // Erst nach 5 Minuten ohne Server-Update zeigen wir wirklich Idle.
-          if (this.currentTrack) {
-            const sinceLastServer = (Date.now() - this.progressStartedAt) / 1000;
-            if (sinceLastServer > 300) {  // 5 Minuten
-              this.currentTrack = null;
-              localStorage.removeItem(NP_POS_STORAGE_KEY);
-              this.renderIdle();
-            } else {
-              // Track bleibt sichtbar, aber wir markieren ihn als pausiert
-              this.currentTrack = Object.assign({}, this.currentTrack, { paused: true });
-              this.renderPaused();
-            }
-          } else {
-            this.renderIdle();
-          }
+          this.currentTrack = null;
+          localStorage.removeItem(NP_POS_STORAGE_KEY);
+          this.renderIdle();
           return;
         }
-        // Track laeuft (playing=true) -> weiter
-        // Wenn der gleiche Track noch laeuft, nur die Zeit-Basis neu setzen,
-        // wenn die Server-Position groesser ist als unsere bisher berechnete.
-        // Sonst waere ein Ruecksprung sichtbar (z. B. wenn Server langsamer tickt).
+        // Track laeuft (playing=true) -> anzeigen
         const newTrack = json.data;
         let newServerPos = Number(newTrack.position || 0);
 
-        // Fallback: Wenn Server-Position 0 ist (Navidrome liefert das oft direkt
-        // nach Track-Start), pruefen wir localStorage auf eine reale Position.
-        // Wir nutzen sie nur, wenn der Titel uebereinstimmt und die Position
-        // juenger als 2 Minuten ist (sonst ist es ein anderer Durchlauf).
+        // Fallback: Wenn Server-Position 0 ist (kurz nach Track-Start),
+        // nutzen wir localStorage-Position als Schaetzung.
         if (newServerPos <= 1) {
           const last = loadLastPosition();
           if (last
@@ -443,7 +426,6 @@
               && last.album === newTrack.album
               && last.position > 1
               && (Date.now() - (last.savedAt || 0)) < 2 * 60 * 1000) {
-            // Geschätzte Position: last.position + verstrichene Zeit seit save
             const minutesAgo = (Date.now() - last.savedAt) / 1000;
             const estimated = last.position + minutesAgo;
             if (estimated < Number(newTrack.duration || 9999)) {
@@ -452,69 +434,38 @@
           }
         }
 
+        // Aktualisiere currentTrack mit dem neuen Server-Wert
+        // (Titel/Artist/Album/Cover/Duration koennen sich auch aendern,
+        // z. B. bei Tag-Korrektur)
         const isNewTrack = !this.currentTrack
           || this.currentTrack.title !== newTrack.title
           || this.currentTrack.album !== newTrack.album;
-
         if (isNewTrack) {
-          // Neuer Track: Zeit-Basis neu setzen
-          this.currentTrack = newTrack;
           this.progressStartedAt = Date.now();
           this.initialPosition = newServerPos;
-          this.lastServerPos = newServerPos;
-          this.lastServerPosAt = Date.now();
-          this.pausedConfirmed = false;
         } else {
-          // Gleicher Track: vergleiche mit unserer lokalen Schaetzung
-          const elapsedSinceLast = (Date.now() - this.progressStartedAt) / 1000;
-          const localPos = this.initialPosition + elapsedSinceLast;
-
-          // PAUSE-ERKENNUNG: Wenn die Server-Position gleich bleibt UND
-          // wir gerade eine Bewegung hatten, ist das wahrscheinlich Pause.
-          // Wir brauchen 2 gleiche Ticks (10s), um sicher zu sein.
-          if (newServerPos === this.lastServerPos && this.lastServerPos > 1
-              && (Date.now() - this.lastServerPosAt) > 5000
-              && !this.pausedConfirmed) {
-            // Position hat sich seit letztem Tick nicht bewegt -> pausiert
-            this.pausedConfirmed = true;
-            this.currentTrack = Object.assign({}, this.currentTrack, { paused: true });
+          // Gleicher Track: nur Zeit-Basis neu setzen, wenn Server weiter ist
+          const elapsed = (Date.now() - this.progressStartedAt) / 1000;
+          const localPos = this.initialPosition + elapsed;
+          if (newServerPos >= localPos - 2) {
             this.progressStartedAt = Date.now();
             this.initialPosition = newServerPos;
-            this.renderPaused();
-            // Wichtig: kein renderTrack(), sonst springt der Balken weiter
-            return;
           }
-
-          // Server-Position darf nicht vor unserer lokalen Schaetzung liegen,
-          // sonst wuerde der Balken zurueckspringen.
-          if (newServerPos >= localPos - 2) {  // 2s Toleranz fuer Netzwerk-Jitter
-            this.currentTrack = newTrack;
-            this.progressStartedAt = Date.now();
-            this.initialPosition = newServerPos;
-            this.pausedConfirmed = false;
-          } else {
-            // Server-Position liegt hinter unserer Schaetzung -> nur Track-Metadaten
-            // aktualisieren (Cover, Titel), aber Zeit-Basis beibehalten
-            this.currentTrack = Object.assign({}, this.currentTrack, {
-              title: newTrack.title,
-              artist: newTrack.artist,
-              album: newTrack.album,
-              coverUrl: this.currentTrack.coverUrl,
-              duration: newTrack.duration,
-            });
-          }
-          this.lastServerPos = newServerPos;
-          this.lastServerPosAt = Date.now();
+          // Wenn Server hinter localPos -> alte Werte beibehalten
         }
-        // Position fuer Reload-Fallback speichern (nur wenn > 1)
-        if (this.currentTrack.position > 1) {
+        this.currentTrack = Object.assign({}, newTrack, {
+          position: newServerPos,
+        });
+        // Position speichern
+        if (newServerPos > 1) {
           saveLastPosition(this.currentTrack);
         }
         this.renderTrack(this.currentTrack);
-        this.updateProgress(); // sofort nach Server-Update synchronisieren
+        this.updateProgress();
       } catch (err) {
         console.warn('[navidrome] poll failed:', err.message);
         this.currentTrack = null;
+        localStorage.removeItem(NP_POS_STORAGE_KEY);
         this.renderIdle();
       }
     },
@@ -542,30 +493,10 @@
       if (timeDur) timeDur.textContent = '0:00';
     },
 
-    // Zeigt den letzten Track weiter, aber mit Pause-Indikator
-    renderPaused() {
-      const wrap = $('#navidrome-player');
-      if (!wrap) return;
-      if (!this.currentTrack) {
-        this.renderIdle();
-        return;
-      }
-      wrap.classList.remove('idle');
-      wrap.classList.remove('playing');
-      wrap.classList.add('paused');
-      // Position EINFRIEREN: setze progressStartedAt so, dass die interpolierte
-      // Position exakt gleich der aktuellen Position ist.
-      const dur = Number(this.currentTrack.duration || 0);
-      const pos = Math.min(dur, Number(this.currentTrack.position || 0));
-      this.progressStartedAt = Date.now();
-      this.initialPosition = pos;
-      const bar = wrap.querySelector('.np-progress-bar');
-      if (bar && dur > 0) {
-        bar.style.width = ((pos / dur) * 100).toFixed(2) + '%';
-      }
-      const timePos = wrap.querySelector('.np-time-pos');
-      if (timePos) timePos.textContent = formatTime(pos);
-    },
+    // renderPaused entfernt: wir zeigen pausierten Track nicht mehr an.
+    // Sobald der User pausiert, geht der Player in den Idle-Zustand.
+    // Beim erneuten Play startet ein neuer Tick und zeigt den Track.
+
 
     renderTrack(data) {
       const wrap = $('#navidrome-player');
