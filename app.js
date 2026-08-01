@@ -181,16 +181,66 @@
   // =========================================================
   // Pollt alle 30s den Navidrome-Proxy und zeigt aktuellen Track.
   // Bei Fehler/kein Server: Player-Container wird ausgeblendet.
+  //
+  // Konfigurations-Reihenfolge (spaeter gewinnt):
+  //   1. config.js (NAVIDROME_CONFIG)        — Defaults / Platzhalter
+  //   2. localStorage 'openweb-navidrome-config' — vom Admin gespeichert
+  const NP_STORAGE_KEY = 'openweb-navidrome-config';
+
+  function loadNavidromeFromStorage() {
+    try {
+      const raw = localStorage.getItem(NP_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return {
+        enabled: !!parsed.enabled,
+        url:      typeof parsed.url === 'string' ? parsed.url : '',
+        user:     typeof parsed.user === 'string' ? parsed.user : '',
+        pass:     typeof parsed.pass === 'string' ? parsed.pass : '',
+        proxyUrl: typeof parsed.proxyUrl === 'string' ? parsed.proxyUrl : '',
+        pollIntervalSec: Math.min(600, Math.max(10, parseInt(parsed.pollIntervalSec || 30, 10) || 30)),
+      };
+    } catch (_) { return null; }
+  }
+
+  function mergeNavidromeConfig() {
+    const base = window.NAVIDROME_CONFIG || {};
+    const stored = loadNavidromeFromStorage();
+    if (!stored) return base;
+    // localStorage ueberschreibt nur Felder, die dort wirklich gesetzt sind
+    return Object.assign({}, base, {
+      enabled: stored.enabled || base.enabled,
+      url: stored.url || base.url,
+      user: stored.user || base.user,
+      pass: stored.pass || base.pass,
+      proxyUrl: stored.proxyUrl || base.proxyUrl,
+      pollIntervalSec: stored.pollIntervalSec || base.pollIntervalSec || 30,
+    });
+  }
+
   const np = {
-    cfg: window.NAVIDROME_CONFIG || null,
+    cfg: null,
     pollTimer: null,
     lastTitle: '',
 
+    init() {
+      this.cfg = mergeNavidromeConfig();
+      window.NAVIDROME_CONFIG = this.cfg;
+    },
+
     isEnabled() {
-      return !!(this.cfg?.enabled && this.cfg?.proxyUrl
-        && !this.cfg.url.startsWith('YOUR_')
-        && !this.cfg.user.startsWith('YOUR_')
-        && !this.cfg.pass.startsWith('YOUR_'));
+      const c = this.cfg;
+      if (!c) return false;
+      if (!c.enabled) return false;
+      if (!c.proxyUrl) return false;
+      // Platzhalter-Werte aus config.example.js rausfiltern
+      const placeholders = ['YOUR-PROJECT', 'YOUR_NAV_URL', 'YOUR_USER', 'YOUR_PASS'];
+      if (placeholders.some((p) => (c.url || '').includes(p))) return false;
+      if (placeholders.some((p) => (c.user || '').includes(p))) return false;
+      if (placeholders.some((p) => (c.pass || '').includes(p))) return false;
+      if (placeholders.some((p) => (c.proxyUrl || '').includes(p))) return false;
+      if (!c.url || !c.user || !c.pass) return false;
+      return true;
     },
 
     async start() {
@@ -328,6 +378,7 @@
         });
       }
       // Navidrome-Player (falls aktiviert)
+      np.init();
       np.start();
       bindPlayerControls();
     }
@@ -345,5 +396,13 @@
     }
   } else {
     window.addEventListener('supabase:ready', init);
+  }
+
+  // Navidrome-Player sofort initialisieren (unabhängig von Supabase-Ready)
+  // damit das UI auch ohne DB-Verbindung den gespeicherten Status zeigt.
+  np.init();
+  if (np.isEnabled()) {
+    bindPlayerControls();
+    // Später (sobald Supabase geladen) startet init() das Polling
   }
 })();
