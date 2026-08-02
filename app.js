@@ -108,7 +108,7 @@
     // Links
     const nav = $('.links');
     if (nav) {
-      nav.innerHTML = '';
+      nav.replaceChildren();
       const active = links.filter((l) => l.is_active !== false);
       if (active.length === 0) {
         const empty = document.createElement('p');
@@ -140,27 +140,43 @@
           a.rel = 'noopener noreferrer nofollow';
         }
         a.dataset.url = prettyUrl(link.url);
-        a.innerHTML = `
-          <span class="link-top">
-            <span class="link-text">
-              <span class="link-text-main">
-                <span class="link-title">${escapeHtml(link.title)}</span>
-                <span class="link-sub">${escapeHtml(link.subtitle || '')}</span>
-              </span>
-              <span class="link-arrow" aria-hidden="true">→</span>
-            </span>
-          </span>
-          <span class="link-url" aria-hidden="true">${escapeHtml(prettyUrl(link.url))}</span>
-        `;
+
+        // DOM-Construction (kein innerHTML mit User-Input) — verhindert XSS,
+        // auch falls zukünftig ein Sanitizer wegfällt.
+        const top  = document.createElement('span'); top.className  = 'link-top';
+        const text = document.createElement('span'); text.className = 'link-text';
+        const main = document.createElement('span'); main.className = 'link-text-main';
+        const titleEl = document.createElement('span'); titleEl.className = 'link-title';
+        titleEl.textContent = link.title || '';
+        const subEl = document.createElement('span'); subEl.className = 'link-sub';
+        subEl.textContent = link.subtitle || '';
+        main.appendChild(titleEl);
+        main.appendChild(subEl);
+        const arrow = document.createElement('span');
+        arrow.className = 'link-arrow';
+        arrow.setAttribute('aria-hidden', 'true');
+        arrow.textContent = '→';
+        text.appendChild(main);
+        text.appendChild(arrow);
+
         // Icon als Badge vorne (mit Auto-Erkennung falls leer)
-        // renderIcon() gibt jetzt ein DOM-Element (oder Text) zurück, kein HTML-String mehr.
+        // renderIcon() gibt ein DOM-Element (oder Text) zurück, kein HTML-String.
         const iconValue = autoIcon(link);
         const badge = document.createElement('span');
         badge.className = 'link-icon';
         const iconEl = renderIcon(iconValue);
         if (iconEl instanceof Node) badge.appendChild(iconEl);
         else badge.textContent = String(iconEl || '🔗');
-        a.querySelector('.link-text').prepend(badge);
+        text.prepend(badge);
+
+        const urlEl = document.createElement('span');
+        urlEl.className = 'link-url';
+        urlEl.setAttribute('aria-hidden', 'true');
+        urlEl.textContent = prettyUrl(link.url);
+
+        top.appendChild(text);
+        a.appendChild(top);
+        a.appendChild(urlEl);
         nav.appendChild(a);
       }
     }
@@ -333,12 +349,5 @@
     }
   } else {
     window.addEventListener('supabase:ready', init);
-  }
-
-  // Navidrome-Player sofort initialisieren (unabhängig von Supabase-Ready)
-  // damit das UI auch ohne DB-Verbindung den gespeicherten Status zeigt.
-  np.init();
-  if (np.isEnabled()) {
-    np.start();
   }
 })();

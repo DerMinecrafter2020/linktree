@@ -131,7 +131,7 @@
       <section class="tab" data-tab="music" hidden>
         <div class="card-block">
           <h3>🎵 Navidrome / Subsonic</h3>
-          <p>Verbindet die Hauptseite mit deinem Navidrome-Server. Die Werte werden in <code>localStorage</code> gespeichert (nicht in Supabase, damit sie nicht öffentlich leak­en).</p>
+          <p>Verbindet die Hauptseite mit deinem Navidrome-Server. Die Werte werden <strong>in-memory</strong> gehalten (<code>window.NAVIDROME_CONFIG</code>) — nicht in <code>localStorage</code>, damit sie nicht clientseitig auslesbar sind. Nach einem Reload müssen sie hier erneut eingetragen werden.</p>
 
           <form id="navidrome-form" class="form">
             <label class="row">

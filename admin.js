@@ -33,7 +33,6 @@
   // bekommen wir ein JWT-Token zurueck, das wir nur in sessionStorage
   // halten (verschwindet beim Tab-Schliessen).
   const SESSION_KEY = 'linktree-admin-session';   // nur Ablaufzeit
-  const SESSION_DURATION = 60 * 60 * 1000;
   const TAB_STORAGE_KEY = 'linktree-admin-active-tab';
   const DEFAULT_PASSWORD = 'admin123';  // nur Anzeige im Form
 
@@ -105,16 +104,6 @@
 
   const $  = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
-  }
-  function clearSession() {
-    sessionStorage.removeItem(SESSION_KEY);
-    sessionStorage.removeItem(TAB_STORAGE_KEY);
-    sessionStorage.removeItem('admin-token');
-    sessionStorage.removeItem('admin-token-created');
-    sessionStorage.removeItem('admin-token-exp');
-    // Falls Server-Login aktiv war: JWT-Token löschen
-    try { window.db?.logout?.(); } catch { /* db evtl. noch nicht ready */ }
-  }
 
   // =========================================================
   // TOAST
@@ -594,7 +583,7 @@
   // =========================================================
   function renderLinks() {
     const list = $('#links-list');
-    list.innerHTML = '';
+    list.replaceChildren();
     if (!state.links.length) {
       const empty = document.createElement('li');
       empty.className = 'hint';
@@ -1180,9 +1169,15 @@
     const hint = $('#change-pw-hint');
     if (hint) {
       const useEdgeAuth = !!window.SUPABASE_CONFIG?.authChangePasswordUrl;
-      hint.innerHTML = useEdgeAuth
-        ? 'Passwort wird <strong>serverseitig</strong> als PBKDF2-Hash in Supabase gespeichert. Aktuelles Passwort zur Bestätigung nötig.'
-        : 'Passwort-Endpoint nicht konfiguriert — bitte Supabase Edge-Function "auth-change-password" deployen.';
+      hint.replaceChildren();
+      if (useEdgeAuth) {
+        hint.append('Passwort wird ');
+        const strong = document.createElement('strong');
+        strong.textContent = 'serverseitig';
+        hint.append(strong, ' als PBKDF2-Hash in Supabase gespeichert. Aktuelles Passwort zur Bestätigung nötig.');
+      } else {
+        hint.textContent = 'Passwort-Endpoint nicht konfiguriert — bitte Supabase Edge-Function "auth-change-password" deployen.';
+      }
     }
 
     // ---- Passwort ändern ----
@@ -1471,7 +1466,12 @@
         // 1) Status (Secrets vorhanden?)
         const s1 = await window.NavidromeAPI.status();
         if (!s1 || !s1.configured) {
-          status.innerHTML = '❌ Secrets fehlen in Supabase.<br>Lege sie an mit:<br><code>supabase secrets set NAVIDROME_URL=…</code> etc.';
+          status.replaceChildren();
+          status.append('❌ Secrets fehlen in Supabase.', document.createElement('br'));
+          status.append('Lege sie an mit:', document.createElement('br'));
+          const code = document.createElement('code');
+          code.textContent = 'supabase secrets set NAVIDROME_URL=…';
+          status.append(code, ' etc.');
           window.NAVIDROME_CONFIG.proxyUrl = savedProxyUrl;
           return;
         }

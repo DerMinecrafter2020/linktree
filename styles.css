@@ -655,6 +655,6 @@ body {
 
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .blob, .avatar-ring, .dot { animation: none; }
+  .blob, .avatar-ring, .dot, .np-cover { animation: none; }
   .link { transition: none; }
 }
