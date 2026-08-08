@@ -168,6 +168,23 @@ is_placeholder() {
     esac
 }
 
+# Prüft, dass benötigte Variablen gesetzt und keine Platzhalter sind
+require_env_vars() {
+    local missing=()
+    for var in "$@"; do
+        local val
+        val="${!var:-}"
+        if [[ -z "$val" ]] || is_placeholder "$val"; then
+            missing+=("$var")
+        fi
+    done
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        log_error "Folgende Umgebungsvariablen fehlen oder sind ungültig: ${missing[*]}"
+        return 1
+    fi
+    return 0
+}
+
 # Wert aus config.js extrahieren (Format: key: 'value')
 _extract_config_js_value() {
     local file="$1"
@@ -1202,7 +1219,7 @@ do_set_admin_enabled() {
         exit $EX_CONFIG
     fi
 
-    assert_vars SUPABASE_URL SUPABASE_ANON_KEY CONFIG_SHARED_SECRET
+    require_env_vars SUPABASE_URL SUPABASE_ANON_KEY CONFIG_SHARED_SECRET || exit $EX_CONFIG
 
     local bool_value
     if [[ "$enabled" == "true" ]]; then bool_value=true; else bool_value=false; fi
