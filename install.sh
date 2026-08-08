@@ -1212,7 +1212,9 @@ do_change_password() {
     return 0
 }
 
-# Admin-Bereich aktivieren / deaktivieren (nur serverseitig in nginx)
+# Admin-Bereich aktivieren / deaktivieren (nur serverseitig).
+# Statt nginx-Config zu parsen, verschieben wir die Admin-Dateien
+# physisch aus dem Webroot. nginx liefert dann fuer /admin* automatisch 404.
 do_set_admin_enabled() {
     local enabled="$1"
     if [[ -z "$enabled" ]]; then
@@ -1220,43 +1222,52 @@ do_set_admin_enabled() {
         exit $EX_USAGE
     fi
 
-    if [[ ! -f "$NGINX_CONF" ]]; then
-        log_error "Keine nginx-Config ${NGINX_CONF} gefunden — bitte erst installieren"
-        exit $EX_CONFIG
-    fi
+    local admin_dir="${INSTALL_DIR}"
+    local disabled_dir="${INSTALL_DIR}/.admin-disabled"
+    local files=("admin.html" "admin.css" "admin.js" "admin/admin-config.js")
 
-
+    mkdir -p "$disabled_dir"
+    chmod 700 "$disabled_dir"
 
     if [[ "$enabled" == "true" ]]; then
-        log_info "Aktiviere Admin-Bereich (lösche ${NGINX_ADMIN_STATE})..."
+        log_info "Aktiviere Admin-Bereich..."
+        for f in "${files[@]}"; do
+            local src="${disabled_dir}/${f}"
+            local dst="${admin_dir}/${f}"
+            if [[ -e "$src" ]]; then
+                mkdir -p "$(dirname "$dst")"
+                mv -f "$src" "$dst"
+                chmod 644 "$dst"
+            fi
+        done
+        # Leere State-Datei = Admin aktiv
         printf '' > "$NGINX_ADMIN_STATE"
+        log_ok "Admin-Bereich aktiviert — /admin ist wieder erreichbar"
     else
-        log_info "Deaktiviere Admin-Bereich (schreibe 404-Block nach ${NGINX_ADMIN_STATE})..."
+        log_info "Deaktiviere Admin-Bereich..."
+        for f in "${files[@]}"; do
+            local src="${admin_dir}/${f}"
+            local dst="${disabled_dir}/${f}"
+            if [[ -e "$src" ]]; then
+                mkdir -p "$(dirname "$dst")"
+                mv -f "$src" "$dst"
+                chmod 600 "$dst"
+            fi
+        done
+        # State-Datei = 404 (fuer neue nginx-Configs, die include verwenden)
         printf 'return 404;\n' > "$NGINX_ADMIN_STATE"
+        log_ok "Admin-Bereich deaktiviert — /admin liefert jetzt 404"
     fi
 
     chmod 644 "$NGINX_ADMIN_STATE"
 
-    # Zusaetzlicher Marker-Blocker fuer alte nginx-Configs, die die
-    # include-Zeile fuer ${NGINX_ADMIN_STATE} noch nicht enthalten.
-    # Regex ^/admin matcht /admin, /admin.html, /admin.css, /admin.js etc.
+    # Entferne eventuell vorhandenen alten nginx-Marker-Block
     local marker="# -- OpenWeb admin area blocker (managed by install.sh) --"
-
-    # Entferne vorhandenen Marker-Block (bei Aktivierung und vor erneutem Einfuegen)
-    sed -i "/${marker}/,/^    }/d" "$NGINX_CONF"
-
-    if [[ "$enabled" != "true" ]]; then
-        # Fuege Blocker direkt nach dem oeffnenden "server {" ein
-        sed -i "/^server {/a\\    ${marker}\\n    location ~ ^/admin {\\n        return 404;\\n    }" "$NGINX_CONF"
+    if [[ -f "$NGINX_CONF" ]]; then
+        sed -i "/${marker}/,/^    }/d" "$NGINX_CONF" 2>/dev/null || true
+        reload_nginx
     fi
 
-    reload_nginx
-
-    if [[ "$enabled" == "true" ]]; then
-        log_ok "Admin-Bereich aktiviert — /admin ist wieder erreichbar"
-    else
-        log_ok "Admin-Bereich deaktiviert — /admin liefert jetzt 404"
-    fi
     return 0
 }
 
