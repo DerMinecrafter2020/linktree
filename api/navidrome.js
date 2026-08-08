@@ -58,8 +58,8 @@
     return await postJSON('status', {});
   });
 
-  window.NavidromeAPI.nowPlaying = safe(async function () {
-    return await postJSON('nowPlaying', {});
+  window.NavidromeAPI.nowPlaying = safe(async function (coverMode) {
+    return await postJSON('nowPlaying', { coverMode: coverMode || 'base64' });
   });
 
   window.NavidromeAPI.control = safe(async function (action) {
@@ -67,8 +67,8 @@
     return await postJSON('control', { controlAction: action });
   });
 
-  window.NavidromeAPI.coverArt = safe(async function (id, size) {
+  window.NavidromeAPI.coverArt = safe(async function (id, size, coverMode) {
     if (!id) throw new Error('coverArt id required');
-    return await postJSON('coverArt', { id: id, size: size || 220 });
+    return await postJSON('coverArt', { id: id, size: size || 220, coverMode: coverMode || 'base64' });
   });
 })();

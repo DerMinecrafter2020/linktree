@@ -71,6 +71,26 @@ function applyTemplate(template, track) {
   return out;
 }
 
+function randomColor() {
+  // Zufällige Discord-Farbe (0x000000 - 0xFFFFFF)
+  return Math.floor(Math.random() * 0xFFFFFF);
+}
+
+function buildDefaultPayload(track) {
+  const embed = {
+    title: track.title || 'Unbekannter Titel',
+    description: track.artist ? `**${track.artist}**` : '',
+    color: randomColor(),
+    image: track.cover ? { url: track.cover } : undefined,
+    timestamp: new Date().toISOString(),
+    footer: track.album ? { text: track.album } : undefined,
+  };
+  // Entferne leere Felder, damit Discord keine leeren Werte bekommt
+  if (!embed.image) delete embed.image;
+  if (!embed.footer) delete embed.footer;
+  return { embeds: [embed] };
+}
+
 function safeJsonParse(text) {
   if (text.length > 50_000) throw new Error('payload too large');
   return JSON.parse(text);
@@ -115,9 +135,13 @@ Deno.serve(async (req) => {
 
   let payload;
   try {
-    const tpl = settings.discord_webhook_template || '{}';
-    const rendered = applyTemplate(tpl, track);
-    payload = safeJsonParse(rendered);
+    const tpl = settings.discord_webhook_template || '';
+    if (tpl.trim()) {
+      const rendered = applyTemplate(tpl, track);
+      payload = safeJsonParse(rendered);
+    } else {
+      payload = buildDefaultPayload(track);
+    }
   } catch (err) {
     return json({ ok: false, error: 'invalid webhook template: ' + err.message }, 400, req);
   }

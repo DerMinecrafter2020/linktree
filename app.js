@@ -217,7 +217,7 @@
 
     async tick() {
       try {
-        const newTrack = await window.NavidromeAPI.nowPlaying();
+        const newTrack = await window.NavidromeAPI.nowPlaying('proxy');
         if (!newTrack || newTrack.playing !== true) {
           this.currentTrack = null;
           this.renderIdle();
@@ -227,7 +227,10 @@
         this.currentTrack = newTrack;
         this.renderTrack(this.currentTrack, newTrack.paused === true ? 'paused' : 'playing');
         if (previousId !== this.trackId(newTrack) && newTrack.paused !== true) {
-          this.notifyDiscord(this.currentTrack).catch(err => {
+          const discordTrack = Object.assign({}, this.currentTrack, {
+            coverUrlExternal: this.currentTrack.coverUrl || ''
+          });
+          this.notifyDiscord(discordTrack).catch(err => {
             console.warn('[discord webhook] notify failed:', err.message);
           });
         }
@@ -248,7 +251,7 @@
         title: track.title || 'Unbekannt',
         artist: track.artist || '',
         album: track.album || '',
-        cover: track.coverUrl || '',
+        cover: track.coverUrlExternal || track.coverUrl || '',
         url: track.url || ''
       };
       if (window.DiscordAPI?.send) {
