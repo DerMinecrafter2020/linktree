@@ -1227,16 +1227,15 @@ do_set_admin_enabled() {
 
 
 
-    # Sicherstellen, dass ein nginx-Blocker-Block fuer /admin existiert bzw. entfernt wird
-    if ! grep -qF "$include_line" "$NGINX_CONF" 2>/dev/null; then
-        log_warn "Include-Zeile fehlt in ${NGINX_CONF} — füge sie hinzu"
-        if grep -q "auth_basic.*OpenWeb Admin" "$NGINX_CONF"; then
-            sed -i "/auth_basic.*OpenWeb Admin/i\\        include ${NGINX_ADMIN_STATE};" "$NGINX_CONF"
-        else
-            # Fallback: hinter der Admin-location öffnenden Zeile einfügen
-            sed -i "/location ~ \^\/(admin|admin-.*\\\\\.(html|css|js))\$/a\\        include ${NGINX_ADMIN_STATE};" "$NGINX_CONF"
-        fi
+    if [[ "$enabled" == "true" ]]; then
+        log_info "Aktiviere Admin-Bereich (lösche ${NGINX_ADMIN_STATE})..."
+        printf '' > "$NGINX_ADMIN_STATE"
+    else
+        log_info "Deaktiviere Admin-Bereich (schreibe 404-Block nach ${NGINX_ADMIN_STATE})..."
+        printf 'return 404;\n' > "$NGINX_ADMIN_STATE"
     fi
+
+    chmod 644 "$NGINX_ADMIN_STATE"
 
     # Zusaetzlicher Marker-Blocker fuer alte nginx-Configs, die die
     # include-Zeile fuer ${NGINX_ADMIN_STATE} noch nicht enthalten.
