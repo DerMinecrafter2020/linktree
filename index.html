@@ -49,7 +49,7 @@
          =========================================================
          Erscheint nur, wenn NAVIDROME_CONFIG.enabled = true.
          Polling-Intervall siehe config.js (pollIntervalSec). -->
-    <section id="navidrome-player" class="np-player np-compact idle" aria-label="Aktuell gespielter Track" hidden>
+    <section id="navidrome-player" class="np-player idle" aria-label="Aktuell gespielter Track" hidden>
       <div class="np-cover" aria-hidden="true"></div>
       <div class="np-info">
         <div class="np-title">Verbinde mit Navidrome…</div>
@@ -71,16 +71,8 @@
   <script src="config.js"></script>
   <script src="supabase-client.js"></script>
   <script src="icons.js"></script>
-  <script src="api/supabase/_shared.js"></script>
-  <script src="api/supabase/admin-proxy.js"></script>
-  <script src="api/supabase/auth-login.js"></script>
-  <script src="api/supabase/auth-change-password.js"></script>
-  <script src="api/client.js"></script>
-  <script src="api/navidrome/_shared.js"></script>
-  <script src="api/navidrome/status.js"></script>
-  <script src="api/navidrome/nowplaying.js"></script>
-  <script src="api/navidrome/control.js"></script>
-  <script src="api/navidrome/coverart.js"></script>
+  <script src="api/supabase.js"></script>
+  <script src="api/navidrome.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -7,62 +7,69 @@
 
   const $ = (s, r = document) => r.querySelector(s);
 
-  // Aktuelles Jahr im Footer
-  const yearEl = $('.year');
-  if (yearEl) yearEl.textContent = String(new Date().getFullYear());
+  // ---------- Utilities ----------
+  function setText(sel, text, root = document) {
+    const el = $(sel, root);
+    if (el) el.textContent = String(text ?? '');
+    return el;
+  }
 
-  // Hilfsfunktion: URL "hübsch" kürzen (kein https://www.)
   function prettyUrl(url) {
     if (!url) return '';
-    return url
+    return String(url)
       .replace(/^https?:\/\//, '')
       .replace(/^www\./, '')
       .replace(/\/$/, '');
   }
 
-  // Hilfsfunktion: Icon rendern (Emoji, simpleicon:ID oder https-Link zu Bild)
-  // Sicher: erzeugt DOM-Elemente, keine innerHTML-Interpolation mehr
-  // (damit ist XSS via URL-Injection unmöglich).
+  function safeUrl(raw) {
+    const u = String(raw || '').trim();
+    if (!u) return '#';
+    if (/^(javascript|data|vbscript|file|about):/i.test(u)) return '#';
+    if (/^mailto:/i.test(u)) return u;
+    try {
+      const url = new URL(u);
+      return ['http:', 'https:'].includes(url.protocol) ? url.toString() : '#';
+    } catch { return '#'; }
+  }
+
+  function createIconImg(src, alt = '') {
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = alt;
+    img.className = 'link-icon-img';
+    img.loading = 'lazy';
+    img.referrerPolicy = 'no-referrer';
+    img.onerror = () => img.replaceWith(document.createTextNode('🔗'));
+    return img;
+  }
+
+  function sanitizeIconText(icon) {
+    return icon.toString().slice(0, 8).replace(/[<>"']/g, '');
+  }
+
   function renderIcon(icon) {
     if (!icon) return '🔗';
 
-    // simpleicon:instagram → Icon aus Library
+    // simpleicon:instagram
     if (icon.startsWith('simpleicon:') && window.icons) {
       const id = icon.slice('simpleicon:'.length);
-      // Nur a-z, 0-9, -
-      if (!/^[a-z0-9-]{1,32}$/.test(id)) return '🔗';
-      // Wenn die ID nicht in der Library ist, lieber Emoji 🔗 anzeigen statt 404
-      if (!window.icons.getInfo(id)) return '🔗';
-      const img = document.createElement('img');
-      img.src = window.icons.url(id);
-      img.alt = '';
-      img.className = 'link-icon-img';
-      img.loading = 'lazy';
-      img.onerror = () => { img.replaceWith(document.createTextNode('🔗')); };
-      return img;
+      if (!/^[a-z0-9-]{1,32}$/.test(id) || !window.icons.getInfo(id)) return '🔗';
+      return createIconImg(window.icons.url(id));
     }
 
-    // Externe Bild-URL: nur http/https, KEIN javascript:/data:/vbscript:
+    // Externe Bild-URL
     if (/^https?:\/\//i.test(icon)) {
       try {
         const u = new URL(icon);
         if (!['http:', 'https:'].includes(u.protocol)) return '🔗';
       } catch { return '🔗'; }
-      const img = document.createElement('img');
-      img.src = icon;
-      img.alt = '';
-      img.className = 'link-icon-img';
-      img.loading = 'lazy';
-      img.referrerPolicy = 'no-referrer';
-      img.onerror = () => { img.replaceWith(document.createTextNode('🔗')); };
-      return img;
+      return createIconImg(icon);
     }
 
-    // Plain Emoji (oder safe text) — strip alles Böse raus
-    return document.createTextNode(icon.toString().slice(0, 8).replace(/[<>"']/g, ''));
+    return document.createTextNode(sanitizeIconText(icon));
   }
 
-  // Auto-Erkennung: Wenn ein Link kein Icon hat, anhand der URL raten
   function autoIcon(link) {
     if (link.icon && link.icon !== '🔗') return link.icon;
     if (!window.icons) return '🔗';
@@ -70,151 +77,115 @@
     return detected ? `simpleicon:${detected}` : '🔗';
   }
 
-  async function render() {
-    const profile = await window.db.getProfile();
-    const links   = await window.db.listLinks();
+  function el(tag, cls, text) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = String(text);
+    return node;
+  }
 
-    // Profil
-    if (profile) {
-      const avatarEl = $('.avatar');
-      if (avatarEl) {
-        // Whitelist: nur Bild-DataURLs von sicheren Formaten (kein SVG)
-        const av = profile.avatar_url;
-        const safeImg = av && /^data:image\/(png|jpeg|webp|gif);base64,/i.test(av);
-        if (safeImg) {
-          avatarEl.replaceChildren();
-          const img = document.createElement('img');
-          img.src = av;
-          img.alt = '';
-          avatarEl.appendChild(img);
-          avatarEl.classList.add('has-image');
-        } else {
-          avatarEl.replaceChildren(document.createTextNode(
-            (profile.avatar || 'CA').slice(0, 2).toUpperCase()
-          ));
-        }
+  // ---------- Profil ----------
+  function renderProfile(profile) {
+    if (!profile) return;
+
+    const avatarEl = $('.avatar');
+    if (avatarEl) {
+      const av = profile.avatar_url;
+      const safeImg = av && /^data:image\/(png|jpeg|webp|gif);base64,/i.test(av);
+      if (safeImg) {
+        avatarEl.replaceChildren(createIconImg(av));
+        avatarEl.classList.add('has-image');
+      } else {
+        avatarEl.replaceChildren(document.createTextNode(
+          (profile.avatar || 'CA').slice(0, 2).toUpperCase()
+        ));
       }
-      const nameEl = $('.name');
-      if (nameEl) nameEl.textContent = profile.name || '';
-      const handleEl = $('.handle');
-      if (handleEl) handleEl.textContent = profile.handle || '';
-      const bioEl = $('.bio');
-      if (bioEl) bioEl.textContent = profile.bio || '';
-
-      // Tab-Titel
-      document.title = `${profile.handle || 'Links'} · Links`;
     }
 
-    // Links
+    setText('.name', profile.name);
+    setText('.handle', profile.handle);
+    setText('.bio', profile.bio);
+    document.title = `${profile.handle || 'Links'} · Links`;
+  }
+
+  // ---------- Links ----------
+  function buildLinkRow(link) {
+    const href = safeUrl(link.url);
+    const a = el('a', 'link');
+    a.href = href;
+    if (link.open_new !== false && href !== '#') {
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer nofollow';
+    }
+    a.dataset.url = prettyUrl(link.url);
+
+    const top = el('span', 'link-top');
+    const text = el('span', 'link-text');
+
+    const badge = el('span', 'link-icon');
+    const iconEl = renderIcon(autoIcon(link));
+    if (iconEl instanceof Node) badge.appendChild(iconEl);
+    else badge.textContent = String(iconEl || '🔗');
+
+    const main = el('span', 'link-text-main');
+    main.appendChild(el('span', 'link-title', link.title));
+    main.appendChild(el('span', 'link-sub', link.subtitle));
+
+    const arrow = el('span', 'link-arrow', '→');
+    arrow.setAttribute('aria-hidden', 'true');
+
+    text.appendChild(badge);
+    text.appendChild(main);
+    text.appendChild(arrow);
+
+    const urlEl = el('span', 'link-url', prettyUrl(link.url));
+    urlEl.setAttribute('aria-hidden', 'true');
+
+    top.appendChild(text);
+    a.appendChild(top);
+    a.appendChild(urlEl);
+    return a;
+  }
+
+  function renderLinks(links) {
     const nav = $('.links');
-    if (nav) {
-      nav.replaceChildren();
-      const active = links.filter((l) => l.is_active !== false);
-      if (active.length === 0) {
-        const empty = document.createElement('p');
-        empty.className = 'empty-state';
-        empty.textContent = 'Noch keine Links vorhanden.';
-        nav.appendChild(empty);
-        return;
-      }
-      for (const link of active) {
-        const a = document.createElement('a');
-        a.className = 'link';
+    if (!nav) return;
+    nav.replaceChildren();
 
-        // URL-Validierung: nur http(s) oder mailto, NIE javascript:/data:/vbscript:
-        const href = (() => {
-          const u = String(link.url || '').trim();
-          if (!u) return '#';
-          if (/^(javascript|data|vbscript|file|about):/i.test(u)) return '#';
-          if (/^mailto:/i.test(u)) return u;
-          try {
-            const url = new URL(u);
-            if (!['http:', 'https:'].includes(url.protocol)) return '#';
-            return url.toString();
-          } catch { return '#'; }
-        })();
+    const active = links.filter((l) => l.is_active !== false);
+    if (active.length === 0) {
+      nav.appendChild(el('p', 'empty-state', 'Noch keine Links vorhanden.'));
+      return;
+    }
 
-        a.href = href;
-        if (link.open_new !== false && href !== '#') {
-          a.target = '_blank';
-          a.rel = 'noopener noreferrer nofollow';
-        }
-        a.dataset.url = prettyUrl(link.url);
-
-        // DOM-Construction (kein innerHTML mit User-Input) — verhindert XSS,
-        // auch falls zukünftig ein Sanitizer wegfällt.
-        const top  = document.createElement('span'); top.className  = 'link-top';
-        const text = document.createElement('span'); text.className = 'link-text';
-        const main = document.createElement('span'); main.className = 'link-text-main';
-        const titleEl = document.createElement('span'); titleEl.className = 'link-title';
-        titleEl.textContent = link.title || '';
-        const subEl = document.createElement('span'); subEl.className = 'link-sub';
-        subEl.textContent = link.subtitle || '';
-        main.appendChild(titleEl);
-        main.appendChild(subEl);
-        const arrow = document.createElement('span');
-        arrow.className = 'link-arrow';
-        arrow.setAttribute('aria-hidden', 'true');
-        arrow.textContent = '→';
-        text.appendChild(main);
-        text.appendChild(arrow);
-
-        // Icon als Badge vorne (mit Auto-Erkennung falls leer)
-        // renderIcon() gibt ein DOM-Element (oder Text) zurück, kein HTML-String.
-        const iconValue = autoIcon(link);
-        const badge = document.createElement('span');
-        badge.className = 'link-icon';
-        const iconEl = renderIcon(iconValue);
-        if (iconEl instanceof Node) badge.appendChild(iconEl);
-        else badge.textContent = String(iconEl || '🔗');
-        text.prepend(badge);
-
-        const urlEl = document.createElement('span');
-        urlEl.className = 'link-url';
-        urlEl.setAttribute('aria-hidden', 'true');
-        urlEl.textContent = prettyUrl(link.url);
-
-        top.appendChild(text);
-        a.appendChild(top);
-        a.appendChild(urlEl);
-        nav.appendChild(a);
-      }
+    for (const link of active) {
+      nav.appendChild(buildLinkRow(link));
     }
   }
 
-  function escapeHtml(s) {
-    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[c]));
+  async function render() {
+    const [profile, links] = await Promise.all([
+      window.db.getProfile(),
+      window.db.listLinks(),
+    ]);
+    renderProfile(profile);
+    renderLinks(links);
   }
 
-  // =========================================================
-  // NAVIDROME PLAYER (optional)
-  // =========================================================
-  // Pollt alle 30s den Navidrome-Proxy und zeigt aktuellen Track.
-  // Bei Fehler/kein Server: Player-Container wird ausgeblendet.
-  //
-  // Konfigurations-Reihenfolge (spaeter gewinnt):
-  // Navidrome-Config kommt komplett aus window.NAVIDROME_CONFIG (von
-  // config.js oder vom Admin-Panel in den Speicher geschrieben).
-  // KEIN localStorage mehr. Bei Seiten-Reload muss der User ggf.
-  // die Werte im Admin-Panel neu setzen.
-
+  // ---------- Navidrome Player ----------
   function mergeNavidromeConfig() {
     const base = window.NAVIDROME_CONFIG || {};
-    // window.NAVIDROME_CONFIG hat bereits enabled/proxyUrl/pollIntervalSec
-    // (entweder aus config.js oder vom Admin gesetzt).
     return Object.assign({}, base, {
       enabled: typeof base.enabled === 'boolean' ? base.enabled : true,
       proxyUrl: base.proxyUrl || '',
-      pollIntervalSec: base.pollIntervalSec || 30,
+      pollIntervalSec: Math.max(5, parseInt(base.pollIntervalSec, 10) || 30),
     });
   }
 
   const np = {
     cfg: null,
     pollTimer: null,
-    currentTrack: null,    // letzter Track-Stand vom Server
+    currentTrack: null,
 
     init() {
       this.cfg = mergeNavidromeConfig();
@@ -223,13 +194,8 @@
 
     isEnabled() {
       const c = this.cfg;
-      if (!c) return false;
-      // Standardmaessig AN. Nur aus, wenn explizit enabled === false.
-      if (c.enabled === false) return false;
-      // proxyUrl muss gesetzt sein
-      if (!c.proxyUrl) return false;
-      // Platzhalter rausfiltern
-      if ((c.proxyUrl || '').includes('YOUR-PROJECT')) return false;
+      if (!c || c.enabled === false) return false;
+      if (!c.proxyUrl || c.proxyUrl.includes('YOUR-PROJECT')) return false;
       return true;
     },
 
@@ -239,8 +205,7 @@
       if (!wrap) return;
       wrap.hidden = false;
       await this.tick();
-      // Server-Polling: alle 5s fuer schnelle Track-Stop-Erkennung
-      this.pollTimer = setInterval(() => this.tick(), 5000);
+      this.pollTimer = setInterval(() => this.tick(), this.cfg.pollIntervalSec * 1000);
     },
 
     stop() {
@@ -251,16 +216,11 @@
     async tick() {
       try {
         const newTrack = await window.NavidromeAPI.nowPlaying();
-        // Binäre Logik: Server sagt playing=true (und nicht paused) -> Track anzeigen,
-        // sonst Player ausblenden.
         if (!newTrack || newTrack.playing !== true || newTrack.paused === true) {
           this.currentTrack = null;
           this.renderIdle();
           return;
         }
-        // Aktualisiere currentTrack mit dem neuen Server-Wert
-        // (Titel/Artist/Album/Cover/Duration koennen sich auch aendern,
-        // z. B. bei Tag-Korrektur)
         this.currentTrack = newTrack;
         this.renderTrack(this.currentTrack);
       } catch (err) {
@@ -270,15 +230,18 @@
       }
     },
 
-    renderIdle() {
+    setState(state) {
       const wrap = $('#navidrome-player');
       if (!wrap) return;
-      wrap.classList.add('idle');
-      wrap.classList.remove('playing', 'paused');
-      const titleEl = wrap.querySelector('.np-title');
-      const artistEl = wrap.querySelector('.np-artist');
-      if (titleEl) titleEl.textContent = 'Momentan läuft nichts';
-      if (artistEl) artistEl.textContent = 'Starte Musik in Navidrome, dann erscheint sie hier';
+      wrap.classList.remove('idle', 'playing', 'paused');
+      wrap.classList.add(state);
+    },
+
+    renderIdle() {
+      this.setState('idle');
+      const wrap = $('#navidrome-player');
+      setText('.np-title', 'Momentan läuft nichts', wrap);
+      setText('.np-artist', 'Starte Musik in Navidrome, dann erscheint sie hier', wrap);
       const cover = wrap.querySelector('.np-cover');
       if (cover) {
         cover.replaceChildren(document.createTextNode('🎵'));
@@ -286,33 +249,22 @@
       }
     },
 
-
     renderTrack(data) {
+      this.setState('playing');
       const wrap = $('#navidrome-player');
-      if (!wrap) return;
-      wrap.classList.remove('idle');
-      wrap.classList.add('playing');
-
-      // Cover (Base64-DataURL oder Emoji)
       const cover = wrap.querySelector('.np-cover');
       cover.replaceChildren();
       cover.classList.remove('placeholder');
+
       if (data.coverUrl) {
-        const img = document.createElement('img');
-        img.src = data.coverUrl;
-        img.alt = data.title || '';
-        img.loading = 'lazy';
-        img.referrerPolicy = 'no-referrer';
-        cover.appendChild(img);
+        cover.appendChild(createIconImg(data.coverUrl, data.title || ''));
       } else {
         cover.appendChild(document.createTextNode('🎵'));
         cover.classList.add('placeholder');
       }
 
-      const titleEl = wrap.querySelector('.np-title');
-      const artistEl = wrap.querySelector('.np-artist');
-      if (titleEl) titleEl.textContent = data.title || 'Unbekannt';
-      if (artistEl) artistEl.textContent = data.artist || (data.album || '');
+      setText('.np-title', data.title || 'Unbekannt', wrap);
+      setText('.np-artist', data.artist || data.album || '', wrap);
     },
 
     async control(action) {
@@ -321,31 +273,36 @@
     },
   };
 
+  // ---------- Init ----------
   function init() {
-    if (window.db) {
-      render();
-      // Realtime: bei Änderungen neu rendern
-      if (window.db.subscribe) {
-        window.db.subscribe((changed) => {
-          console.log('[realtime] reload due to', changed);
-          render();
-        });
-      }
-      // Navidrome-Player (falls aktiviert)
-      np.init();
-      np.start();
+    if (!window.db) return;
+    render();
+    if (window.db.subscribe) {
+      window.db.subscribe((changed) => {
+        console.log('[realtime] reload due to', changed);
+        render();
+      });
     }
+    np.init();
+    np.start();
   }
+
+  // Footer Jahr
+  const yearEl = $('.year');
+  if (yearEl) yearEl.textContent = String(new Date().getFullYear());
 
   // Warten, bis Supabase geladen ist
   if (window.sb !== undefined || window.db) {
     if (window.sb === null || window.db?.isMock) {
-      // Mock oder bereits geladen
       init();
     } else {
       window.addEventListener('supabase:ready', init);
-      // Fallback: Wenn nach 1s noch nichts da
-      setTimeout(() => { if (window.db && !window.__init_done) { window.__init_done = true; init(); } }, 1000);
+      setTimeout(() => {
+        if (window.db && !window.__init_done) {
+          window.__init_done = true;
+          init();
+        }
+      }, 1000);
     }
   } else {
     window.addEventListener('supabase:ready', init);

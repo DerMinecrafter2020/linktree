@@ -1,39 +1,34 @@
-# Navidrome API — Browser-Module
+# Navidrome Client API
 
-Diese Module kapseln alle Calls an die Navidrome-Edge-Function in einzelne, testbare Dateien.
+Alle clientseitigen Navidrome-Calls sind jetzt in **einem** Bundle gebündelt.
 
-## Dateien
-
-| Datei | Funktion | Zweck |
-|-------|----------|-------|
-| `client.js` | `NavidromeAPI.post(path, body)` | Generischer POST-Wrapper |
-| `_shared.js` | `NavidromeHelpers.safe(fn)` | try/catch-Wrapper |
-| `status.js` | `NavidromeAPI.status()` | Credentials prüfen |
-| `nowplaying.js` | `NavidromeAPI.nowPlaying()` | Aktueller Track |
-| `control.js` | `NavidromeAPI.control(action)` | play/pause/next/previous |
-| `coverart.js` | `NavidromeAPI.coverArt(id, size)` | Cover herunterladen |
-
-## Verwendung in HTML
-
-In dieser Reihenfolge einbinden (in `index.html` / `admin.html`):
+## Einsatz
 
 ```html
-<script src="api/navidrome/_shared.js"></script>
-<script src="api/navidrome/client.js"></script>
-<script src="api/navidrome/status.js"></script>
-<script src="api/navidrome/nowplaying.js"></script>
-<script src="api/navidrome/control.js"></script>
-<script src="api/navidrome/coverart.js"></script>
+<script type="module" src="api/navidrome.js"></script>
 ```
 
-Dann im Code:
+## Verfügbare Funktionen
+
+| Symbol | Zweck |
+|--------|-------|
+| `NavidromeAPI.config()` | Proxy-Konfiguration laden |
+| `NavidromeAPI.post(path, body)` | Generischer POST-Wrapper |
+| `NavidromeAPI.status()` | Credentials prüfen |
+| `NavidromeAPI.nowPlaying()` | Aktueller Track |
+| `NavidromeAPI.control(action)` | play/pause/next/previous |
+| `NavidromeAPI.coverArt(id, size)` | Cover herunterladen |
+
+## Beispiel
+
 ```js
 const data = await NavidromeAPI.nowPlaying();
 if (data?.playing) { /* Track anzeigen */ }
 ```
 
-## Verwendung in Node.js (Tests)
+## Hinweise
 
-Diese Dateien sind Browser-Module (nutzen `window`). Für Node-Tests siehe
-stattdessen `api/nowplaying.js`, `api/status.js`, `api/coverart.js` im
-übergeordneten `api/`-Ordner.
+- Das Bundle ist ein Browser-Modul und erwartet `window.NAVIDROME_CONFIG`.
+- Die früheren Einzeldateien (`_shared.js`, `client.js`, `status.js`,
+  `nowplaying.js`, `control.js`, `coverart.js`) sind entfernt und in
+  `api/navidrome.js` aufgegangen.

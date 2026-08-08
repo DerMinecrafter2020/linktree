@@ -1,41 +1,28 @@
-# Supabase API — Browser-Module
+# Supabase Client API
 
-Diese Module kapseln die Calls an die drei Supabase Edge-Functions
-(`admin-proxy`, `auth-login`, `auth-change-password`) in einzelne Dateien.
+Alle clientseitigen Supabase-Calls sind jetzt in **einem** Bundle gebündelt.
 
-## Dateien
-
-| Datei | Funktion | Zweck |
-|-------|----------|-------|
-| `_shared.js` | `SupabaseHelpers.postJSON()` | POST mit JSON-Antwort, wirft bei Fehlern |
-| `admin-proxy.js` | `SupabaseAPI.adminProxy({ url, token, action, data, authEnabled, anonKey })` | DB-Mutationen |
-| `auth-login.js` | `SupabaseAPI.authLogin({ url, password, honeypot, onToken })` | Login + Token speichern |
-| `auth-change-password.js` | `SupabaseAPI.authChangePassword({ url, token, oldPassword, newPassword })` | PW-Änderung |
-
-## Verwendung in HTML
+## Einsatz
 
 ```html
-<script src="api/supabase/_shared.js"></script>
-<script src="api/supabase/admin-proxy.js"></script>
-<script src="api/supabase/auth-login.js"></script>
-<script src="api/supabase/auth-change-password.js"></script>
+<script type="module" src="api/supabase.js"></script>
 ```
 
-Dann im Code:
-```js
-await SupabaseAPI.adminProxy({
-  url: window.SUPABASE_CONFIG.adminProxyUrl,
-  token: getToken(),
-  action: 'updateProfile',
-  data: profile,
-  authEnabled: true,
-  anonKey: window.SUPABASE_CONFIG.anonKey,
-});
-```
+## Verfügbare Funktionen
+
+| Symbol | Zweck |
+|--------|-------|
+| `SupabaseHelpers.postJSON(url, body, token)` | Generischer POST-Helper |
+| `SupabaseAPI.adminProxy(payload)` | Proxy für Admin-Operationen |
+| `SupabaseAPI.authLogin(email, password)` | Login |
+| `SupabaseAPI.authChangePassword(newPassword, token)` | Passwort ändern |
+| `SupabaseAPI.saveConfig(config)` | Einstellungen speichern |
 
 ## Hinweise
 
-- Die Module sind **dünn**: keine Caching-Logik, kein Retry, kein State.
-  Caching/Token-Management bleibt im `supabase-client.js` (DB-Wrapper).
+- Kein Caching, kein Retry, kein State – das bleibt in `supabase-client.js`.
 - `adminProxy` setzt `Authorization` je nach `authEnabled`: bei `true` mit dem
   User-JWT, sonst mit dem anon-Key + `token` im Body (Legacy).
+- Die früheren Einzeldateien (`_shared.js`, `admin-proxy.js`, `auth-login.js`,
+  `auth-change-password.js`, `save-config.js`) sind entfernt und in
+  `api/supabase.js` aufgegangen.

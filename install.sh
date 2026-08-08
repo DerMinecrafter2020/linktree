@@ -1348,7 +1348,11 @@ server {
         try_files \$uri =404;
     }
 
-    # Admin-Panel: kein Caching
+    # Admin-Panel: /admin saubere URL + kein Caching
+    location = /admin {
+        rewrite ^ /admin.html last;
+    }
+
     location = /admin.html {
         add_header Cache-Control "no-store" always;
         try_files \$uri =404;
