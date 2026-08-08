@@ -1239,7 +1239,7 @@ do_set_admin_enabled() {
 
     # Zusaetzlicher Marker-Blocker fuer alte nginx-Configs, die die
     # include-Zeile fuer ${NGINX_ADMIN_STATE} noch nicht enthalten.
-    # ^~ hat Vorrang vor eventuellen "location = /admin.html"-Bloecken.
+    # Regex ^/admin matcht /admin, /admin.html, /admin.css, /admin.js etc.
     local marker="# -- OpenWeb admin area blocker (managed by install.sh) --"
 
     # Entferne vorhandenen Marker-Block (bei Aktivierung und vor erneutem Einfuegen)
@@ -1247,7 +1247,7 @@ do_set_admin_enabled() {
 
     if [[ "$enabled" != "true" ]]; then
         # Fuege Blocker direkt nach dem oeffnenden "server {" ein
-        sed -i "/^server {/a\\    ${marker}\\n    location ^~ /admin {\\n        return 404;\\n    }" "$NGINX_CONF"
+        sed -i "/^server {/a\\    ${marker}\\n    location ~ ^/admin {\\n        return 404;\\n    }" "$NGINX_CONF"
     fi
 
     reload_nginx
