@@ -59,6 +59,7 @@ readonly EX_GIT=4
 readonly EX_NGINX=5
 readonly EX_CONFIG=6
 readonly EX_DEPENDENCY=7
+readonly EX_SOFTWARE=70
 
 # --- Farben für Output ---
 readonly RED='\033[0;31m'
@@ -1231,6 +1232,7 @@ do_set_admin_enabled() {
     local http_code
     http_code=$(curl -sS -w '%{http_code}' -o "$temp_out" \
         -X POST "${SUPABASE_URL%/}/functions/v1/admin-proxy" \
+        -H "apikey: ${SUPABASE_ANON_KEY}" \
         -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
         -H "Content-Type: application/json" \
         -H "X-Admin-Secret: ${CONFIG_SHARED_SECRET}" \
