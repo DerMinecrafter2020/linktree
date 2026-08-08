@@ -1593,6 +1593,27 @@ log_ok "config.js erstellt (chmod 644)"
 # Serverseitige Konfiguration sichern
 save_server_config
 
+# Geschützte Admin-Konfiguration erzeugen (Shared Secret für admin-proxy)
+# Diese Datei liegt im /admin-Bereich und wird durch nginx Basic Auth geschützt.
+# Sie enthält das CONFIG_SHARED_SECRET, damit das Admin-Panel nicht per
+# Prompt danach fragen muss.
+generate_admin_config() {
+    local file="${INSTALL_DIR}/admin/admin-config.js"
+    mkdir -p "$(dirname "$file")"
+    local tmp
+    tmp=$(mktemp "${file}.tmp.XXXXXX")
+    cat > "$tmp" <<EOF
+// OpenWeb Admin-Konfiguration — nur für /admin über nginx Basic Auth erreichbar.
+// Wird von install.sh erzeugt. NICHT in git committen.
+window.ADMIN_CONFIG = {
+  sharedSecret: '${CONFIG_SHARED_SECRET}',
+};
+EOF
+    chmod 600 "$tmp"
+    mv -f "$tmp" "$file"
+    log_ok "Geschützte Admin-Konfiguration erstellt: ${file} (chmod 600)"
+}
+
 # --- Edge Functions deployen (falls supabase CLI verfügbar) ---
 deploy_edge_functions() {
     local cli=""
@@ -1713,6 +1734,14 @@ server {
 
     # config.js: niemals cachen, sensible Daten
     location = /config.js {
+        add_header Cache-Control "no-store" always;
+        try_files \$uri =404;
+    }
+
+    # admin-config.js: geschützte Datei im /admin-Bereich, niemals cachen
+    location = /admin/admin-config.js {
+        auth_basic           "OpenWeb Admin";
+        auth_basic_user_file ${NGINX_HTPASSWD};
         add_header Cache-Control "no-store" always;
         try_files \$uri =404;
     }

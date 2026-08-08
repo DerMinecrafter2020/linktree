@@ -63,8 +63,11 @@
       throw new Error('adminProxyUrl nicht konfiguriert — siehe supabase/functions/admin-proxy/README');
     }
     if (!sharedSecret) {
-      sharedSecret = prompt('🔐 Shared Secret aus /var/html/.openweb.env (CONFIG_SHARED_SECRET):');
-      if (!sharedSecret) throw new Error('Shared Secret erforderlich');
+      sharedSecret = (window.ADMIN_CONFIG?.sharedSecret || '').trim();
+      if (!sharedSecret) {
+        sharedSecret = prompt('🔐 Shared Secret aus /var/html/.openweb.env (CONFIG_SHARED_SECRET):');
+        if (!sharedSecret) throw new Error('Shared Secret erforderlich');
+      }
     }
     return await window.SupabaseAPI.adminProxy({
       url: ADMIN_PROXY_URL,

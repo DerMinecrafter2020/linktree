@@ -15,6 +15,10 @@ config.local.js
 # und beim Restore wiederhergestellt.
 .openweb.env
 
+# Geschützte Admin-Konfiguration im /admin-Bereich. Wird von install.sh
+# erzeugt, nur via nginx Basic Auth erreichbar. Enthält CONFIG_SHARED_SECRET.
+admin/admin-config.js
+
 # --- Lokale Test-/Debug-Skripte -------------------------------------------
 test-attack.bat
 final-check.bat
