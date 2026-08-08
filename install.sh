@@ -1225,9 +1225,12 @@ generate_admin_config() {
 // OpenWeb Admin-Konfiguration — nur für /admin über nginx Basic Auth erreichbar.
 // Wird von install.sh erzeugt. NICHT in git committen.
 window.ADMIN_CONFIG = {
-  sharedSecret: '${CONFIG_SHARED_SECRET}',
+  sharedSecret: '${CONFIG_SHARED_SECRET:-}',
 };
 EOF
+    if [[ -z "${CONFIG_SHARED_SECRET:-}" ]]; then
+        log_warn "CONFIG_SHARED_SECRET ist leer — admin-config.js enthält kein Shared Secret"
+    fi
     chmod 600 "$tmp"
     mv -f "$tmp" "$file"
     log_ok "Geschützte Admin-Konfiguration erstellt: ${file} (chmod 600)"
@@ -1252,6 +1255,8 @@ do_set_admin_enabled() {
 
     if [[ "$enabled" == "true" ]]; then
         log_info "Aktiviere Admin-Bereich..."
+        # Aktuelles serverseitiges Secret laden, falls noch nicht geschehen
+        load_server_config
         # Sicherstellen, dass admin-config.js das aktuelle Secret nutzt
         generate_admin_config
         local seen=("admin/admin-config.js")
