@@ -13,7 +13,8 @@
 // Aufruf von der App:
 //   POST {SUPABASE_URL}/functions/v1/admin-proxy
 //   Header: Authorization: Bearer <anon-key>
-//   Body:   { "action": "saveProfile", "secret": "<CONFIG_SHARED_SECRET>", "data": {...} }
+//           X-Admin-Secret: <CONFIG_SHARED_SECRET>
+//   Body:   { "action": "saveProfile", "data": {...} }
 //
 // Antwort:
 //   200 { "ok": true,  "data": {...} }
@@ -27,17 +28,25 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-admin-secret',
 };
 
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').filter(Boolean);
 
 function corsFor(req) {
   const origin = req.headers.get('origin') || '';
-  if (ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) {
+  if (ALLOWED_ORIGINS.length === 0) {
     return { ...CORS, 'Access-Control-Allow-Origin': origin || '*' };
   }
-  return { ...CORS, 'Access-Control-Allow-Origin': 'null' };
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    return { ...CORS, 'Access-Control-Allow-Origin': origin };
+  }
+  // Unbekannter Origin: keine CORS-Weitergabe (Preflight/Request wird blockiert)
+  return {
+    'Access-Control-Allow-Origin': 'null',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-admin-secret',
+  };
 }
 
 function json(data, status, req) {
@@ -148,10 +157,11 @@ function validateLink(l) {
   };
 }
 
-async function authenticate(body) {
+async function authenticate(req, body) {
   if (!SHARED_SECRET) throw new Error('server not configured');
-  if (!body || typeof body !== 'object') throw new Error('unauthorized');
-  const provided = String(body.secret || '');
+  // Secret bevorzugt aus Header (nicht im JSON-Body/Proxy-Log sichtbar),
+  // Fallback auf Body für alte Clients.
+  const provided = String(req.headers.get('x-admin-secret') || body?.secret || '');
   if (provided !== SHARED_SECRET) throw new Error('unauthorized');
   return { sub: 'admin' };
 }
@@ -212,7 +222,7 @@ Deno.serve(async (req) => {
   catch { return json({ ok: false, error: 'invalid json' }, 400, req); }
 
   let claims;
-  try { claims = await authenticate(body); }
+  try { claims = await authenticate(req, body); }
   catch { return json({ ok: false, error: 'unauthorized' }, 401, req); }
 
   // Rate-Limit: pro Client (IP + secret-Hash)

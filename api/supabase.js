@@ -36,8 +36,14 @@
     if (!secret) throw new Error('shared secret missing');
     if (!anonKey) throw new Error('anonKey missing');
 
-    const headers = { apikey: anonKey, 'Authorization': 'Bearer ' + anonKey };
-    const body = { action: action, secret: secret, data: data || {} };
+    // Shared Secret kommt aus /admin/admin-config.js und wird im Header
+    // übertragen, damit es nicht im JSON-Body landet.
+    const headers = {
+      apikey: anonKey,
+      'Authorization': 'Bearer ' + anonKey,
+      'X-Admin-Secret': secret,
+    };
+    const body = { action: action, data: data || {} };
     if (extra && typeof extra === 'object') {
       for (const k of Object.keys(extra)) {
         if (extra[k] !== undefined) body[k] = extra[k];
@@ -54,9 +60,13 @@
     const projectRef = m[1];
     const endpoint = `https://${projectRef}.supabase.co/functions/v1/save-config`;
 
-    const headers = { apikey: anonKey || '', 'Authorization': 'Bearer ' + (anonKey || ''), 'Content-Type': 'application/json' };
+    const headers = {
+      apikey: anonKey || '',
+      'Authorization': 'Bearer ' + (anonKey || ''),
+      'Content-Type': 'application/json',
+    };
+    if (secret) headers['X-Admin-Secret'] = secret;
     const body = { url: url, anonKey: anonKey };
-    if (secret) body.secret = secret;
 
     const r = await fetch(endpoint, {
       method: 'POST',

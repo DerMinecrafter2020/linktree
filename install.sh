@@ -1365,27 +1365,23 @@ prompt_admin_password() {
     fi
 
     echo ""
-    echo "  Standard-Passwort: admin123"
-    echo "  (Nur für den ersten nginx-Basic-Auth-Login. Ändere es danach sofort.)"
+    echo "  Es gibt kein Standard-Passwort."
+    echo "  Bitte ein sicheres Admin-Passwort für /admin eingeben."
     echo ""
-    echo "  Optionen:"
-    echo "    [Enter]       Standard 'admin123' verwenden"
-    echo "    <eigenes PW>  Jetzt ein anderes Passwort setzen"
+    echo -n "  Admin-Passwort: "
+    read -rs ADMIN_PASSWORD
     echo ""
-    echo -n "  Deine Wahl: "
-    read -r ADMIN_PASSWORD
 
     if [[ -z "$ADMIN_PASSWORD" ]]; then
-        ADMIN_PASSWORD="admin123"
-        log_info "  Standard-Passwort 'admin123' wird als Initial-Passwort gesetzt"
-    else
-        log_ok "  eigenes Passwort wird gesetzt"
+        log_error "Kein Admin-Passwort angegeben. Abbruch."
+        exit $EX_CONFIG
     fi
-
-    # Warnung bei bekanntem Default
     if [[ "$ADMIN_PASSWORD" == "admin123" ]]; then
-        log_warn "  ACHTUNG: Default-Passwort 'admin123' gewählt — bitte sofort nach dem ersten Login ändern!"
+        log_warn "'admin123' ist der bekannte Default — bitte ein sicheres Passwort wählen"
+        read -rs ADMIN_PASSWORD
+        echo ""
     fi
+    log_ok "  eigenes Passwort wird gesetzt"
 }
 
 # --- Schritt 3: /var/html vorbereiten + Repo klonen/updaten ---
@@ -1707,28 +1703,30 @@ server {
     add_header Referrer-Policy "no-referrer-when-downgrade" always;
     add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
 
+    # Rate-Limits (schützen Admin-Login gegen Brute-Force)
+    limit_req_zone \$binary_remote_addr zone=admin_login:10m rate=5r/m;
+    limit_req_zone \$binary_remote_addr zone=admin_general:10m rate=60r/m;
+
     # Statische Files
     location / {
         try_files \$uri \$uri/ /index.html;
     }
 
-    # Cache für statische Assets (1 Tag)
-    location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|woff2?)$ {
+    # Cache für statische Assets (1 Tag) — AUSSER admin-* und config.js
+    location ~* ^(?!.*admin).*\.(css|js|png|jpg|jpeg|gif|ico|svg|woff2?)$ {
         expires 1d;
         add_header Cache-Control "public, max-age=86400";
         try_files \$uri =404;
     }
 
-    # Admin-Panel: /admin saubere URL + kein Caching + Basic Auth
-    location = /admin {
-        rewrite ^ /admin.html last;
-    }
-
-    location ~ ^/admin(\.|$) {
+    # Admin-Bereich: /admin, /admin.html und alle admin-* Dateien streng schützen
+    location ~ ^/(admin|admin-.*\.(html|css|js))$ {
+        limit_req zone=admin_login burst=5 nodelay;
         auth_basic           "OpenWeb Admin";
         auth_basic_user_file ${NGINX_HTPASSWD};
 
         add_header Cache-Control "no-store" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
         try_files \$uri =404;
     }
 
@@ -1740,9 +1738,12 @@ server {
 
     # admin-config.js: geschützte Datei im /admin-Bereich, niemals cachen
     location = /admin/admin-config.js {
+        limit_req zone=admin_login burst=5 nodelay;
         auth_basic           "OpenWeb Admin";
         auth_basic_user_file ${NGINX_HTPASSWD};
         add_header Cache-Control "no-store" always;
+        add_header Last-Modified "";
+        add_header ETag "";
         try_files \$uri =404;
     }
 
@@ -2032,7 +2033,31 @@ if [[ -n "$DOMAIN" ]]; then
     else
         log_warn "nginx config-Test fehlgeschlagen — bitte manuell prüfen"
     fi
+
+    # CORS-Origin fÃ¼r Edge Functions auf diese Domain beschrÃ¤nken
+    set_allowed_origins_secret "$DOMAIN"
 fi
+
+set_allowed_origins_secret() {
+    local domain="${1:-}"
+    [[ -z "$domain" ]] && return 0
+
+    local cli=""
+    [[ -x "$SUPABASE_CLI" ]] && cli="$SUPABASE_CLI"
+    command -v supabase >/dev/null 2>&1 && cli="${cli:-supabase}"
+    if [[ -z "$cli" ]] || ! "$cli" projects list 2>/dev/null >/dev/null; then
+        log_warn "supabase CLI nicht eingeloggt — ALLOWED_ORIGINS nicht automatisch gesetzt"
+        log_warn "  Manuell: supabase secrets set ALLOWED_ORIGINS='https://${domain}'"
+        return 0
+    fi
+
+    log_info "BeschrÃ¤nke Edge-Function CORS auf https://${domain} ..."
+    if "$cli" secrets set "ALLOWED_ORIGINS=https://${domain}" 2>&1 | sed 's/^/    /'; then
+        log_ok "ALLOWED_ORIGINS in Supabase gesetzt"
+    else
+        log_warn "Konnte ALLOWED_ORIGINS nicht in Supabase setzen"
+    fi
+}
 
 # --- Zusammenfassung ---
 LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
