@@ -165,13 +165,14 @@
   // ---- Modals ----
   function makeModal(id, title, bodyNodes) {
     let modal = document.getElementById(id);
-    if (modal) return modal;
+    if (modal) { modal.hidden = false; return modal; }
     modal = el('div', { id, class: 'modal-overlay' },
       el('div', { class: 'modal-card' },
         el('h2', { text: title }),
         ...bodyNodes
       )
     );
+    modal.hidden = false;
     document.body.appendChild(modal);
     return modal;
   }
@@ -222,10 +223,9 @@
     location.href = 'https://logout:logout@' + location.host + location.pathname;
   }
 
-  // ---- nginx Basic Auth übernimmt das Login. Die App zeigt sich direkt. ----
+  // ---- nginx Basic Auth übernimmt das Login. Nur Logout-Button binden. ----
   function bindLogin() {
     $('#logout-btn').addEventListener('click', () => browserLogout());
-    initApp();
   }
 
   // ---- Avatar ----
@@ -849,6 +849,7 @@
   }
 
   // ---- Boot ----
+  let appInitialized = false;
   document.addEventListener('DOMContentLoaded', async () => {
     if (location.protocol === 'file:') console.warn('%c[Security]%c App läuft lokal über file://. Für Produktion über HTTPS hosten.', 'color:#ff2bd6;font-weight:bold', 'color:inherit');
     bindLogin();
@@ -866,8 +867,12 @@
       showSetupForm();
       return;
     }
-    const start = () => window.db ? initApp() : setTimeout(start, 50);
-    if (window.db) initApp();
+    const start = () => {
+      if (appInitialized) return;
+      if (window.db) { appInitialized = true; initApp(); }
+      else setTimeout(start, 50);
+    };
+    if (window.db && !appInitialized) { appInitialized = true; initApp(); }
     else window.addEventListener('supabase:ready', start);
   });
 })();
