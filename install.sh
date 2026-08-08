@@ -1196,9 +1196,9 @@ do_set_admin_enabled() {
         exit $EX_USAGE
     fi
 
-    load_or_ask_env "${INSTALL_DIR}/.openweb.env"
-    if [[ ! -f "${INSTALL_DIR}/.openweb.env" ]]; then
-        log_error "Keine ${INSTALL_DIR}/.openweb.env gefunden — bitte erst installieren"
+    load_server_config
+    if [[ ! -f "$SERVER_CONFIG_FILE" ]]; then
+        log_error "Keine ${SERVER_CONFIG_FILE} gefunden — bitte erst installieren"
         exit $EX_CONFIG
     fi
 
