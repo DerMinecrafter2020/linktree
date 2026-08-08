@@ -15,10 +15,8 @@ gbündelt: [`api/supabase.js`](../supabase.js).
 |--------|-------|
 | `SupabaseHelpers.postJSON(url, headers, body)` | Generischer POST-Helper |
 | `SupabaseAPI.adminProxy(payload)` | Proxy für Admin-Operationen |
-| `SupabaseAPI.authLogin(password, honeypot)` | Login |
-| `SupabaseAPI.authChangePassword(oldPassword, newPassword, token)` | Passwort ändern |
 | `SupabaseAPI.saveConfig(config)` | Supabase-URL + Anon-Key speichern |
-| `SupabaseAPI.discordWebhook({ url, token, track, anonKey, authEnabled })` | Now-Playing an Discord-Webhook senden |
+| `SupabaseAPI.discordWebhook({ url, token, track, anonKey })` | Now-Playing an Discord-Webhook senden (Legacy) |
 
 Über `adminProxy` zusätzlich verfügbar:
 
@@ -30,8 +28,11 @@ gbündelt: [`api/supabase.js`](../supabase.js).
 ## Hinweise
 
 - Kein Caching, kein Retry, kein State – das bleibt in `supabase-client.js`.
-- `adminProxy` setzt `Authorization` je nach `authEnabled`: bei `true` mit dem
-  User-JWT, sonst mit dem anon-Key + `token` im Body (Legacy).
+- `adminProxy` sendet immer `Authorization: Bearer <anonKey>` und erwartet,
+  dass `admin-proxy` über das mitgesendete `token` (Shared Secret) den Schreibzugriff prüft.
+- Login geschieht über **nginx Basic Auth** (`/admin`, `/admin.html`).
+  `api/supabase.js` enthält keinen Login mehr; das Passwort liegt nur serverseitig
+  in `/etc/nginx/openweb-admin.htpasswd`.
 - Für reine Discord-Webhook-Aufrufe wird bevorzugt `api/discord.js` / `window.DiscordAPI.send()` verwendet.
 - Die früheren Einzeldateien (`_shared.js`, `admin-proxy.js`, `auth-login.js`,
   `auth-change-password.js`, `save-config.js`) sind entfernt und in

@@ -9,11 +9,10 @@ window.SUPABASE_CONFIG = {
   anonKey: 'YOUR-ANON-KEY',
 
   // --- Optionale Supabase Edge Functions ---
-  authEnabled: false,
-  adminProxyUrl:         'https://YOUR-PROJECT.supabase.co/functions/v1/admin-proxy',
-  authLoginUrl:          'https://YOUR-PROJECT.supabase.co/functions/v1/auth-login',
-  authChangePasswordUrl: 'https://YOUR-PROJECT.supabase.co/functions/v1/auth-change-password',
-  discordWebhookUrl:     'https://YOUR-PROJECT.supabase.co/functions/v1/discord-webhook',
+  // Admin-Login läuft über nginx Basic Auth. Keine weiteren URLs nötig.
+  // Admin-Login läuft jetzt über nginx Basic Auth.
+  adminProxyUrl:     'https://YOUR-PROJECT.supabase.co/functions/v1/admin-proxy',
+  discordWebhookUrl: 'https://YOUR-PROJECT.supabase.co/functions/v1/discord-webhook',
 };
 
 // =========================================================

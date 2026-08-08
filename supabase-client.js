@@ -18,36 +18,15 @@
   const SUPABASE_URL = window.SUPABASE_CONFIG?.url;
   const SUPABASE_KEY = window.SUPABASE_CONFIG?.anonKey;
 
-  // Edge-Function URLs (optional)
+  // Edge-Function URL (optional)
   const ADMIN_PROXY_URL  = window.SUPABASE_CONFIG?.adminProxyUrl;
-  const AUTH_LOGIN_URL   = window.SUPABASE_CONFIG?.authLoginUrl;
-  const AUTH_CHANGE_PW   = window.SUPABASE_CONFIG?.authChangePasswordUrl;
-  const AUTH_ENABLED     = !!window.SUPABASE_CONFIG?.authEnabled;
 
-  // Session-Storage Keys (einmalig hier, damit andere Module übereinstimmen)
-  const TOKEN_KEY   = 'admin-token';
-  const TOKEN_TS    = 'admin-token-created';
-  const TOKEN_EXP   = 'admin-token-exp';
+  // Shared Secret fuer admin-proxy/save-config.
+  // Wird erst im Admin-Panel eingegeben (aus /var/html/.openweb.env)
+  // und NICHT in config.js gespeichert.
+  let sharedSecret = '';
 
-  function getToken() { return sessionStorage.getItem(TOKEN_KEY) || null; }
-  function setToken(token, expSec) {
-    sessionStorage.setItem(TOKEN_KEY, token);
-    sessionStorage.setItem(TOKEN_TS, String(Date.now()));
-    sessionStorage.setItem(TOKEN_EXP, String(expSec));
-  }
-  function clearToken() {
-    sessionStorage.removeItem(TOKEN_KEY);
-    sessionStorage.removeItem(TOKEN_TS);
-    sessionStorage.removeItem(TOKEN_EXP);
-  }
-  function isTokenValid() {
-    const exp = parseInt(sessionStorage.getItem(TOKEN_EXP) || '0', 10);
-    if (!exp) return false;
-    // 60s Sicherheitspuffer
-    return Date.now() < (exp * 1000) - 60_000;
-  }
-
-  if (!SUPABASE_URL || !SUPABASE_KEY || SUPABASE_KEY.startsWith('HIER_')) {
+  if (!SUPABASE_URL || !SUPABASE_KEY || SUPABASE_KEY.startsWith('YOUR-') || SUPABASE_KEY.startsWith('HIER_')) {
     console.warn('[db] Supabase ist nicht konfiguriert. Bitte URL + Key im Admin-Panel eintragen.');
     window.sb = null;
     window.db = needsSetupDb();
@@ -79,56 +58,27 @@
   // =========================================================
   // SCHREIBEN: bevorzugt via Edge-Function
   // =========================================================
-  // Wenn authEnabled + gültiges JWT vorhanden → Header: Bearer <JWT>
-  // Edge-Function nutzt SERVICE_ROLE_KEY und JWT-Verifikation.
-  //
-  // Fallback (kein authEnabled): anon-Key + token im Body.
-  async function adminProxy(action, data, token, extra) {
+  async function adminProxy(action, data, extra) {
     if (!ADMIN_PROXY_URL) {
       throw new Error('adminProxyUrl nicht konfiguriert — siehe supabase/functions/admin-proxy/README');
     }
-    // extra (z.B. { id }) wird als Top-Level-Feld gemerged, damit die
-    // Edge-Function es als body.id / body.X lesen kann.
-    // body.data bleibt separat (für validateLink etc.).
+    if (!sharedSecret) {
+      sharedSecret = prompt('🔐 Shared Secret aus /var/html/.openweb.env (CONFIG_SHARED_SECRET):');
+      if (!sharedSecret) throw new Error('Shared Secret erforderlich');
+    }
     return await window.SupabaseAPI.adminProxy({
       url: ADMIN_PROXY_URL,
-      token: token,
       action: action,
       data: data || {},
       extra: extra || {},
-      authEnabled: AUTH_ENABLED,
       anonKey: SUPABASE_KEY,
+      secret: sharedSecret,
     });
   }
 
-  // =========================================================
-  // AUTH: Server-seitige Passwortprüfung + JWT
-  // =========================================================
-  // Die Funktion auth-init (One-Time-Setup) ist absichtlich
-  // NICHT im Client verfügbar: Sie braucht SERVICE_ROLE_KEY
-  // und darf nur via curl auf der Konsole aufgerufen werden.
-  // Siehe DEPLOYMENT.md Schritt 4.
-  async function authLogin(password, honeypot) {
-    if (!AUTH_LOGIN_URL) throw new Error('authLoginUrl nicht konfiguriert');
-    return await window.SupabaseAPI.authLogin({
-      url: AUTH_LOGIN_URL,
-      password: password,
-      honeypot: honeypot,
-      onToken: (token, expiresAt) => setToken(token, expiresAt),
-    });
-  }
-
-  async function authChangePassword(oldPassword, newPassword) {
-    if (!AUTH_CHANGE_PW) throw new Error('authChangePasswordUrl nicht konfiguriert');
-    const token = getToken();
-    if (!token) throw new Error('nicht eingeloggt');
-    return await window.SupabaseAPI.authChangePassword({
-      url: AUTH_CHANGE_PW,
-      token: token,
-      oldPassword: oldPassword,
-      newPassword: newPassword,
-    });
-  }
+  window.setAdminSharedSecret = function (v) {
+    sharedSecret = String(v || '').trim();
+  };
 
   function createDb(client) {
     // Defense-in-Depth: Wenn KEIN Edge-Proxy und KEIN Edge-Auth
@@ -142,19 +92,11 @@
     return {
       isMock: false,
       usesProxy: !!ADMIN_PROXY_URL,
-      authEnabledFlag: AUTH_ENABLED,
       allowsDirectWrites: ALLOW_DIRECT_WRITES,
+      setSharedSecret(v) { sharedSecret = String(v || '').trim(); },
 
-      // ---- AUTH ----
-      isLoggedIn() { return AUTH_ENABLED && isTokenValid(); },
-      getToken() { return getToken(); },
-      async login(password, honeypot) {
-        return authLogin(password, honeypot);
-      },
-      async changePassword(oldPw, newPw) {
-        return authChangePassword(oldPw, newPw);
-      },
-      logout() { clearToken(); },
+      // Login geschieht über nginx Basic Auth; kein Browser-Token nötig.
+      logout() { /* Basic-Auth-Cache wird via admin.js zurückgesetzt */ },
 
       async getProfile() {
         const { data, error } = await client
@@ -164,38 +106,30 @@
       },
 
       async saveProfile(profile) {
-        // Bei aktiviertem Edge-Auth: nur ueber Proxy schreiben
-        if (AUTH_ENABLED && ADMIN_PROXY_URL) {
-          return adminProxy('saveProfile', profile, getToken());
+        if (ADMIN_PROXY_URL) {
+          return adminProxy('saveProfile', profile);
         }
-        // Fallback: ohne Edge-Auth direkt via REST schreiben.
-        // Voraussetzung: RLS-Policies muessen Schreibzugriff erlauben
-        // (siehe fix-policies.sql).
         const { data, error } = await client
           .from('profile').update(profile).eq('id', 1).select().maybeSingle();
         if (error) throw error;
         if (!data) {
-          // RLS hat den Write stillschweigend geblockt. Das passiert wenn
-          // eine Tabelle RLS aktiv hat aber keine passende Policy für anon.
-          // Wir werfen einen klaren Fehler statt den User im Unklaren zu lassen.
-          throw new Error('saveProfile fehlgeschlagen: RLS-Policy blockt anon-Write. Setze adminProxyUrl + authEnabled=true oder lockere RLS-Policy.');
+          throw new Error('saveProfile fehlgeschlagen: RLS-Policy blockt anon-Write. Setze adminProxyUrl oder lockere RLS-Policy.');
         }
         return data;
       },
 
       async getAdminSettings() {
-        if (AUTH_ENABLED && ADMIN_PROXY_URL) {
-          return adminProxy('getAdminSettings', null, getToken());
+        if (ADMIN_PROXY_URL) {
+          return adminProxy('getAdminSettings');
         }
-        // Ohne Edge-Function: nicht lesbar (RLS blockt anon)
-        throw new Error('getAdminSettings erfordert adminProxyUrl + authEnabled=true');
+        throw new Error('getAdminSettings erfordert adminProxyUrl');
       },
 
       async saveAdminSettings(settings) {
-        if (AUTH_ENABLED && ADMIN_PROXY_URL) {
-          return adminProxy('saveAdminSettings', settings, getToken());
+        if (ADMIN_PROXY_URL) {
+          return adminProxy('saveAdminSettings', settings);
         }
-        throw new Error('saveAdminSettings erfordert adminProxyUrl + authEnabled=true');
+        throw new Error('saveAdminSettings erfordert adminProxyUrl');
       },
 
       async sendDiscordWebhook(track) {
@@ -222,8 +156,8 @@
       },
 
       async createLink(link) {
-        if (AUTH_ENABLED && ADMIN_PROXY_URL) {
-          return adminProxy('createLink', link, getToken());
+        if (ADMIN_PROXY_URL) {
+          return adminProxy('createLink', link);
         }
         const { data, error } = await client
           .from('links').insert(link).select().maybeSingle();
@@ -232,9 +166,8 @@
       },
 
       async updateLink(id, patch) {
-        if (AUTH_ENABLED && ADMIN_PROXY_URL) {
-          // id muss mitgeschickt werden — die Edge-Function liest body.id
-          return adminProxy('updateLink', patch, getToken(), { id: id });
+        if (ADMIN_PROXY_URL) {
+          return adminProxy('updateLink', patch, { id: id });
         }
         const { data, error } = await client
           .from('links').update(patch).eq('id', id).select().maybeSingle();
@@ -243,8 +176,8 @@
       },
 
       async deleteLink(id) {
-        if (AUTH_ENABLED && ADMIN_PROXY_URL) {
-          return adminProxy('deleteLink', null, getToken(), { id: id });
+        if (ADMIN_PROXY_URL) {
+          return adminProxy('deleteLink', null, { id: id });
         }
         const { error } = await client.from('links').delete().eq('id', id);
         if (error) throw error;
@@ -252,10 +185,9 @@
       },
 
       async reorderLinks(orderedIds) {
-        if (AUTH_ENABLED && ADMIN_PROXY_URL) {
-          return adminProxy('reorderLinks', { orderedIds }, getToken());
+        if (ADMIN_PROXY_URL) {
+          return adminProxy('reorderLinks', { orderedIds });
         }
-        // Sequenzielle Updates — eine Transaktion ist auf REST-Ebene nicht trivial
         for (let i = 0; i < orderedIds.length; i++) {
           const { error } = await client
             .from('links').update({ position: i }).eq('id', orderedIds[i]);

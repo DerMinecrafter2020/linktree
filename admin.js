@@ -2,26 +2,18 @@
 // Admin-Logik (refactored)
 // =========================================================
 // Funktionen:
-//   - Login mit serverseitigem Passwort (Edge Function)
 //   - Tab-Navigation
 //   - Profil bearbeiten (inkl. Avatar-Upload)
 //   - Links: CRUD + Drag & Drop + Pfeile
 //   - Export / Import / Reset (JSON)
-//   - Passwort ändern
 //   - Navidrome-Player-Konfiguration
 //   - Realtime-Update über Supabase
+//   - nginx Basic Auth-Logout
 // =========================================================
 (() => {
   'use strict';
 
   // ---- Konfiguration ----
-  const TOKEN_KEY = 'admin-token';
-  const TOKEN_EXP = 'admin-token-exp';
-  const SESSION_KEY = 'linktree-admin-session';
-  const TAB_STORAGE_KEY = 'linktree-admin-active-tab';
-  const LOGIN_WINDOW_MS = 5 * 60 * 1000;
-  const LOGIN_MAX_TRIES = 5;
-  const LOGIN_LOCKOUT_MS = 60 * 1000;
   const AVATAR_MAX_PX = 512;
   const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
   const AVATAR_TARGET_BYTES = 80 * 1024;
@@ -30,6 +22,9 @@
 
   // ---- State ----
   const state = { profile: null, links: [] };
+
+  // ---- App-Boot vereinfachen: nginx Basic Auth erledigt den Login ----
+  const TAB_STORAGE_KEY = 'linktree-admin-active-tab';
 
   // ---- DOM helpers ----
   const $  = (s, r = document) => r.querySelector(s);
@@ -83,41 +78,7 @@
     return t.slice(0, 8).replace(/[<>"']/g, '');
   }
 
-  // ---- Auth ----
-  function hasValidSession() {
-    const tok = sessionStorage.getItem(TOKEN_KEY);
-    if (!tok) return false;
-    const exp = parseInt(sessionStorage.getItem(TOKEN_EXP) || '0', 10);
-    return exp ? Date.now() < (exp * 1000) - 60_000 : true;
-  }
-  function clearSession() {
-    for (const k of [TOKEN_KEY, TOKEN_EXP, SESSION_KEY]) sessionStorage.removeItem(k);
-  }
-  function mustChangePassword() {
-    const tok = sessionStorage.getItem(TOKEN_KEY);
-    if (!tok) return false;
-    try {
-      const payload = JSON.parse(atob(tok.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-      return payload.must_change === true;
-    } catch { return false; }
-  }
 
-  // ---- Login rate limit ----
-  function getLoginState() { try { return JSON.parse(sessionStorage.getItem('login-attempts') || '{}'); } catch { return {}; } }
-  function setLoginState(s) { sessionStorage.setItem('login-attempts', JSON.stringify(s)); }
-  function consumeLoginAttempt() {
-    const now = Date.now();
-    let s = getLoginState();
-    if (s.lockedUntil && s.lockedUntil > now) return false;
-    if (s.lockedUntil && s.lockedUntil <= now) s = { tries: [], lockedUntil: 0 };
-    s.tries = (s.tries || []).filter(t => now - t < LOGIN_WINDOW_MS);
-    s.tries.push(now);
-    if (s.tries.length >= LOGIN_MAX_TRIES) s.lockedUntil = now + LOGIN_LOCKOUT_MS;
-    setLoginState(s);
-    return true;
-  }
-  const resetLoginAttempts = () => sessionStorage.removeItem('login-attempts');
-  const getLockoutRemaining = () => Math.max(0, (getLoginState().lockedUntil || 0) - Date.now());
 
   // ---- Toast ----
   let toastTimer;
@@ -175,11 +136,7 @@
   }
   function bindTabs() {
     $$('.side-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
-    $('#logout-btn').addEventListener('click', () => {
-      try { window.db?.logout?.(); } catch {}
-      for (const k of [SESSION_KEY, TAB_STORAGE_KEY, TOKEN_KEY, 'admin-token-created', TOKEN_EXP, 'login-attempts']) sessionStorage.removeItem(k);
-      location.reload();
-    });
+    $('#logout-btn').addEventListener('click', () => browserLogout());
     const saved = sessionStorage.getItem(TAB_STORAGE_KEY);
     if (saved && TAB_TITLES[saved]) switchTab(saved);
   }
@@ -232,12 +189,14 @@
       e.preventDefault();
       err.style.color = 'var(--text-dim)';
       err.textContent = 'Speichere…';
+      const secret = form.secret.value.trim();
       try {
         await window.SupabaseAPI.saveConfig({
           url: form.url.value.trim(),
           anonKey: form.anonKey.value.trim(),
-          secret: form.secret.value.trim()
+          secret: secret
         });
+        window.setAdminSharedSecret?.(secret);
         err.style.color = 'var(--neon-lime)';
         err.textContent = 'Gespeichert! Lade neu…';
         setTimeout(() => location.reload(), 1500);
@@ -256,90 +215,17 @@
     ]);
   }
 
-  function showForceChangePasswordDialog() {
-    const err = el('p', { id: 'force-pw-error', class: 'form-error' });
-    const form = el('form', { id: 'force-pw-form' },
-      el('label', {}, el('span', { text: 'Aktuelles Passwort (admin123)' }), el('input', { type: 'password', name: 'old', required: true, autocomplete: 'current-password' })),
-      el('label', {}, el('span', { text: 'Neues Passwort' }), el('input', { type: 'password', name: 'new', required: true, minlength: 8, autocomplete: 'new-password' })),
-      el('label', {}, el('span', { text: 'Neues Passwort bestätigen' }), el('input', { type: 'password', name: 'confirm', required: true, minlength: 8, autocomplete: 'new-password' })),
-      el('div', { class: 'form-actions' }, el('button', { type: 'submit', class: 'btn primary', text: 'Passwort jetzt ändern' })),
-      err
-    );
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      err.textContent = '';
-      if (form.new.value.length < 8) { err.textContent = 'Mindestens 8 Zeichen'; return; }
-      if (form.new.value !== form.confirm.value) { err.textContent = 'Passwörter stimmen nicht überein'; return; }
-      try {
-        await window.SupabaseAPI.authChangePassword({ oldPassword: form.old.value, newPassword: form.new.value });
-        $('#force-pw-modal')?.remove();
-        $('#app').style.pointerEvents = '';
-        toast('🔑 Passwort auf dem Server geändert');
-      } catch (err2) { err.textContent = 'Server-Fehler: ' + err2.message; }
-    });
-    makeModal('force-pw-modal', '🔑 Passwort ändern', [
-      el('p', { html: 'Du loggst dich gerade mit dem <strong>Standard-Passwort</strong> ein. Bitte ändere es jetzt auf ein eigenes, sicheres Passwort (min. 8 Zeichen).' }),
-      form
-    ]);
-    $('#app').style.pointerEvents = 'none';
+  // ---- Logout (Browser-Basic-Auth-Cache löschen) ----
+  function browserLogout() {
+    // Hinweis: Browser-Cache für Basic Auth kann nur durch reload mit 401 gelöscht werden.
+    sessionStorage.removeItem(TAB_STORAGE_KEY);
+    location.href = 'https://logout:logout@' + location.host + location.pathname;
   }
 
-  // ---- Login ----
+  // ---- nginx Basic Auth übernimmt das Login. Die App zeigt sich direkt. ----
   function bindLogin() {
-    const forgotBtn = $('#forgot-password-btn');
-    const forgotOverlay = $('#forgot-password-overlay');
-    if (forgotBtn && forgotOverlay) {
-      forgotBtn.addEventListener('click', () => { forgotOverlay.hidden = false; });
-      $('#forgot-password-close')?.addEventListener('click', () => { forgotOverlay.hidden = true; });
-      forgotOverlay.addEventListener('click', (e) => {
-        if (e.target === forgotOverlay) forgotOverlay.hidden = true;
-      });
-    }
-
-    $('#login-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const form = e.target;
-      const pw = $('#login-password').value;
-      const honeypot = form.querySelector('input[name="website"]')?.value;
-      const errEl = $('#login-error');
-      const submitBtn = form.querySelector('button[type="submit"]');
-      errEl.textContent = '';
-      if (honeypot) { errEl.textContent = 'Falsches Passwort'; return; }
-      submitBtn.disabled = true;
-      const btnText = submitBtn.textContent;
-      submitBtn.textContent = 'Prüfe…';
-      const start = performance.now();
-      if (!consumeLoginAttempt()) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = btnText;
-        errEl.textContent = `Zu viele Versuche. Warte ${Math.ceil(getLockoutRemaining()/1000)}s.`;
-        return;
-      }
-      let ok = false;
-      try {
-        if (window.SUPABASE_CONFIG?.authLoginUrl) {
-          await window.db.login(pw, honeypot);
-          ok = true;
-        } else {
-          throw new Error('auth-login nicht konfiguriert');
-        }
-      } catch (err) { console.warn('[login] failed:', err.message); ok = false; }
-      const elapsed = performance.now() - start;
-      if (elapsed < 250) await wait(250 - elapsed);
-      if (ok) {
-        resetLoginAttempts();
-        $('#login-overlay').hidden = true;
-        $('#app').hidden = false;
-        initApp();
-        if (mustChangePassword()) showForceChangePasswordDialog();
-      } else {
-        submitBtn.disabled = false;
-        submitBtn.textContent = btnText;
-        errEl.textContent = 'Falsches Passwort';
-        $('#login-password').value = '';
-        $('#login-password').focus();
-      }
-    });
+    $('#logout-btn').addEventListener('click', () => browserLogout());
+    initApp();
   }
 
   // ---- Avatar ----
@@ -801,26 +687,8 @@
   function bindSettings() {
     const hint = $('#change-pw-hint');
     if (hint) {
-      const useEdgeAuth = !!window.SUPABASE_CONFIG?.authChangePasswordUrl;
-      hint.textContent = useEdgeAuth
-        ? 'Passwort wird serverseitig als PBKDF2-Hash in Supabase gespeichert. Aktuelles Passwort zur Bestätigung nötig.'
-        : 'Passwort-Endpoint nicht konfiguriert — bitte Supabase Edge-Function "auth-change-password" deployen.';
+      hint.textContent = 'Das Admin-Passwort liegt nur serverseitig in /etc/nginx/openweb-admin.htpasswd. Ändere es über "sudo bash install.sh" → "Passwort ändern".';
     }
-    $('#change-pw-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const form = e.target;
-      const op = form.old?.value || '';
-      const np = form.new.value;
-      if (typeof np !== 'string' || np.length < 8) { toast('Mindestens 8 Zeichen empfohlen', true); return; }
-      if (!/[a-zA-Z0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(np)) { toast('Bitte Buchstaben, Zahlen oder Sonderzeichen verwenden', true); return; }
-      if (!window.SUPABASE_CONFIG?.authChangePasswordUrl) { toast('Passwort-Endpoint nicht konfiguriert', true); return; }
-      if (!op) { toast('Bitte aktuelles Passwort eingeben', true); return; }
-      try {
-        await window.db.changePassword(op, np);
-        form.reset();
-        toast('🔑 Passwort serverseitig geändert');
-      } catch (err) { toast('Fehler: ' + err.message, true); }
-    });
   }
 
   // ---- Navidrome ----
@@ -913,14 +781,6 @@
     if (!form) return;
 
     (async () => {
-      if (!window.SUPABASE_CONFIG?.authEnabled) {
-        if (status) {
-          status.textContent = '⚠️ Discord-Webhook erfordert serverseitige Authentifizierung (authEnabled: true). Siehe DEPLOYMENT.md.';
-          status.classList.add('error');
-        }
-        form.querySelectorAll('input, textarea, button').forEach(el => { if (el.type !== 'button') el.disabled = true; });
-        return;
-      }
       try {
         const res = await window.db.getAdminSettings();
         renderDiscordForm(res?.data || res);
@@ -1003,17 +863,11 @@
     bindNavidrome();
 
     if (window.db?.needsSetup) {
-      $('#login-overlay').hidden = true;
-      $('#app').hidden = false;
       showSetupForm();
       return;
     }
-    if (hasValidSession()) {
-      $('#login-overlay').hidden = true;
-      $('#app').hidden = false;
-      const start = () => window.db ? initApp() : setTimeout(start, 50);
-      if (window.db) initApp();
-      else window.addEventListener('supabase:ready', start);
-    }
+    const start = () => window.db ? initApp() : setTimeout(start, 50);
+    if (window.db) initApp();
+    else window.addEventListener('supabase:ready', start);
   });
 })();

@@ -32,27 +32,19 @@ create policy "links read" on public.links
   for select to anon, authenticated
   using (true);
 
--- 4) Schreib-Policies NUR für authenticated mit role='admin' im JWT
---    (Achtung: anon hat per Definition KEIN role='admin', wird also
---     durch die USING-Klausel geblockt, auch wenn die Policy 'all'
---     umfasst. Zusätzlich gibt es unten die expliziten anon-DENYs.)
-create policy "profile write" on public.profile
-  for all to authenticated
-  using ((auth.jwt() ->> 'role')::text = 'admin')
-  with check ((auth.jwt() ->> 'role')::text = 'admin');
+-- 4) Schreib-Policies: Schreiben für anon und authenticated verbieten.
+--    Edge-Function 'admin-proxy' verwendet SERVICE_ROLE_KEY und bypassed RLS.
+create policy "profile deny write" on public.profile
+  for all to anon, authenticated using (false) with check (false);
 
-create policy "links insert" on public.links
-  for insert to authenticated
-  with check ((auth.jwt() ->> 'role')::text = 'admin');
+create policy "links deny insert" on public.links
+  for insert to anon, authenticated with check (false);
 
-create policy "links update" on public.links
-  for update to authenticated
-  using ((auth.jwt() ->> 'role')::text = 'admin')
-  with check ((auth.jwt() ->> 'role')::text = 'admin');
+create policy "links deny update" on public.links
+  for update to anon, authenticated using (false) with check (false);
 
-create policy "links delete" on public.links
-  for delete to authenticated
-  using ((auth.jwt() ->> 'role')::text = 'admin');
+create policy "links deny delete" on public.links
+  for delete to anon, authenticated using (false);
 
 -- 5) Defense-in-Depth: explizit für anon DENY
 --    (Selbst wenn jemand oben etwas falsch macht, ist anon geblockt)
@@ -68,8 +60,8 @@ create policy "anon deny all links" on public.links
 
 -- =========================================================
 -- FERTIG. Die nächsten Schritte sind außerhalb dieses Skripts:
---  1. Edge Functions deployen
---  2. JWT_SECRET setzen
---  3. config.js: authEnabled = true
+--  1. Edge Functions deployen (admin-proxy, navidrome-proxy, discord-webhook, save-config)
+--  2. .openweb.env: CONFIG_SHARED_SECRET setzen
+--  3. nginx: Basic Auth für /admin aktivieren
 --  4. DB aufräumen (siehe fix-cleanup.sql)
 -- =========================================================

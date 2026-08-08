@@ -4,7 +4,7 @@
 # =========================================================
 # Was dieses Skript tut:
 #   1. Installiert alle System-Abhängigkeiten (nginx, git, curl)
-#   2. Fragt nach einem Admin-Passwort (Default: admin123)
+#   2. Fragt nach einem Admin-Passwort (Default 'admin123' nur für Erst-Login)
 #   3. Klont/aktualisiert die OpenWeb-Seite von GitHub nach /var/html
 #   4. Konfiguriert nginx als Reverse-Proxy + Static-Server
 #   5. Erstellt einen systemd-Service für Auto-Updates
@@ -36,7 +36,6 @@ readonly REPO_BRANCH="main"
 readonly INSTALL_DIR="/var/html"
 readonly BACKUP_DIR="/var/backups/openweb"
 readonly SERVER_CONFIG_FILE="${INSTALL_DIR}/.openweb.env"
-readonly SUPABASE_PROJECT_REF="fxywervpqojpjwreymdp"
 readonly SUPABASE_CLI="${SUPABASE_CLI:-/usr/local/bin/supabase}"
 readonly NGINX_SITE_NAME="openweb"
 readonly NGINX_CONF="/etc/nginx/sites-available/${NGINX_SITE_NAME}"
@@ -211,7 +210,6 @@ save_server_config() {
 # Wird von install.sh geschrieben. Enthält serverseitige Einstellungen
 # (URL, anon-Key, Discord/Navidrome, Shared Secret für save-config).
 # Niemals in git committen — steht in .gitignore.
-SUPABASE_PROJECT_REF='${SUPABASE_PROJECT_REF}'
 SUPABASE_URL='${SUPABASE_URL:-}'
 SUPABASE_ANON_KEY='${SUPABASE_ANON_KEY:-}'
 CONFIG_SHARED_SECRET='${CONFIG_SHARED_SECRET:-}'
@@ -267,17 +265,18 @@ ensure_server_config() {
     local cli=""
     [[ -x "$SUPABASE_CLI" ]] && cli="$SUPABASE_CLI"
     command -v supabase >/dev/null 2>&1 && cli="${cli:-supabase}"
-    if [[ -n "$cli" ]] && "$cli" projects list 2>/dev/null | grep -q "$SUPABASE_PROJECT_REF"; then
+    if [[ -n "$cli" ]] && "$cli" projects list 2>/dev/null >/dev/null; then
         log_info "Stelle sicher, dass CONFIG_SHARED_SECRET in Supabase gesetzt ist..."
-        if "$cli" secrets set --project-ref "$SUPABASE_PROJECT_REF" CONFIG_SHARED_SECRET="$CONFIG_SHARED_SECRET" 2>&1 | sed 's/^/    /'; then
+        if "$cli" secrets set CONFIG_SHARED_SECRET="$CONFIG_SHARED_SECRET" 2>&1 | sed 's/^/    /'; then
             log_ok "CONFIG_SHARED_SECRET in Supabase gesetzt"
         else
             log_warn "Konnte CONFIG_SHARED_SECRET nicht in Supabase setzen"
         fi
     else
         log_warn "supabase CLI nicht eingeloggt — CONFIG_SHARED_SECRET nur lokal gespeichert"
-        log_warn "  Später manuell setzen:"
-        log_warn "    supabase secrets set --project-ref $SUPABASE_PROJECT_REF CONFIG_SHARED_SECRET='$CONFIG_SHARED_SECRET'"
+        log_warn "  Später manuell setzen (Projekt muss mit 'supabase link' verknüpft sein):"
+        log_warn "    supabase link"
+        log_warn "    supabase secrets set CONFIG_SHARED_SECRET='$CONFIG_SHARED_SECRET'"
     fi
 
     # 4) config.js-Permissions korrigieren (falls sie falsch sind)
@@ -328,7 +327,7 @@ get_supabase_secret() {
     [[ -z "$cli" ]] && { log_warn "supabase CLI nicht verfügbar" >&2; return 1; }
 
     local val
-    if ! val=$("$cli" secrets get --project-ref "$SUPABASE_PROJECT_REF" "$name" 2>/dev/null | head -n1 | tr -d '\r'); then
+    if ! val=$("$cli" secrets get "$name" 2>/dev/null | head -n1 | tr -d '\r'); then
         log_warn "supabase secrets get '$name' fehlgeschlagen — ist die CLI eingeloggt?" >&2
         return 1
     fi
@@ -470,9 +469,6 @@ download_latest_files() {
         api/README.md
         supabase/functions/save-config/index.ts
         supabase/functions/admin-proxy/index.ts
-        supabase/functions/auth-login/index.ts
-        supabase/functions/auth-change-password/index.ts
-        supabase/functions/auth-init/index.ts
         supabase/functions/navidrome-proxy/index.ts
         supabase/functions/discord-webhook/index.ts
     )
@@ -1016,7 +1012,7 @@ do_install_cli() {
 
         if [[ -d "${INSTALL_DIR}/supabase/functions/save-config" ]]; then
             log_info "Deploye save-config Edge-Function..."
-            if (cd "$INSTALL_DIR" && supabase functions deploy save-config --project-ref "$SUPABASE_PROJECT_REF" 2>&1) | sed 's/^/    /'; then
+            if (cd "$INSTALL_DIR" && supabase functions deploy save-config 2>&1) | sed 's/^/    /'; then
                 log_ok "save-config deployed"
             else
                 log_warn "save-config konnte nicht deployed werden"
@@ -1134,128 +1130,23 @@ do_change_password() {
         exit $EX_CONFIG
     fi
 
-    log_info "Admin-Passwort ändern"
-
-    local current_pw
-    current_pw=$(grep -oE "ADMIN_DEFAULT_PASSWORD\s*=\s*['\"][^'\"]*['\"]" "${INSTALL_DIR}/config.js" 2>/dev/null | head -1 | sed -E "s/^.*ADMIN_DEFAULT_PASSWORD\s*=\s*['\"]//;s/['\"];?\s*$//")
-    if [[ -z "$current_pw" ]]; then
-        current_pw="(unbekannt)"
-    fi
-    log_info "  aktuelles Passwort in config.js: ${current_pw:0:3}*** (Länge: ${#current_pw})"
-
-    # Prüfen, ob serverseitiger Edge-Auth aktiv ist
-    local auth_enabled=0
-    if grep -qE "authEnabled:\s*true" "${INSTALL_DIR}/config.js"; then
-        auth_enabled=1
-        log_info "  serverseitige Authentifizierung (authEnabled: true) erkannt"
-    fi
+    log_info "Admin-Passwort ändern (nginx Basic Auth)"
 
     change_admin_password
     local new_pw="$ADMIN_PASSWORD"
 
-    # Wenn serverseitiger Auth aktiv: Hash in Supabase zurücksetzen
-    if [[ "$auth_enabled" -eq 1 ]]; then
-        _reset_admin_auth_hash "$new_pw"
-    fi
+    # htpasswd auf dem Server aktualisieren
+    ensure_admin_htpasswd "$new_pw"
 
     if ! create_backup "$INSTALL_DIR/config.js" "pre-pwchange" >/dev/null; then
         log_warn "Pre-Passwortänderungs-Backup fehlgeschlagen — fahre trotzdem fort"
     fi
 
-    local escaped_pw
-    escaped_pw=$(json_escape "$new_pw")
+    log_ok "Admin-Passwort aktualisiert (nginx Basic Auth)"
+    log_info "Hinweis: Browser muss ggf. die Basic-Auth-Sitzung neu laden: /admin neu öffnen."
 
-    # Atomare Ersetzung via temp-Datei
-    local tmp_conf
-    tmp_conf=$(mktemp /tmp/openweb-config.XXXXXX.js)
-    if grep -q "window.ADMIN_DEFAULT_PASSWORD" "${INSTALL_DIR}/config.js"; then
-        sed "s|window\.ADMIN_DEFAULT_PASSWORD\s*=.*|window.ADMIN_DEFAULT_PASSWORD = $escaped_pw;|" "${INSTALL_DIR}/config.js" > "$tmp_conf"
-    else
-        cat "${INSTALL_DIR}/config.js" > "$tmp_conf"
-        echo "window.ADMIN_DEFAULT_PASSWORD = $escaped_pw;" >> "$tmp_conf"
-    fi
-
-    # Optional: Syntax-Check mit node (falls vorhanden)
-    if command -v node >/dev/null 2>&1; then
-        if ! node -c "$tmp_conf" 2>/dev/null; then
-            log_warn "Syntax-Check der neuen config.js fehlgeschlagen"
-        fi
-    fi
-
-    if ! mv -f "$tmp_conf" "${INSTALL_DIR}/config.js"; then
-        log_error "Konnte config.js nicht aktualisieren"
-        rm -f "$tmp_conf"
-        exit $EX_PERM
-    fi
-    chmod 644 "${INSTALL_DIR}/config.js"
-
-    log_ok "Admin-Passwort in ${INSTALL_DIR}/config.js aktualisiert"
-    log_info "Hinweis: Browser muss den Hash im localStorage (linktree-admin-pw-hash) leeren,"
-    log_info "         damit der neue Hash beim Login-Versuch berechnet wird."
-    log_info "         Im Browser-Console: localStorage.clear(); dann /admin.html neu laden."
-}
-
-# Hilfsfunktion: Setzt admin_auth in Supabase zurück (nur für authEnabled=true)
-_reset_admin_auth_hash() {
-    local new_pw="$1"
-    if [[ -z "$new_pw" ]]; then
-        log_warn "Kein neues Passwort übergeben — Supabase-Hash wird nicht zurückgesetzt"
-        return 1
-    fi
-
-    log_info "Setze serverseitiges Passwort in Supabase zurück..."
-
-    local cli=""
-    [[ -x "$SUPABASE_CLI" ]] && cli="$SUPABASE_CLI"
-    command -v supabase >/dev/null 2>&1 && cli="${cli:-supabase}"
-    if [[ -z "$cli" ]]; then
-        log_warn "supabase CLI nicht verfügbar — serverseitiges Passwort konnte nicht zurückgesetzt werden"
-        log_info "  Führe anschließend manuell aus:"
-        log_info "    supabase functions deploy auth-init --project-ref $SUPABASE_PROJECT_REF"
-        log_info "    curl -X POST .../auth-init -H \"Authorization: Bearer \$SERVICE_ROLE_KEY\" -d '{\"default_password\":\"$new_pw\"}'"
-        return 1
-    fi
-
-    local service_key
-    service_key=$(get_supabase_secret "SERVICE_ROLE_KEY" 2>/dev/null)
-    if [[ -z "$service_key" ]]; then
-        log_warn "SERVICE_ROLE_KEY konnte nicht aus Supabase Secrets gelesen werden"
-        log_info "  Stelle sicher, dass 'supabase login' und 'supabase link' aktiv sind."
-        return 1
-    fi
-
-    local url
-    url=$(grep -oE "url:\s*['\"]https://[^'\"]+['\"]" "${INSTALL_DIR}/config.js" 2>/dev/null | head -1 | sed -E "s/^.*url:\s*['\"]//;s/['\"]\s*$/")
-    if [[ -z "$url" ]]; then
-        url="https://${SUPABASE_PROJECT_REF}.supabase.co"
-    fi
-
-    # admin_auth Eintrag zurücksetzen (Placeholder setzen, damit auth-init erlaubt)
-    log_info "  Lösche bestehenden admin_auth Hash..."
-    local psql_out
-    psql_out=$(supabase db query --project-ref "$SUPABASE_PROJECT_REF" "DELETE FROM public.admin_auth WHERE id=1;" 2>&1) || {
-        log_warn "Konnte admin_auth nicht per 'supabase db query' löschen: $psql_out"
-        log_info "  Alternativ in der Supabase-SQL-Konsole: DELETE FROM public.admin_auth WHERE id=1;"
-        return 1
-    }
-
-    # auth-init aufrufen
-    log_info "  Initialisiere neuen Hash..."
-    local init_res
-    init_res=$(curl -sS -X POST "${url}/functions/v1/auth-init" \
-        -H "Authorization: Bearer ${service_key}" \
-        -H "apikey: ${service_key}" \
-        -H "Content-Type: application/json" \
-        -d "{\"default_password\":\"$(json_escape <<< "$new_pw")\"}" 2>&1)
-    if [[ "$init_res" == *'"ok":true'* ]]; then
-        log_ok "  Serverseitiges Passwort erfolgreich neu gesetzt"
-        return 0
-    else
-        log_warn "  auth-init-Aufruf fehlgeschlagen: $init_res"
-        log_info "  Bitte manuell ausführen:"
-        log_info "    curl -X POST ${url}/functions/v1/auth-init -H \"Authorization: Bearer \$SERVICE_ROLE_KEY\" -H \"apikey: \$SERVICE_ROLE_KEY\" -d '{\"default_password\":\"$new_pw\"}'"
-        return 1
-    fi
+    # Kein Admin-Passwort mehr in config.js
+    return 0
 }
 
 # 8) Supabase CLI installieren (Helper)
@@ -1415,9 +1306,14 @@ prompt_admin_password() {
     log_info "Konfiguration: Admin-Passwort für /admin.html"
     echo ""
 
+    # Admin-Passwort aus .openweb.env laden, falls vorhanden
+    if [[ -f "$SERVER_CONFIG_FILE" ]]; then
+        load_server_config
+    fi
+
     local keep_existing=0
     if [[ "$MODE" != "neuinstallieren" ]]; then
-        if [[ -n "${EXISTING_ADMIN_PW:-}" ]] && ! is_placeholder "${EXISTING_ADMIN_PW:-}"; then
+        if [[ -n "${ADMIN_PASSWORD:-}" ]] && ! is_placeholder "${ADMIN_PASSWORD:-}"; then
             keep_existing=1
         fi
     fi
@@ -1426,7 +1322,6 @@ prompt_admin_password() {
         read -r CHANGE_PW
         if [[ ! "$CHANGE_PW" =~ ^[jJyY]$ ]]; then
             log_info "  bestehendes Passwort wird beibehalten"
-            ADMIN_PASSWORD="$EXISTING_ADMIN_PW"
             return 0
         fi
         log_info "  OK, neues Passwort wird gesetzt"
@@ -1434,7 +1329,7 @@ prompt_admin_password() {
 
     echo ""
     echo "  Standard-Passwort: admin123"
-    echo "  (Beim ersten /admin.html-Login wirst du zum Ändern gezwungen.)"
+    echo "  (Nur für den ersten nginx-Basic-Auth-Login. Ändere es danach sofort.)"
     echo ""
     echo "  Optionen:"
     echo "    [Enter]       Standard 'admin123' verwenden"
@@ -1445,7 +1340,7 @@ prompt_admin_password() {
 
     if [[ -z "$ADMIN_PASSWORD" ]]; then
         ADMIN_PASSWORD="admin123"
-        log_info "  Standard-Passwort 'admin123' wird gesetzt"
+        log_info "  Standard-Passwort 'admin123' wird als Initial-Passwort gesetzt"
     else
         log_ok "  eigenes Passwort wird gesetzt"
     fi
@@ -1541,7 +1436,7 @@ EXISTING_ADMIN_PW=""
 if [[ "$MODE" != "neuinstallieren" && -f "$EXISTING_CONFIG" ]]; then
     EXISTING_URL=$(grep -oE "url:\s*['\"][^'\"]*['\"]" "$EXISTING_CONFIG" 2>/dev/null | head -1 | sed -E "s/^.*url:\s*['\"]//;s/['\"],?\s*$//")
     EXISTING_ANON_KEY=$(grep -oE "anonKey:\s*['\"][^'\"]*['\"]" "$EXISTING_CONFIG" 2>/dev/null | head -1 | sed -E "s/^.*anonKey:\s*['\"]//;s/['\"],?\s*$//")
-    EXISTING_ADMIN_PW=$(grep -oE "ADMIN_DEFAULT_PASSWORD\s*=\s*['\"][^'\"]*['\"]" "$EXISTING_CONFIG" 2>/dev/null | head -1 | sed -E "s/^.*ADMIN_DEFAULT_PASSWORD\s*=\s*['\"]//;s/['\"];?\s*$//")
+    # Admin-Passwort liegt jetzt in .openweb.env (ADMIN_PASSWORD), nicht mehr in config.js
 elif [[ "$MODE" == "neuinstallieren" ]]; then
     log_info "  Modus 'neuinstallieren' — alle Werte werden neu abgefragt"
 fi
@@ -1563,9 +1458,12 @@ if [[ -n "$EXISTING_URL" ]] && ! is_placeholder "$EXISTING_URL"; then
     SUPABASE_URL="$EXISTING_URL"
     log_info "  bestehende Supabase-URL behalten: $SUPABASE_URL"
 else
-    echo -n "  Supabase URL [https://fxywervpqojpjwreymdp.supabase.co]: "
+    echo -n "  Supabase URL [https://DEIN-PROJEKT.supabase.co]: "
     read SUPABASE_URL
-    SUPABASE_URL=${SUPABASE_URL:-https://fxywervpqojpjwreymdp.supabase.co}
+    if [[ -z "$SUPABASE_URL" ]]; then
+        log_warn "Keine Supabase-URL gesetzt — du musst sie nachträglich in ${INSTALL_DIR}/config.js eintragen"
+        SUPABASE_URL="https://DEIN-PROJEKT.supabase.co"
+    fi
 fi
 
 # Supabase anon-key
@@ -1587,14 +1485,14 @@ install_supabase_cli
 
 SECRETS_READABLE=0
 if command -v supabase >/dev/null 2>&1; then
-    if supabase projects list 2>/dev/null | grep -q "$SUPABASE_PROJECT_REF"; then
-        log_ok "supabase CLI eingeloggt und Projekt $SUPABASE_PROJECT_REF verlinkt"
+    if supabase projects list 2>/dev/null >/dev/null; then
+        log_ok "supabase CLI eingeloggt und verlinkt"
         SECRETS_READABLE=1
     else
         log_warn "supabase CLI nicht eingeloggt — Secrets werden nur in config.js gesetzt"
         log_warn "  Um nachträglich zu setzen:"
         log_warn "    supabase login"
-        log_warn "    supabase link --project-ref $SUPABASE_PROJECT_REF"
+        log_warn "    supabase link"
     fi
 fi
 
@@ -1642,7 +1540,7 @@ else
         local env_tmp="/tmp/openweb-nav-env"
         printf 'NAVIDROME_URL=%s\nNAVIDROME_USER=%s\nNAVIDROME_PASS=%s\n' "$NAV_URL" "$NAV_USER" "$NAV_PASS" > "$env_tmp"
         chmod 600 "$env_tmp"
-        if supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$env_tmp" 2>&1 | sed 's/^/    /'; then
+        if supabase secrets set --env-file "$env_tmp" 2>&1 | sed 's/^/    /'; then
             log_ok "Secrets in Supabase gesetzt"
         else
             log_warn "supabase secrets set fehlgeschlagen — nur lokal in config.js"
@@ -1651,12 +1549,14 @@ else
     else
         log_warn "CLI nicht eingeloggt — Secrets nur lokal. Später manuell mit:"
         log_warn "    supabase login"
-        log_warn "    supabase link --project-ref $SUPABASE_PROJECT_REF"
+        log_warn "    supabase link"
         log_warn "    supabase secrets set NAVIDROME_URL='${NAV_URL}' NAVIDROME_USER='${NAV_USER}' NAVIDROME_PASS='${NAV_PASS}'"
     fi
 
     NAV_PASS_JSON=$(json_escape "$NAV_PASS")
 fi
+
+# Pre-Write-Backup
 
 # Pre-Write-Backup
 if ! create_backup "$INSTALL_DIR/config.js" "pre-write" >/dev/null; then
@@ -1669,11 +1569,10 @@ cat > "${INSTALL_DIR}/config.js" <<EOF
 window.SUPABASE_CONFIG = {
   url: '${SUPABASE_URL}',
   anonKey: '${SUPABASE_ANON_KEY}',
-  authEnabled: false,
-  adminProxyUrl:         '${SUPABASE_URL}/functions/v1/admin-proxy',
-  authLoginUrl:          '${SUPABASE_URL}/functions/v1/auth-login',
-  authChangePasswordUrl: '${SUPABASE_URL}/functions/v1/auth-change-password',
-  discordWebhookUrl:     '${SUPABASE_URL}/functions/v1/discord-webhook',
+
+  // Admin-Login läuft über nginx Basic Auth.
+  adminProxyUrl:     '${SUPABASE_URL}/functions/v1/admin-proxy',
+  discordWebhookUrl: '${SUPABASE_URL}/functions/v1/discord-webhook',
 };
 
 window.NAVIDROME_CONFIG = {
@@ -1685,10 +1584,8 @@ window.NAVIDROME_CONFIG = {
   pollIntervalSec: 30,
 };
 
-// Wird vom Admin-Panel in localStorage gespeichert (PBKDF2-gehasht).
-// Falls der Admin-Passwort-Vergleich gegen das Backend gehen soll,
-// muss dieses Passwort identisch zu auth-init sein.
-window.ADMIN_DEFAULT_PASSWORD = ${ADMIN_PASS_JSON};
+// Admin-Passwort wird NICHT im Browser gespeichert.
+// Serverseitige Authentifizierung über /etc/nginx/openweb-admin.htpasswd
 EOF
 
 chmod 644 "${INSTALL_DIR}/config.js"
@@ -1703,22 +1600,21 @@ deploy_edge_functions() {
     [[ -x "$SUPABASE_CLI" ]] && cli="$SUPABASE_CLI"
     command -v supabase >/dev/null 2>&1 && cli="${cli:-supabase}"
     [[ -z "$cli" ]] && { log_warn "supabase CLI nicht verfügbar — Edge Functions müssen manuell deployed werden"; return 1; }
-    if ! "$cli" projects list 2>/dev/null | grep -q "$SUPABASE_PROJECT_REF"; then
+    if ! "$cli" projects list 2>/dev/null >/dev/null; then
         log_warn "supabase CLI nicht eingeloggt — Edge Functions müssen manuell deployed werden:"
-        log_warn "  supabase functions deploy admin-proxy --project-ref $SUPABASE_PROJECT_REF"
-        log_warn "  supabase functions deploy auth-login --project-ref $SUPABASE_PROJECT_REF"
-        log_warn "  supabase functions deploy auth-change-password --project-ref $SUPABASE_PROJECT_REF"
-        log_warn "  supabase functions deploy navidrome-proxy --project-ref $SUPABASE_PROJECT_REF"
-        log_warn "  supabase functions deploy discord-webhook --project-ref $SUPABASE_PROJECT_REF"
-        log_warn "  supabase functions deploy save-config --project-ref $SUPABASE_PROJECT_REF"
+        log_warn "  (im Installationsverzeichnis mit 'supabase link')"
+        log_warn "  supabase functions deploy admin-proxy"
+        log_warn "  supabase functions deploy navidrome-proxy"
+        log_warn "  supabase functions deploy discord-webhook"
+        log_warn "  supabase functions deploy save-config"
         return 1
     fi
 
     log_info "Deploye Supabase Edge Functions..."
     local func
-    for func in admin-proxy auth-login auth-change-password navidrome-proxy discord-webhook save-config; do
+    for func in admin-proxy navidrome-proxy discord-webhook save-config; do
         if [[ -d "${INSTALL_DIR}/supabase/functions/${func}" ]]; then
-            if (cd "$INSTALL_DIR" && "$cli" functions deploy "$func" --project-ref "$SUPABASE_PROJECT_REF" 2>&1) | sed 's/^/    /'; then
+            if (cd "$INSTALL_DIR" && "$cli" functions deploy "$func" 2>&1) | sed 's/^/    /'; then
                 log_ok "  $func deployed"
             else
                 log_warn "  $func konnte nicht deployed werden"
@@ -1741,6 +1637,40 @@ if [[ -f "$NGINX_CONF" ]]; then
         log_warn "Backup von nginx.conf fehlgeschlagen — fahre trotzdem fort"
     fi
 fi
+
+# --- Admin-Passwort / htpasswd ---
+readonly NGINX_HTPASSWD="/etc/nginx/openweb-admin.htpasswd"
+ensure_admin_htpasswd() {
+    local pw="${1:-${ADMIN_PASSWORD:-}}"
+    if [[ -z "$pw" ]]; then
+        log_warn "Kein Admin-Passwort übergeben — htpasswd bleibt unverändert"
+        return 1
+    fi
+    if ! command -v apache2-utils >/dev/null 2>&1 && ! command -v htpasswd >/dev/null 2>&1; then
+        log_info "Installiere htpasswd (apache2-utils)..."
+        apt-get install -y -qq apache2-utils >/dev/null 2>&1 || {
+            log_warn "apache2-utils konnte nicht installiert werden — Admin-Login ohne Basic Auth"
+            return 1
+        }
+    fi
+    if command -v openssl >/dev/null 2>&1; then
+        # bcrypt-Hash via openssl (bevorzugt)
+        local hash
+        hash=$(openssl passwd -apr1 "$pw" 2>/dev/null)
+        printf 'admin:%s\n' "$hash" > "$NGINX_HTPASSWD"
+    else
+        htpasswd -cbB "$NGINX_HTPASSWD" admin "$pw" 2>/dev/null || {
+            log_warn "htpasswd konnte keinen Hash erstellen"
+            return 1
+        }
+    fi
+    chmod 640 "$NGINX_HTPASSWD"
+    chown root:www-data "$NGINX_HTPASSWD" 2>/dev/null || true
+    log_ok "Admin-Basic-Auth-Datei aktualisiert: ${NGINX_HTPASSWD}"
+}
+
+# Initial beim Setup aufrufen (ADMIN_PASSWORD ist zu diesem Zeitpunkt gesetzt)
+ensure_admin_htpasswd "$ADMIN_PASSWORD"
 
 cat > "$NGINX_CONF" <<EOF
 # OpenWeb — automatisch generiert
@@ -1770,12 +1700,15 @@ server {
         try_files \$uri =404;
     }
 
-    # Admin-Panel: /admin saubere URL + kein Caching
+    # Admin-Panel: /admin saubere URL + kein Caching + Basic Auth
     location = /admin {
         rewrite ^ /admin.html last;
     }
 
-    location = /admin.html {
+    location ~ ^/admin(\.|$) {
+        auth_basic           "OpenWeb Admin";
+        auth_basic_user_file ${NGINX_HTPASSWD};
+
         add_header Cache-Control "no-store" always;
         try_files \$uri =404;
     }

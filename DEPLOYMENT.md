@@ -1,14 +1,14 @@
-# Server-side Auth: Deployment-Anleitung
+# Server-seitige Konfiguration: Deployment-Anleitung
 
-Diese Anleitung aktiviert die **serverseitige Passwort-Verifizierung** über
-Supabase Edge Functions. Aktuell läuft alles im **client-seitigen Fallback**
-(PBKDF2-Hash in `localStorage`) — das ist okay, aber das Passwort-Hash wäre
-im DevTools auslesbar.
+Diese Anleitung beschreibt die aktuelle Architektur:
 
-Mit Edge-Function-Auth ist das Passwort **nirgendwo im Browser** gespeichert.
-Beim Login wird das Klartext-Passwort per TLS zum Edge-Function-Call
-geschickt, dort gegen den DB-Hash verifiziert, und die App bekommt ein
-**signiertes JWT (HS256, 1h TTL)** zurück.
+- **Admin-Login** erfolgt über **nginx Basic Auth**. Das Passwort liegt als
+  Hash in `/etc/nginx/openweb-admin.htpasswd` und wird nirgendwo sonst
+  gespeichert.
+- Schreibzugriffe auf Supabase laufen über die Edge-Function `admin-proxy`,
+  die den Service-Role-Key serverseitig nutzt.
+- Konfigurationen werden in `/var/html/.openweb.env` (chmod 600) gespeichert
+  und können mit `install.sh update` selbstheilend repariert werden.
 
 ---
 
@@ -16,16 +16,15 @@ geschickt, dort gegen den DB-Hash verifiziert, und die App bekommt ein
 
 ```
 ┌──────────────┐        ┌─────────────────────┐        ┌──────────────┐
-│  Browser     │  TLS   │  Edge Function     │        │  Supabase DB │
-│  (admin.js)  │───────▶│  auth-login         │───────▶│  admin_auth  │
-│              │  1.0s  │  - PBKDF2 verify    │  React │  (hash+salt) │
-│              │        │  - HMAC-SHA256 JWT  │        │              │
-│              │        │  - 1h TTL           │        │              │
-│              │◀───────│  → JWT              │        │              │
-│              │  JWT   │                     │        │              │
-│              │  Bearer│  admin-proxy        │───────▶│  profile     │
-│              │───────▶│  - JWT verify       │  React │  links       │
-│              │  TTL   │  - validation       │        │              │
+│  Browser     │  TLS   │  nginx              │        │  Supabase DB │
+│  (admin.js)  │───────▶│  /admin Basic Auth  │        │  profile     │
+│              │ 401/   │  htpasswd           │        │  links       │
+│              │ 200    │                     │        │              │
+│              │◀───────│  → admin.html       │        │              │
+│              │        │                     │        │              │
+│              │───────▶│  admin-proxy        │───────▶│  admin_proxy │
+│              │ Bearer │  - Shared Secret    │ Service│  schreibt    │
+│              │ Token  │  - JWT/Secret prüft │ Role   │  Mutationen  │
 └──────────────┘        └─────────────────────┘        └──────────────┘
 ```
 
@@ -46,55 +45,53 @@ Das Skript erledigt dann automatisch:
 1. `.openweb.env` aus bestehender `config.js` erzeugen
 2. `CONFIG_SHARED_SECRET` generieren und in Supabase setzen
 3. `config.js` auf `chmod 644` setzen, damit nginx sie ausliefern kann
-4. `save-config` Edge Function deployen
+4. Edge Functions deployen (außer auth-init/auth-login/auth-change-password)
+5. nginx-Basic-Auth-Datei (`htpasswd`) erzeugen oder erneuern
 
 Danach steht das Shared Secret in `/var/html/.openweb.env` und wird im
-Admin-Panel unter „Supabase konfigurieren“ eingetragen.
+Admin-Panel unter „Supabase konfigurieren" eingetragen.
 
 ---
 
 ## Voraussetzungen
 
 - [Supabase CLI](https://supabase.com/docs/guides/cli) (`npm i -g supabase`)
-- Supabase-Projekt (existiert bereits: `fxywervpqojpjwreymdp`)
-- 3 Edge Functions lokal im Verzeichnis `supabase/functions/`:
-  - `auth-init` (bereits im Workspace angelegt)
-  - `auth-login` (bereits im Workspace angelegt)
-  - `auth-change-password` (bereits im Workspace angelegt)
-  - `admin-proxy` (bereits im Workspace angelegt)
+- Supabase-Projekt (linkes Projekt wird automatisch verwendet; kein `<PROJECT_REF>` nötig)
+- Edge Functions lokal im Verzeichnis `supabase/functions/`:
+  - `admin-proxy`
+  - `navidrome-proxy`
+  - `discord-webhook`
+  - `save-config`
+
+> Die Edge Functions `auth-init`, `auth-login` und `auth-change-password`
+> werden nicht mehr verwendet. Das Admin-Passwort liegt jetzt ausschließlich
+> serverseitig in der nginx `htpasswd`.
 
 ## 1. Einmalig: SQL ausführen
 
 Im Supabase SQL-Editor (`/dashboard/project/_/sql`) den Inhalt von
-`supabase-setup.sql` ausführen. Erzeugt die `admin_auth`-Tabelle mit
-einem **Platzhalter-Hash** (nicht das echte Password).
+`supabase-setup.sql` ausführen. Erzeugt die Tabellen `profile`, `links` und
+`admin_settings`.
 
 ## 2. Edge Functions deployen
 
 ```bash
-supabase functions deploy auth-init
-supabase functions deploy auth-login
-supabase functions deploy auth-change-password
 supabase functions deploy admin-proxy
 supabase functions deploy navidrome-proxy
 supabase functions deploy discord-webhook
 supabase functions deploy save-config
 ```
 
-Optional: `install.sh` deployed diese automatisch, wenn `supabase CLI` eingeloggt ist.
+Optional: `install.sh` deployed diese automatisch, wenn `supabase CLI`
+eingeloggt ist.
 
 ## 3. Secrets setzen
 
 ```bash
 supabase secrets set SERVICE_ROLE_KEY=eyJ...      # schon bekannt
-supabase secrets set JWT_SECRET=$(openssl rand -base64 48)
 supabase secrets set ALLOWED_ORIGINS=https://deine-domain.com,http://localhost:5500
 supabase secrets set CONFIG_SHARED_SECRET=$(openssl rand -hex 32)
 ```
-
-`JWT_SECRET` MUSS mindestens 32 Bytes (Base64) lang sein. Er wird für
-HS256-Signaturen verwendet — ändere ihn regelmäßig; alte JWTs werden
-danach ungültig (und die User müssen sich neu einloggen).
 
 `CONFIG_SHARED_SECRET` schützt die `save-config` Edge Function. Wenn du
 `install.sh` nutzt, wird das Secret automatisch generiert, in
@@ -102,108 +99,83 @@ danach ungültig (und die User müssen sich neu einloggen).
 Im Admin-Panel „Supabase konfigurieren" muss es als **Shared Secret**
 eingetragen werden, sonst antwortet `save-config` mit **401**.
 
-## 4. Init: Default-Passwort hashen
+## 4. Admin-Passwort setzen
 
 ```bash
-curl -X POST https://fxywervpqojpjwreymdp.supabase.co/functions/v1/auth-init \
-  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{}'
+sudo bash install.sh
 ```
 
-Antwort:
-```json
-{ "ok": true, "message": "initialized", "algo": "PBKDF2-SHA256", "iterations": 210000 }
-```
+Im Menü „neuinstallieren" oder „Passwort ändern" das gewünschte Passwort
+eingeben. `install.sh` schreibt dann `/etc/nginx/openweb-admin.htpasswd`
+und aktiviert `auth_basic` für `/admin` in der nginx-Konfiguration.
 
-Falls bereits initialisiert (409): erst mit `delete from admin_auth where id=1;`
-(per Service-Role) zurücksetzen, dann Schritt 4 erneut.
+Standard-Benutzername ist `admin`.
 
 ## 5. Frontend aktivieren
 
-In `config.js`:
+In `config.js` (wird von `install.sh` automatisch geschrieben):
 
 ```js
-authEnabled: true,  // war vorher false
+window.SUPABASE_CONFIG = {
+  url: 'https://DEIN-PROJEKT.supabase.co',
+  anonKey: 'YOUR-ANON-KEY',
+  adminProxyUrl: 'https://DEIN-PROJEKT.supabase.co/functions/v1/admin-proxy',
+  discordWebhookUrl: 'https://DEIN-PROJEKT.supabase.co/functions/v1/discord-webhook',
+};
 ```
 
-Speichern, Browser neu laden.
+> Kein `authEnabled`, keine `authLoginUrl`, keine `authChangePasswordUrl`,
+> kein `ADMIN_DEFAULT_PASSWORD` mehr nötig.
+
+Speichern, nginx neu laden, Browser neu laden.
 
 ## 6. Login testen
 
-- `admin.html` öffnen
-- Passwort `admin123` eingeben → JWT wird im `sessionStorage` unter
-  `admin-token` abgelegt, Ablaufzeit in `admin-token-exp`
-- Im Supabase-Log (`Edge Functions → auth-login`) taucht ein Request mit
-  der Remote-IP auf
-- Falsches Passwort → 401, `Falsches Passwort` im UI
+- `/admin` öffnen.
+- Der Browser zeigt den nativen Basic-Auth-Dialog.
+- Benutzername: `admin`, Passwort: das bei `install.sh` gesetzte.
+- Nach erfolgreicher Authentifizierung wird `admin.html` ausgeliefert.
 
 ## 7. Passwort ändern
 
-Im Admin unter **Einstellungen → 🔑 Passwort ändern**:
-- "Aktuelles Passwort" + "Neues Passwort" eingeben
-- Speichern → Edge-Function `auth-change-password` rotiert Hash + Salt
-  in `admin_auth`, behält die `iterations`
+```bash
+sudo bash install.sh
+# Menü: „Passwort ändern"
+```
+
+`install.sh` aktualisiert `/etc/nginx/openweb-admin.htpasswd`. Es ist kein
+Supabase-Update mehr nötig.
 
 ## 8. Realtime-Test
 
-- Hauptseite (`index.html`) öffnen
-- Im Admin "Externer Link" hinzufügen
-- Innerhalb 1s erscheint er live auf der Hauptseite
-- Wird mit JWT von `admin-proxy` via Service-Role geschrieben
+- Hauptseite (`index.html`) öffnen.
+- Im Admin „Externer Link" hinzufügen.
+- Innerhalb 1s erscheint er live auf der Hauptseite.
 
 ---
 
 ## Sicherheits-Checkliste
 
-- [ ] `JWT_SECRET` ist mindestens 32 Bytes zufällig
-- [ ] `ALLOWED_ORIGINS` enthält nur deine echten Domains
-- [ ] `SERVICE_ROLE_KEY` ist **niemals** im Browser-Code
-- [ ] `anonKey` darf in `config.js` stehen (public)
-- [ ] `admin_auth` RLS-Policy ist aktiv (`deny all`)
-- [ ] Frontend CSP blockt `connect-src` auf Supabase-Domain
-- [ ] Browser-Login in DevTools geprüft: `admin-token` enthält JWT,
-      `admin-token-exp` = Unix-Timestamp, kein `localStorage`-Hash mehr
-- [ ] SQL: `select * from admin_auth;` als anon → 0 Zeilen
+- [ ] `CONFIG_SHARED_SECRET` ist mindestens 32 Bytes zufällig (Hex).
+- [ ] `ALLOWED_ORIGINS` enthält nur deine echten Domains.
+- [ ] `SERVICE_ROLE_KEY` ist **niemals** im Browser-Code.
+- [ ] `anonKey` darf in `config.js` stehen (public).
+- [ ] `/etc/nginx/openweb-admin.htpasswd` hat `chmod 640` und gehört `root:www-data`.
+- [ ] `/var/html/.openweb.env` hat `chmod 600`.
+- [ ] Frontend CSP blockt `connect-src` auf Supabase-Domain.
+- [ ] Kein `auth-init`, `auth-login`, `auth-change-password` mehr deployed.
 
-## Rollback
+## Rollback auf client-seitigen Login
 
-Falls Edge-Functions Ärger machen:
+Falls nginx Basic Auth doch nicht gewünscht ist:
 
-1. `config.js` → `authEnabled: false` setzen
-2. Browser neu laden → fällt zurück auf PBKDF2-`localStorage`-Login
-3. **Wichtig**: nachdem Edge-Functions wieder gehen, ist der Hash in
-   `admin_auth` evtl. nicht synchron mit dem `localStorage`-Hash. In
-   Edge-Function `auth-init` einmal mit einem bekannten Passwort neu
-   initialisieren.
+1. `sudo rm /etc/nginx/openweb-admin.htpasswd` oder Basic-Auth-Block in
+   nginx-Konfiguration auskommentieren.
+2. `sudo systemctl reload nginx`
 
-## Tabellen-Schema (`admin_auth`)
+Ein vollständiger client-seitiger Login ist in dieser Version nicht mehr
+vorgesehen; bei Bedarf muss er manuell wieder eingebaut werden.
 
-| Spalte          | Typ           | Beschreibung |
-|-----------------|---------------|--------------|
-| `id`            | `int`         | Primary key, immer `1` (Singleton) |
-| `algo`          | `text`        | Algorithmus, z. B. `PBKDF2-SHA256` |
-| `iterations`    | `int`         | OWASP 2023: 210000 |
-| `salt`          | `text`        | Base64-16-Bytes, per Rotation neu |
-| `password_hash` | `text`        | Base64-32-Bytes (= PBKDF2-Output) |
-| `updated_at`    | `timestamptz` | Auto-set bei jeder Änderung |
-
-## JWT-Payload
-
-```json
-{
-  "sub": "admin",
-  "role": "admin",
-  "iat": 1700000000,
-  "exp": 1700003600,
-  "jti": "uuid-v4"
-}
-```
-
-- `sub`: Subject-Identifier (immer „admin")
-- `role`: Wird in `admin-proxy` geprüft (`payload.role === 'admin'`)
-- `exp`: Unix-Sekunden, Edge-Function lehnt abgelaufene Tokens ab
-- `jti`: Eindeutige ID, präventiv für zukünftige Token-Revocation-Listen
 ## Discord Now-Playing Webhook
 
 ### Voraussetzungen

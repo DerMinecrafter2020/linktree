@@ -11,7 +11,7 @@
 //
 // Aufruf:
 //   POST {SUPABASE_URL}/functions/v1/discord-webhook
-//   Header: Authorization: Bearer <JWT>   (nur wenn authEnabled)
+//   Header: apikey: <anon-key>, Authorization: Bearer <anon-key>
 //   Body:   { "track": { "title", "artist", "album", "cover", "url" } }
 //
 // Sicherheit:
@@ -44,45 +44,6 @@ function json(data, status, req) {
     status,
     headers: { 'Content-Type': 'application/json', ...corsFor(req) }
   });
-}
-
-function b64urlDecode(s) {
-  s = s.replace(/-/g, '+').replace(/_/g, '/');
-  while (s.length % 4) s += '=';
-  const bin = atob(s);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes;
-}
-
-async function hmacVerify(secret, data, signature) {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const expected = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data)));
-  if (expected.length !== signature.length) return false;
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) diff |= expected[i] ^ signature[i];
-  return diff === 0;
-}
-
-async function verifyJwt(token, secret) {
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
-  const [h, p, s] = parts;
-  const sigBytes = b64urlDecode(s);
-  const ok = await hmacVerify(secret, `${h}.${p}`, sigBytes);
-  if (!ok) return null;
-  let payload;
-  try { payload = JSON.parse(new TextDecoder().decode(b64urlDecode(p))); }
-  catch { return null; }
-  if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
-  if (payload.role !== 'admin') return null;
-  return payload;
 }
 
 function isDiscordWebhookUrl(u) {
@@ -121,18 +82,9 @@ Deno.serve(async (req) => {
 
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
   const SERVICE_KEY  = Deno.env.get('SERVICE_ROLE_KEY')!;
-  const JWT_SECRET   = Deno.env.get('JWT_SECRET') || '';
 
   if (!SUPABASE_URL || !SERVICE_KEY) {
     return json({ ok: false, error: 'server not configured' }, 500, req);
-  }
-
-  // Optional: JWT-Auth nur wenn im Projekt aktiviert
-  const auth = req.headers.get('authorization') || '';
-  const m = auth.match(/^Bearer\s+(.+)$/i);
-  if (JWT_SECRET && m) {
-    const claims = await verifyJwt(m[1], JWT_SECRET);
-    if (!claims) return json({ ok: false, error: 'unauthorized' }, 401, req);
   }
 
   let body;

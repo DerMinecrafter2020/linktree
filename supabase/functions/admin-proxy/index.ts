@@ -2,28 +2,23 @@
 // Supabase Edge Function: admin-proxy
 // =========================================================
 // Diese Funktion kapselt ALLE Schreiboperationen hinter einem
-// gültigen Admin-JWT (HS256, signiert von auth-login).
+// Shared Secret, das install.sh in Supabase Secrets und lokal
+// in /var/html/.openweb.env ablegt.
 //
 // Deployment:
 //   1. supabase functions deploy admin-proxy
-//   2. supabase functions deploy auth-login
-//   3. supabase functions deploy auth-change-password
-//   4. supabase secrets set SERVICE_ROLE_KEY=...
-//   5. supabase secrets set JWT_SECRET=...   (mind. 32 Zeichen random!)
+//   2. supabase secrets set SERVICE_ROLE_KEY=...
+//   3. supabase secrets set CONFIG_SHARED_SECRET=...
 //
 // Aufruf von der App:
 //   POST {SUPABASE_URL}/functions/v1/admin-proxy
-//   Header: Authorization: Bearer <JWT>
-//   Body:   { "action": "saveProfile", "data": {...} }
+//   Header: Authorization: Bearer <anon-key>
+//   Body:   { "action": "saveProfile", "secret": "<CONFIG_SHARED_SECRET>", "data": {...} }
 //
 // Antwort:
 //   200 { "ok": true,  "data": {...} }
 //   401 { "ok": false, "error": "unauthorized" }
 //   400 { "ok": false, "error": "<validation>" }
-// =========================================================
-//
-// HINWEIS: Wenn du die Edge Functions NICHT deployst, schreibe
-// direkt mit dem anon-Key und entferne den JWT-Check.
 // =========================================================
 //
 // @ts-nocheck
@@ -52,49 +47,7 @@ function json(data, status, req) {
   });
 }
 
-function b64urlDecode(s) {
-  s = s.replace(/-/g, '+').replace(/_/g, '/');
-  while (s.length % 4) s += '=';
-  const bin = atob(s);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes;
-}
-function b64urlEncode(bytes) {
-  let bin = '';
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-async function hmacVerify(secret, data, signature) {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const expected = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data)));
-  if (expected.length !== signature.length) return false;
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) diff |= expected[i] ^ signature[i];
-  return diff === 0;
-}
-
-async function verifyJwt(token, secret) {
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
-  const [h, p, s] = parts;
-  const sigBytes = b64urlDecode(s);
-  const ok = await hmacVerify(secret, `${h}.${p}`, sigBytes);
-  if (!ok) return null;
-  let payload;
-  try { payload = JSON.parse(new TextDecoder().decode(b64urlDecode(p))); }
-  catch { return null; }
-  if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
-  if (payload.role !== 'admin') return null;
-  return payload;
-}
+const SHARED_SECRET = Deno.env.get('CONFIG_SHARED_SECRET') || '';
 
 function isHttpUrl(u) {
   try {
@@ -204,32 +157,29 @@ function validateLink(l) {
   };
 }
 
-async function authenticate(req) {
-  const secret = Deno.env.get('JWT_SECRET');
-  if (!secret) throw new Error('server not configured');
-  const auth = req.headers.get('authorization') || '';
-  const m = auth.match(/^Bearer\s+(.+)$/i);
-  if (!m) throw new Error('unauthorized');
-  const claims = await verifyJwt(m[1], secret);
-  if (!claims) throw new Error('unauthorized');
-  return claims;
+async function authenticate(body) {
+  if (!SHARED_SECRET) throw new Error('server not configured');
+  if (!body || typeof body !== 'object') throw new Error('unauthorized');
+  const provided = String(body.secret || '');
+  if (provided !== SHARED_SECRET) throw new Error('unauthorized');
+  return { sub: 'admin' };
 }
 
-// --- Rate-Limit (pro JWT sub, in-Memory; pro Edge-Instance) ---
+// --- Rate-Limit (pro IP / Shared-Secret-Client, in-Memory; pro Edge-Instance) ---
 const WRITE_WINDOW_MS = 60 * 1000;
 const WRITE_MAX = 60; // max 60 Mutationen pro Minute
-const writeAttempts = new Map(); // sub -> [timestamps]
+const writeAttempts = new Map(); // key -> [timestamps]
 
-function checkWriteRate(sub) {
+function checkWriteRate(key) {
   const now = Date.now();
-  const arr = (writeAttempts.get(sub) || []).filter(t => now - t < WRITE_WINDOW_MS);
+  const arr = (writeAttempts.get(key) || []).filter(t => now - t < WRITE_WINDOW_MS);
   if (arr.length >= WRITE_MAX) {
     const oldest = arr[0];
     const retryAfter = Math.ceil((WRITE_WINDOW_MS - (now - oldest)) / 1000);
     return { ok: false, retryAfter };
   }
   arr.push(now);
-  writeAttempts.set(sub, arr);
+  writeAttempts.set(key, arr);
   return { ok: true };
 }
 
@@ -266,12 +216,17 @@ Deno.serve(async (req) => {
   const SERVICE_KEY  = Deno.env.get('SERVICE_ROLE_KEY')!;
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
+  let body;
+  try { body = await req.json(); }
+  catch { return json({ ok: false, error: 'invalid json' }, 400, req); }
+
   let claims;
-  try { claims = await authenticate(req); }
+  try { claims = await authenticate(body); }
   catch { return json({ ok: false, error: 'unauthorized' }, 401, req); }
 
-  // Rate-Limit: pro JWT-Subject
-  const gate = checkWriteRate(claims.sub || 'anon');
+  // Rate-Limit: pro Client (IP + secret-Hash)
+  const rateKey = `${req.headers.get('x-forwarded-for') || 'unknown'}-${claims.sub || 'admin'}`;
+  const gate = checkWriteRate(rateKey);
   if (!gate.ok) {
     return new Response(JSON.stringify({
       ok: false, error: 'rate limit exceeded', retryAfter: gate.retryAfter
@@ -284,10 +239,6 @@ Deno.serve(async (req) => {
       }
     });
   }
-
-  let body;
-  try { body = await req.json(); }
-  catch { return json({ ok: false, error: 'invalid json' }, 400, req); }
 
   // Action-Whitelist
   if (!ALLOWED_ACTIONS.has(body.action)) {

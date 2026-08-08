@@ -78,19 +78,9 @@ create trigger trg_profile_updated_at
 alter table public.profile enable row level security;
 alter table public.links   enable row level security;
 
--- 5) Policies: Jeder darf lesen (öffentliche Seite), Schreiben erfordert
---    ein gültiges "admin_token" (custom claim im JWT, gesetzt via RPC).
---
---    Flow:
---    1. App ruft `verify_admin_password(password text)` auf
---    2. Wenn das Passwort stimmt → set_session_admin() setzt ein
---       Statement-Timeout-Session-Tag + Claims via JWT-Issuer
---    3. Schreib-Policies prüfen `auth.jwt()->>'role' = 'admin'`
---
---    Da wir aktuell nur Client-Auth nutzen, verwenden wir einen
---    pragmatischen Ansatz: Schreibrechte via Edge-Function /
---    service_role. Hier sind die Policies schon RLS-strict
---    vorbereitet, sodass anon KEINEN Schreibzugriff hat.
+-- 5) Policies: Jeder darf lesen (öffentliche Seite).
+--    Schreiben darf nur der Service-Role-Key (via Edge-Function
+--    admin-proxy). Anon wird hart geblockt.
 drop policy if exists "profile read"   on public.profile;
 drop policy if exists "profile write"  on public.profile;
 drop policy if exists "links read"     on public.links;
@@ -103,34 +93,19 @@ drop policy if exists "links delete"   on public.links;
 create policy "profile read"  on public.profile for select to anon, authenticated using (true);
 create policy "links read"    on public.links   for select to anon, authenticated using (true);
 
--- =========================================================
--- WICHTIG: Schreib-Policies gelten NUR, wenn ein JWT mit
---   role = 'admin' als Custom-Claim vorhanden ist.
---   Anon-User (auch wenn sie per anon-Key schreiben wollen)
---   haben per Definition KEINEN JWT mit role='admin' → blockiert.
---
--- Da unser Edge-Function 'admin-proxy' direkt mit dem
--- SERVICE_ROLE_KEY schreibt, umgehen wir die RLS ohnehin.
--- Die Policies hier sind eine Belt-and-Suspenders-Maßnahme
--- für den Fall, dass jemand den anon-Key leakiert.
--- =========================================================
-create policy "profile write" on public.profile
-  for all to authenticated
-  using ((auth.jwt() ->> 'role')::text = 'admin')
-  with check ((auth.jwt() ->> 'role')::text = 'admin');
+-- Schreiben für anon und authenticated verbieten.
+-- Edge-Function admin-proxy verwendet SERVICE_ROLE_KEY und bypassed RLS.
+create policy "profile deny write" on public.profile
+  for all to anon, authenticated using (false) with check (false);
 
-create policy "links insert" on public.links
-  for insert to authenticated
-  with check ((auth.jwt() ->> 'role')::text = 'admin');
+create policy "links deny insert" on public.links
+  for insert to anon, authenticated with check (false);
 
-create policy "links update" on public.links
-  for update to authenticated
-  using ((auth.jwt() ->> 'role')::text = 'admin')
-  with check ((auth.jwt() ->> 'role')::text = 'admin');
+create policy "links deny update" on public.links
+  for update to anon, authenticated using (false) with check (false);
 
-create policy "links delete" on public.links
-  for delete to authenticated
-  using ((auth.jwt() ->> 'role')::text = 'admin');
+create policy "links deny delete" on public.links
+  for delete to anon, authenticated using (false);
 
 -- Defense-in-Depth: explizit für anon DENY
 -- (anon sollte zwar schon durch das Fehlen einer Policy geblockt
@@ -182,31 +157,19 @@ alter table public.links
 alter publication supabase_realtime add table public.profile;
 alter publication supabase_realtime add table public.links;
 
--- =========================================================
--- 7) Admin-Auth: Passwort serverseitig gehasht (PBKDF2-SHA256)
--- =========================================================
--- Der Klartext liegt NUR im Edge-Function-Aufruf (TLS-verschlüsselt).
--- In der DB stehen: Hash (Base64), Salt (Base64), Iterationen, Algorithmus.
-create table if not exists public.admin_auth (
-  id           int          primary key default 1,
-  algo         text         not null default 'PBKDF2-SHA256',
-  iterations   int          not null default 210000,
-  salt         text         not null,
-  password_hash text        not null,
-  updated_at   timestamptz  not null default now(),
-  constraint admin_auth_singleton check (id = 1)
+-- 7) Admin-Einstellungen (Discord-Webhook etc.)
+create table if not exists public.admin_settings (
+  id                        int          primary key default 1,
+  discord_webhook_enabled   boolean      not null default false,
+  discord_webhook_url       text         null,
+  discord_webhook_template  text         null default '{"content":"🎵 Jetzt läuft: {artist} - {title} ({album})"}',
+  updated_at                timestamptz  not null default now(),
+  constraint admin_settings_singleton check (id = 1)
 );
 
--- Initial-Seed mit Default-Passwort "admin123":
---   Salt (Base64): 16 Bytes aus crypto.getRandomValues(), deterministisch gesalzen
---   Hash = PBKDF2-SHA256("admin123", salt, 210000)
--- Der genaue Wert wird beim ersten Deploy der Edge-Function 'auth-init' erzeugt
--- (siehe supabase/functions/auth-init/index.ts). Hier nur Platzhalter:
-insert into public.admin_auth (id, algo, iterations, salt, password_hash)
-values (1, 'PBKDF2-SHA256', 210000, 'PLACEHOLDER', 'PLACEHOLDER')
-on conflict (id) do nothing;
+insert into public.admin_settings (id) values (1) on conflict (id) do nothing;
 
--- RLS: niemand liest oder schreibt direkt. Nur Service-Role (via Edge-Function).
-alter table public.admin_auth enable row level security;
-drop policy if exists "admin_auth all" on public.admin_auth;
-create policy "admin_auth deny all" on public.admin_auth for all to anon, authenticated using (false) with check (false);
+-- RLS: niemand liest/schreibt direkt. Service-Role via Edge-Function.
+alter table public.admin_settings enable row level security;
+drop policy if exists "admin_settings all" on public.admin_settings;
+create policy "admin_settings deny all" on public.admin_settings for all to anon, authenticated using (false) with check (false);

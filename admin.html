@@ -27,46 +27,9 @@
 <body>
 
   <!-- =========================================================
-       LOGIN-MODAL
-       ========================================================= -->
-  <div id="login-overlay" class="login-overlay">
-    <div class="login-card">
-      <div class="login-ring"></div>
-      <h1>🔐 Admin</h1>
-      <p>Bitte Passwort eingeben</p>
-      <form id="login-form" autocomplete="off">
-        <!-- Honeypot: Bots füllen das Feld aus, Menschen nicht -->
-        <input type="text" name="website" tabindex="-1" autocomplete="off" class="honeypot" aria-hidden="true" />
-        <input type="password" id="login-password" placeholder="Passwort" required
-               autocomplete="current-password" />
-        <button type="submit">Anmelden</button>        <button type="button" id="forgot-password-btn" class="link-btn">Passwort vergessen?</button>        <p id="login-error" class="login-error"></p>
-      </form>
-      <small>Hinweis: Standard-Passwort ist <code>admin123</code> – beim ersten Login als PBKDF2-Hash gespeichert. Ändern unter <strong>Einstellungen → Passwort ändern</strong>.</small>
-    </div>
-  </div>
-
-  <!-- Passwort-vergessen-Hilfe -->
-  <div id="forgot-password-overlay" class="modal-overlay" hidden>
-    <div class="modal-card">
-      <h2>🔑 Passwort vergessen?</h2>
-      <p>Es gibt keinen automatischen E-Mail-Reset, da OpenWeb keinen eigenen Mail-Versand nutzt.</p>
-      <p>So setzt du das Passwort zurck:</p>
-      <ol>
-        <li>Melde dich am Server an (SSH).</li>
-        <li>Fhre aus:<br><code class="code-inline">sudo bash install.sh</code> und whle im Men <strong>Passwort ndern</strong>.</li>
-        <li>Alternativ kann ein Supabase-Admin in der Tabelle <code class="code-inline">admin_auth</code> den Hash lschen und anschlieend <code class="code-inline">supabase functions deploy auth-init</code> ausfhren.</li>
-      </ol>
-      <p class="hint">Danach kannst du dich mit dem neuen Passwort anmelden.</p>
-      <div class="form-actions">
-        <button type="button" id="forgot-password-close" class="btn primary">Schlieen</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- =========================================================
        HAUPT-LAYOUT
        ========================================================= -->
-  <div id="app" class="app" hidden>
+  <div id="app" class="app">
 
     <aside class="sidebar">
       <div class="brand">
@@ -82,7 +45,7 @@
       </nav>
       <div class="side-footer">
         <a href="index.html" target="_blank" class="side-link">↗ Seite öffnen</a>
-        <button id="logout-btn" class="side-link">↩ Logout</button>
+        <button id="logout-btn" class="side-link">↩ Browser-Auth zurücksetzen</button>
       </div>
     </aside>
 
@@ -247,13 +210,12 @@ supabase secrets set ALLOWED_ORIGINS="http://localhost:5500,https://deine-domain
           <code id="settings-url">…</code>
         </div>
         <div class="card-block">
-          <h3>🔑 Passwort ändern</h3>
-          <p id="change-pw-hint">Passwort wird serverseitig als PBKDF2-Hash in Supabase gespeichert.</p>
-          <form id="change-pw-form" class="form inline">
-            <input type="password" name="old" placeholder="Aktuelles Passwort" autocomplete="current-password" />
-            <input type="password" name="new" placeholder="Neues Passwort (min. 8 Zeichen)" required autocomplete="new-password" />
-            <button class="btn">Ändern</button>
-          </form>
+          <h3>🔑 Admin-Passwort</h3>
+          <p id="change-pw-hint">Das Passwort liegt nur serverseitig in <code>/etc/nginx/openweb-admin.htpasswd</code> und wird über <code>install.sh</code> verwaltet.</p>
+          <p>Ändere es direkt auf dem Server:</p>
+          <pre><code>sudo bash install.sh
+# Menü: „Passwort ändern"</code></pre>
+          <p class="hint">Der Browser zeigt beim nächsten Aufruf von <code>/admin</code> erneut den Basic-Auth-Dialog.</p>
         </div>
       </section>
     </main>

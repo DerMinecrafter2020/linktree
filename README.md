@@ -1,7 +1,8 @@
-# Link in Bio · Admin-Oberfläche
+# OpenWeb · Link in Bio
 
 Eine komplette Link-in-Bio-Seite (à la Linktree) im **Dark & Neon**-Stil mit eigener Admin-Oberfläche.
-Daten werden in **Supabase** gespeichert, mit **localStorage-Fallback** für den schnellen Einstieg.
+Daten werden in **Supabase** gespeichert und über Edge Functions geschrieben.
+Für lokale Demos gibt es einen **Mock/Fallback** im Browser.
 
 ---
 
@@ -10,21 +11,20 @@ Daten werden in **Supabase** gespeichert, mit **localStorage-Fallback** für den
 | Datei | Zweck |
 |---|---|
 | `index.html` / `styles.css` / `app.js` | Öffentliche Profilseite |
-| `admin.html` / `admin.css` / `admin.js` | Admin-Oberfläche (Login + Dashboard) |
+| `admin.html` / `admin.css` / `admin.js` | Admin-Oberfläche (Dashboard) |
 | `supabase-client.js` | Gemeinsamer DB-Wrapper (Supabase + Mock) |
-| `config.js` | **Hier deine Supabase-Daten eintragen** |
+| `config.js` | Öffentliche Supabase-Daten (URL + anon-key) |
 | `supabase-setup.sql` | SQL zum Anlegen der Tabellen |
 
 ---
 
-## 🚀 Schnellstart (ohne Supabase)
+## 🚀 Schnellstart (nur lokale Demo)
 
-1. Doppelklick auf `index.html` – die Seite läuft sofort mit **Beispieldaten im localStorage**.
-2. Doppelklick auf `admin.html` – Login mit Standard-Passwort **`admin123`**.
-3. Links hinzufügen, sortieren, exportieren, fertig.
+1. Doppelklick auf `index.html` – die Seite läuft mit **Demo-Daten im Browser**.
+2. Doppelklick auf `admin.html` – ohne Server wird hier das **Setup-Formular** angezeigt.
 
-> 💡 Standard-Passwort ändern: im Admin unter **Einstellungen → Passwort ändern**.
-> Achtung: Das Passwort wird in `localStorage` gespeichert – **kein echter Schutz**!
+> ⚠️ Für den Produktivbetrieb siehe die Installationsanleitung unten. `admin.html` ist
+> dann über `/admin` erreichbar und durch **nginx Basic Auth** geschützt.
 
 ---
 
@@ -40,7 +40,9 @@ Daten werden in **Supabase** gespeichert, mit **localStorage-Fallback** für den
 - Dadurch entstehen zwei Tabellen: `profile` und `links`, inkl. RLS-Policies
 
 ### 3) Zugangsdaten eintragen
-In [`config.js`](config.js):
+In [`config.js`](config.js) tragest du **nur** URL und anon-key ein. Admin-Schreibzugriffe
+laufen über die Edge Function `admin-proxy` und ein Shared Secret (`CONFIG_SHARED_SECRET`),
+das **nicht** in `config.js` liegt.
 
 ```js
 window.SUPABASE_CONFIG = {
@@ -64,13 +66,13 @@ Die Tabellen sind bereits in der `supabase_realtime`-Publication. Änderungen im
 - Auto-Update bei Änderungen (Supabase Realtime)
 
 ### Admin
-- 🔐 **Login** mit client-seitigem Passwort (1-h-Session)
+- 🔐 **Login** über **nginx Basic Auth** — Passwort liegt nur serverseitig in `/etc/nginx/openweb-admin.htpasswd`
 - 🔗 **Links**: hinzufügen, bearbeiten, löschen, **drag & drop sortieren**, Pfeile
 - 👤 **Profil**: Name, Handle, Bio, Avatar-Buchstaben
 - 🖼 **Eigene Icons** pro Link (Emoji oder Bild-URL)
 - 💾 **JSON-Export/Import** als Backup
 - 🗑 **Reset** auf Auslieferungszustand
-- ⚙️ **Verbindungsstatus** und Passwort-Änderung
+- ⚙️ **Verbindungsstatus** und Discord-Webhook-Einstellungen
 
 ---
 
@@ -78,11 +80,9 @@ Die Tabellen sind bereits in der `supabase_realtime`-Publication. Änderungen im
 
 | Schutz | Wie |
 |---|---|
-| **Passwort-Hash** | PBKDF2 (SHA-256, 210 000 Iterationen) + zufälliger 16-Byte-Salt. Klartext liegt nirgends. |
-| **Login-Sperre** | 5 Fehlversuche in 5 min → 1 min Sperre |
-| **Honeypot** | Verstecktes Feld „website" — Bots werden still abgewiesen |
-| **Constant-Time-Vergleich** | verhindert Timing-Attacks beim Passwort-Hash |
-| **CSRF-Token** | Zufalls-Token in `sessionStorage`, bei jeder Mutation mitgesendet |
+| **Admin-Login** | nginx Basic Auth (`/admin`, `/admin.html`). Passwort-Hash liegt in `/etc/nginx/openweb-admin.htpasswd` (root:www-data, chmod 640). Kein Passwort in Supabase, `config.js` oder localStorage. |
+| **Admin-Schreiben** | Nur über Edge Function `admin-proxy` mit `CONFIG_SHARED_SECRET` (serverseitig in `.openweb.env` und Supabase Secrets). |
+| **Login-Sperre** | Keine client-seitige Sperre nötig – nginx Basic Auth handhabt Fehlversuche. |
 | **Content-Security-Policy** | Meta-Tag in `index.html` und `admin.html`, inkl. `frame-ancestors 'none'` |
 | **X-Content-Type-Options** | `nosniff` |
 | **Referrer-Policy** | `strict-origin-when-cross-origin` |
@@ -96,26 +96,20 @@ Die Tabellen sind bereits in der `supabase_realtime`-Publication. Änderungen im
 ### Edge-Function deployen (empfohlen für Produktion)
 
 ```bash
-# 1. Login
+# 1. Login (verwendet das verlinkte Supabase-Projekt, kein --project-ref nötig)
 supabase login
 
 # 2. Funktionen deployen
-# ersetze <PROJECT_REF> durch deinen Supabase-Project-Ref (z.B. abcdefghijklmnopqrst)
-PROJECT_REF=<PROJECT_REF>
-supabase functions deploy admin-proxy     --project-ref $PROJECT_REF
-supabase functions deploy auth-login      --project-ref $PROJECT_REF
-supabase functions deploy auth-change-password --project-ref $PROJECT_REF
-supabase functions deploy navidrome-proxy --project-ref $PROJECT_REF
-supabase functions deploy discord-webhook --project-ref $PROJECT_REF
-supabase functions deploy save-config     --project-ref $PROJECT_REF
+supabase functions deploy admin-proxy
+supabase functions deploy navidrome-proxy
+supabase functions deploy discord-webhook
+supabase functions deploy save-config
 
 # 3. Secrets setzen (serverseitig!)
-supabase secrets set SERVICE_ROLE_KEY=eyJ...           --project-ref $PROJECT_REF
-supabase secrets set JWT_SECRET=$(openssl rand -base64 48) --project-ref $PROJECT_REF
-supabase secrets set ADMIN_PASSWORD=...                  --project-ref $PROJECT_REF
-supabase secrets set ALLOWED_ORIGINS=https://deine-domain.de --project-ref $PROJECT_REF
-supabase secrets set CONFIG_SHARED_SECRET=$(openssl rand -hex 32) --project-ref $PROJECT_REF
-supabase secrets set NAVIDROME_URL='...' NAVIDROME_USER='...' NAVIDROME_PASS='...' --project-ref $PROJECT_REF
+supabase secrets set SERVICE_ROLE_KEY=eyJ...
+supabase secrets set ALLOWED_ORIGINS=https://deine-domain.de
+supabase secrets set CONFIG_SHARED_SECRET=$(openssl rand -hex 32)
+supabase secrets set NAVIDROME_URL='...' NAVIDROME_USER='...' NAVIDROME_PASS='...'
 
 # 4. config.js anlegen (wird bei Verwendung von install.sh automatisch erledigt)
 # Falls du manuell installierst, kopiere config.example.js nach config.js
@@ -125,16 +119,27 @@ cp config.example.js config.js
 ```
 
 > **Hinweis:** Bei Verwendung von `install.sh` werden `config.js`,
-> `save-config` und `CONFIG_SHARED_SECRET` automatisch angelegt. Das
-> Secret wird in `/var/html/.openweb.env` gespeichert und im Admin-Panel
-> beim ersten Supabase-Setup eingetragen. Trage echte URLs/Keys niemals
-> in README-Beispiele ein.
+> Edge Functions und `CONFIG_SHARED_SECRET` automatisch angelegt. Das
+> Secret wird in `/var/html/.openweb.env` gespeichert. Trage echte
+> URLs/Keys niemals in README-Beispiele ein.
+
+### Admin-Passwort
+
+Das Admin-Passwort wird bei `install.sh` abgefragt und ausschließlich in
+`/etc/nginx/openweb-admin.htpasswd` als Hash gespeichert. Es landet **nicht**
+in Supabase, `config.js` oder `localStorage`.
+
+Passwort ändern:
+
+```bash
+sudo bash install.sh
+# Menü: „Passwort ändern“
+```
 
 ### Was aktuell noch offen ist
 
-- ❗ Login ist **client-seitig** — wer DevTools + PBKDF2-Cracker hat, kann Bruteforce versuchen. Der Salt + 210k Iterationen erschwert das aber extrem.
 - ❗ Für echten Multi-User-Betrieb: Supabase Auth (Email-Login) verwenden.
-- ❗ localStorage-Passwort-Hash ist nicht rotationsfähig — bei Kompromiss: Browser-Daten löschen.
+- ❗ Bei Kompromiss des Server-Zugriffs: `install.sh` → Passwort ändern und `.openweb.env` rotieren.
 
 ---
 
