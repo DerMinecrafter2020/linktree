@@ -203,7 +203,6 @@
       if (!this.isEnabled()) return;
       const wrap = $('#navidrome-player');
       if (!wrap) return;
-      wrap.hidden = false;
       await this.tick();
       this.pollTimer = setInterval(() => this.tick(), this.cfg.pollIntervalSec * 1000);
     },
@@ -266,9 +265,10 @@
     renderIdle() {
       this.setState('idle');
       const wrap = $('#navidrome-player');
+      if (wrap) wrap.hidden = true;
       setText('.np-title', 'Momentan läuft nichts', wrap);
       setText('.np-artist', 'Starte Musik in Navidrome, dann erscheint sie hier', wrap);
-      const cover = wrap.querySelector('.np-cover');
+      const cover = wrap?.querySelector('.np-cover');
       if (cover) {
         cover.replaceChildren(document.createTextNode('🎵'));
         cover.classList.add('placeholder');
@@ -278,15 +278,17 @@
     renderTrack(data) {
       this.setState('playing');
       const wrap = $('#navidrome-player');
-      const cover = wrap.querySelector('.np-cover');
-      cover.replaceChildren();
-      cover.classList.remove('placeholder');
-
-      if (data.coverUrl) {
-        cover.appendChild(createIconImg(data.coverUrl, data.title || ''));
-      } else {
-        cover.appendChild(document.createTextNode('🎵'));
-        cover.classList.add('placeholder');
+      if (wrap) wrap.hidden = false;
+      const cover = wrap?.querySelector('.np-cover');
+      if (cover) {
+        cover.replaceChildren();
+        cover.classList.remove('placeholder');
+        if (data.coverUrl) {
+          cover.appendChild(createIconImg(data.coverUrl, data.title || ''));
+        } else {
+          cover.appendChild(document.createTextNode('🎵'));
+          cover.classList.add('placeholder');
+        }
       }
 
       setText('.np-title', data.title || 'Unbekannt', wrap);
