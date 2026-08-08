@@ -771,9 +771,11 @@
 
   function bindNavidrome() {
     const form = $('#navidrome-form');
-    if (!form) return;
+    if (!form || !window.db) return;
     renderNavidromeForm();
-    loadNavidromeSettings();
+    if (!window.db.needsSetup) {
+      loadNavidromeSettings();
+    }
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const proxyUrl = (form.proxyUrl.value || '').trim();
@@ -850,8 +852,8 @@
     bindSettings();
     bindNavidrome();
 
-    // Keine Admin-Daten laden, wenn Supabase noch nicht konfiguriert ist
-    if (window.db?.needsSetup) {
+    // Keine Admin-Daten laden, wenn Supabase nicht initialisiert oder noch nicht konfiguriert ist
+    if (!window.db || window.db.needsSetup) {
       showSetupForm();
       return;
     }
