@@ -100,37 +100,35 @@ Die Tabellen sind bereits in der `supabase_realtime`-Publication. Änderungen im
 supabase login
 
 # 2. Funktionen deployen
-supabase functions deploy admin-proxy --project-ref fxywervpqojpjwreymdp
-supabase functions deploy auth-login --project-ref fxywervpqojpjwreymdp
-supabase functions deploy auth-change-password --project-ref fxywervpqojpjwreymdp
-supabase functions deploy navidrome-proxy --project-ref fxywervpqojpjwreymdp
-supabase functions deploy discord-webhook --project-ref fxywervpqojpjwreymdp
-supabase functions deploy save-config --project-ref fxywervpqojpjwreymdp
+# ersetze <PROJECT_REF> durch deinen Supabase-Project-Ref (z.B. abcdefghijklmnopqrst)
+PROJECT_REF=<PROJECT_REF>
+supabase functions deploy admin-proxy     --project-ref $PROJECT_REF
+supabase functions deploy auth-login      --project-ref $PROJECT_REF
+supabase functions deploy auth-change-password --project-ref $PROJECT_REF
+supabase functions deploy navidrome-proxy --project-ref $PROJECT_REF
+supabase functions deploy discord-webhook --project-ref $PROJECT_REF
+supabase functions deploy save-config     --project-ref $PROJECT_REF
 
 # 3. Secrets setzen (serverseitig!)
-supabase secrets set SERVICE_ROLE_KEY=eyJ... --project-ref fxywervpqojpjwreymdp
-supabase secrets set JWT_SECRET=$(openssl rand -base64 48) --project-ref fxywervpqojpjwreymdp
-supabase secrets set ADMIN_PASSWORD=...   --project-ref fxywervpqojpjwreymdp
-supabase secrets set ALLOWED_ORIGINS=https://deine-domain.de --project-ref fxywervpqojpjwreymdp
-supabase secrets set CONFIG_SHARED_SECRET=$(openssl rand -hex 32) --project-ref fxywervpqojpjwreymdp
-supabase secrets set NAVIDROME_URL='...' NAVIDROME_USER='...' NAVIDROME_PASS='...' --project-ref fxywervpqojpjwreymdp
+supabase secrets set SERVICE_ROLE_KEY=eyJ...           --project-ref $PROJECT_REF
+supabase secrets set JWT_SECRET=$(openssl rand -base64 48) --project-ref $PROJECT_REF
+supabase secrets set ADMIN_PASSWORD=...                  --project-ref $PROJECT_REF
+supabase secrets set ALLOWED_ORIGINS=https://deine-domain.de --project-ref $PROJECT_REF
+supabase secrets set CONFIG_SHARED_SECRET=$(openssl rand -hex 32) --project-ref $PROJECT_REF
+supabase secrets set NAVIDROME_URL='...' NAVIDROME_USER='...' NAVIDROME_PASS='...' --project-ref $PROJECT_REF
 
-# 4. URL in config.js eintragen
-window.SUPABASE_CONFIG = {
-  url: 'https://fxywervpqojpjwreymdp.supabase.co',
-  anonKey: '...',
-  authEnabled: true,
-  adminProxyUrl:         'https://fxywervpqojpjwreymdp.supabase.co/functions/v1/admin-proxy',
-  authLoginUrl:          'https://fxywervpqojpjwreymdp.supabase.co/functions/v1/auth-login',
-  authChangePasswordUrl: 'https://fxywervpqojpjwreymdp.supabase.co/functions/v1/auth-change-password',
-  discordWebhookUrl:     'https://fxywervpqojpjwreymdp.supabase.co/functions/v1/discord-webhook',
-};
+# 4. config.js anlegen (wird bei Verwendung von install.sh automatisch erledigt)
+# Falls du manuell installierst, kopiere config.example.js nach config.js
+# und trage deine Supabase-URL und deinen anon-key ein.
+cp config.example.js config.js
+# Bearbeite anschließend config.js und setze url/anonKey für dein Projekt.
 ```
 
-> **Hinweis:** Bei Verwendung von `install.sh` werden `save-config` und
-> `CONFIG_SHARED_SECRET` automatisch angelegt. Das Secret wird in
-> `/var/html/.openweb.env` gespeichert und im Admin-Panel beim ersten
-> Supabase-Setup eingetragen.
+> **Hinweis:** Bei Verwendung von `install.sh` werden `config.js`,
+> `save-config` und `CONFIG_SHARED_SECRET` automatisch angelegt. Das
+> Secret wird in `/var/html/.openweb.env` gespeichert und im Admin-Panel
+> beim ersten Supabase-Setup eingetragen. Trage echte URLs/Keys niemals
+> in README-Beispiele ein.
 
 ### Was aktuell noch offen ist
 
