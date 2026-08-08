@@ -42,6 +42,7 @@ readonly SUPABASE_CLI="${SUPABASE_CLI:-/usr/local/bin/supabase}"
 readonly NGINX_SITE_NAME="openweb"
 readonly NGINX_CONF="/etc/nginx/sites-available/${NGINX_SITE_NAME}"
 readonly NGINX_LINK="/etc/nginx/sites-enabled/${NGINX_SITE_NAME}"
+readonly NGINX_ADMIN_STATE="/etc/nginx/openweb-admin-state.conf"
 readonly NGINX_MAIN="/etc/nginx/nginx.conf"
 readonly SYSTEMD_SERVICE="/etc/systemd/system/openweb-updater.service"
 readonly SYSTEMD_TIMER="/etc/systemd/system/openweb-updater.timer"
@@ -1211,7 +1212,7 @@ do_change_password() {
     return 0
 }
 
-# Admin-Bereich aktivieren / deaktivieren (nur serverseitig)
+# Admin-Bereich aktivieren / deaktivieren (nur serverseitig in nginx)
 do_set_admin_enabled() {
     local enabled="$1"
     if [[ -z "$enabled" ]]; then
@@ -1219,42 +1220,54 @@ do_set_admin_enabled() {
         exit $EX_USAGE
     fi
 
-    load_server_config
-    if [[ ! -f "$SERVER_CONFIG_FILE" ]]; then
-        log_error "Keine ${SERVER_CONFIG_FILE} gefunden — bitte erst installieren"
+    if [[ ! -f "$NGINX_CONF" ]]; then
+        log_error "Keine nginx-Config ${NGINX_CONF} gefunden — bitte erst installieren"
         exit $EX_CONFIG
     fi
 
-    require_env_vars SUPABASE_URL SUPABASE_ANON_KEY CONFIG_SHARED_SECRET || exit $EX_CONFIG
+    local include_line
+    include_line="include ${NGINX_ADMIN_STATE};"
 
-    local bool_value
-    if [[ "$enabled" == "true" ]]; then bool_value=true; else bool_value=false; fi
-
-    log_info "Setze admin_enabled=${bool_value} über admin-proxy Edge Function..."
-
-    local temp_out
-    temp_out=$(mktemp)
-    local http_code
-    http_code=$(curl -sS -w '%{http_code}' -o "$temp_out" \
-        -X POST "${SUPABASE_URL%/}/functions/v1/admin-proxy" \
-        -H "apikey: ${SUPABASE_ANON_KEY}" \
-        -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-        -H "x-client-info: supabase-js/2.0" \
-        -H "Content-Type: application/json" \
-        -H "X-Admin-Secret: ${CONFIG_SHARED_SECRET}" \
-        -d "{\"action\":\"saveAdminSettings\",\"data\":{\"admin_enabled\":${bool_value}}}")
-
-    if [[ "$http_code" != "200" && "$http_code" != "201" ]]; then
-        log_error "admin-proxy antwortete mit HTTP ${http_code}"
-        log_error "Antwort: $(cat "$temp_out")"
-        rm -f "$temp_out"
-        exit $EX_SOFTWARE
+    if [[ "$enabled" == "true" ]]; then
+        log_info "Aktiviere Admin-Bereich (lösche ${NGINX_ADMIN_STATE})..."
+        # Leere Datei = kein return 404, Admin-Bereich erreichbar
+        printf '' > "$NGINX_ADMIN_STATE"
+    else
+        log_info "Deaktiviere Admin-Bereich (schreibe 404-Block nach ${NGINX_ADMIN_STATE})..."
+        printf 'return 404;\n' > "$NGINX_ADMIN_STATE"
     fi
 
-    log_ok "admin_enabled=${bool_value} erfolgreich gesetzt"
-    log_info "Hinweis: /admin ist weiterhin via nginx Basic Auth geschützt; das Admin-UI zeigt jetzt den neuen Status."
-    rm -f "$temp_out"
+    chmod 644 "$NGINX_ADMIN_STATE"
+
+    # Sicherstellen, dass die Include-Zeile in der nginx-Config existiert
+    if ! grep -qF "$include_line" "$NGINX_CONF" 2>/dev/null; then
+        log_warn "Include-Zeile fehlt in ${NGINX_CONF} — füge sie hinzu"
+        sed -i "/auth_basic.*OpenWeb Admin/i\\        ${include_line}" "$NGINX_CONF"
+    fi
+
+    reload_nginx
+
+    if [[ "$enabled" == "true" ]]; then
+        log_ok "Admin-Bereich aktiviert — /admin ist wieder erreichbar"
+    else
+        log_ok "Admin-Bereich deaktiviert — /admin liefert jetzt 404"
+    fi
     return 0
+}
+
+reload_nginx() {
+    if command -v nginx >/dev/null 2>&1; then
+        if nginx -t >/dev/null 2>&1; then
+            nginx -s reload >/dev/null 2>&1 || true
+            log_ok "nginx neu geladen"
+        else
+            log_error "nginx-Konfiguration ist ungültig — bitte prüfen"
+            nginx -t
+            exit $EX_NGINX
+        fi
+    else
+        log_warn "nginx nicht gefunden — bitte manuell neu laden"
+    fi
 }
 
 # 8) Supabase CLI installieren (Helper)
@@ -1804,9 +1817,13 @@ server {
         try_files \$uri =404;
     }
 
-    # Admin-Bereich: /admin, /admin.html und alle admin-* Dateien streng schützen
+    # Admin-Bereich: /admin, /admin.html und alle admin-* Dateien streng schützen.
+    # In openweb-admin-state.conf kann der Admin-Bereich serverseitig auf 404 geschaltet werden.
     location ~ ^/(admin|admin-.*\.(html|css|js))$ {
         limit_req zone=admin_login burst=5 nodelay;
+
+        include ${NGINX_ADMIN_STATE};
+
         auth_basic           "OpenWeb Admin";
         auth_basic_user_file ${NGINX_HTPASSWD};
 
