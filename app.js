@@ -33,14 +33,17 @@
     } catch { return '#'; }
   }
 
-  function createIconImg(src, alt = '') {
+  function createIconImg(src, alt = '', cls = 'link-icon-img') {
     const img = document.createElement('img');
     img.src = src;
     img.alt = alt;
-    img.className = 'link-icon-img';
+    img.className = cls;
     img.loading = 'lazy';
     img.referrerPolicy = 'no-referrer';
-    img.onerror = () => img.replaceWith(document.createTextNode('🔗'));
+    img.onerror = () => {
+      console.warn('[img] failed to load:', src.slice(0, 120));
+      img.replaceWith(document.createTextNode('🔗'));
+    };
     return img;
   }
 
@@ -284,7 +287,7 @@
         cover.replaceChildren();
         cover.classList.remove('placeholder');
         if (data.coverUrl) {
-          cover.appendChild(createIconImg(data.coverUrl, data.title || ''));
+          cover.appendChild(createIconImg(data.coverUrl, data.title || '', 'np-cover-img'));
         } else {
           cover.appendChild(document.createTextNode('🎵'));
           cover.classList.add('placeholder');

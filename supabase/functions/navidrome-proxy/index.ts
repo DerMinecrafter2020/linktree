@@ -360,13 +360,26 @@ async function getCoverArt(id, size) {
     const params = subsonicParams({ id: id, size: sizeNum });
     const base = NAVIDROME_URL.replace(/\/+$/, '');
     const url = base + '/rest/getCoverArt?' + params.toString();
+    console.log('[coverArt] fetching', url);
     const r = await fetch(url);
-    if (!r.ok) return '';
+    if (!r.ok) {
+      console.warn('[coverArt] navidrome responded', r.status, await r.text().catch(() => ''));
+      return '';
+    }
     const ct = r.headers.get('content-type') || 'image/jpeg';
-    if (!/^image\/(png|jpeg|jpg|webp|gif)$/i.test(ct)) return '';
+    if (!/^image\/(png|jpeg|jpg|webp|gif)$/i.test(ct)) {
+      console.warn('[coverArt] unexpected content-type', ct);
+      return '';
+    }
     const buf = await r.arrayBuffer();
-    if (buf.byteLength > 600000) return '';
-    return 'data:' + ct + ';base64,' + arrayBufferToBase64(buf);
+    const limit = 900000; // ~675 KB base64
+    if (buf.byteLength > limit) {
+      console.warn('[coverArt] image too large', buf.byteLength, 'bytes');
+      return '';
+    }
+    const b64 = arrayBufferToBase64(buf);
+    console.log('[coverArt] ok', ct, buf.byteLength, 'bytes ->', b64.length, 'base64 chars');
+    return 'data:' + ct + ';base64,' + b64;
   } catch (e) {
     console.error('coverArt failed:', e && e.message);
     return '';
