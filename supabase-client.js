@@ -119,17 +119,38 @@
       },
 
       async getAdminSettings() {
+        const discordUrl = window.SUPABASE_CONFIG?.discordSettingsUrl || window.ADMIN_CONFIG?.discordSettingsUrl;
+        const discordSecret = window.SUPABASE_CONFIG?.discordAdminSecret || window.ADMIN_CONFIG?.discordAdminSecret;
+        if (discordUrl && discordSecret) {
+          return window.SupabaseAPI.discordSettings({
+            url: discordUrl,
+            action: 'get',
+            anonKey: SUPABASE_KEY,
+            secret: discordSecret,
+          });
+        }
         if (ADMIN_PROXY_URL) {
           return adminProxy('getAdminSettings');
         }
-        throw new Error('getAdminSettings erfordert adminProxyUrl');
+        throw new Error('getAdminSettings erfordert adminProxyUrl oder discordSettingsUrl');
       },
 
       async saveAdminSettings(settings) {
+        const discordUrl = window.SUPABASE_CONFIG?.discordSettingsUrl || window.ADMIN_CONFIG?.discordSettingsUrl;
+        const discordSecret = window.SUPABASE_CONFIG?.discordAdminSecret || window.ADMIN_CONFIG?.discordAdminSecret;
+        if (discordUrl && discordSecret) {
+          return window.SupabaseAPI.discordSettings({
+            url: discordUrl,
+            action: 'save',
+            data: settings,
+            anonKey: SUPABASE_KEY,
+            secret: discordSecret,
+          });
+        }
         if (ADMIN_PROXY_URL) {
           return adminProxy('saveAdminSettings', settings);
         }
-        throw new Error('saveAdminSettings erfordert adminProxyUrl');
+        throw new Error('saveAdminSettings erfordert adminProxyUrl oder discordSettingsUrl');
       },
 
       async sendDiscordWebhook(track) {

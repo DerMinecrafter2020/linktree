@@ -78,4 +78,13 @@
     const headers = { apikey: anonKey || '', 'Authorization': 'Bearer ' + (anonKey || ''), 'Content-Type': 'application/json' };
     return await Helpers.postJSON(url, headers, { track });
   };
+
+  // ---------- Discord Settings (Admin Panel) ----------
+  window.SupabaseAPI.discordSettings = async function ({ url, action, data, anonKey, secret }) {
+    if (!url) throw new Error('discordSettingsUrl not set');
+    if (!secret) throw new Error('discord admin secret missing');
+    if (!anonKey) throw new Error('anonKey missing');
+    const headers = { apikey: anonKey, 'Authorization': 'Bearer ' + anonKey };
+    return await Helpers.postJSON(url, headers, { action: action, secret: secret, data: data || {} });
+  };
 })();

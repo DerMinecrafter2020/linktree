@@ -213,6 +213,7 @@ save_server_config() {
 SUPABASE_URL='${SUPABASE_URL:-}'
 SUPABASE_ANON_KEY='${SUPABASE_ANON_KEY:-}'
 CONFIG_SHARED_SECRET='${CONFIG_SHARED_SECRET:-}'
+DISCORD_ADMIN_SECRET='${DISCORD_ADMIN_SECRET:-}'
 NAVIDROME_URL='${NAV_URL:-}'
 NAVIDROME_USER='${NAV_USER:-}'
 NAVIDROME_PASS='${NAVIDROME_PASS:-}'
@@ -258,10 +259,19 @@ ensure_server_config() {
             fi
         fi
 
+        # Discord-Admin-Secret generieren
+        if [[ -z "${DISCORD_ADMIN_SECRET:-}" ]] || is_placeholder "$DISCORD_ADMIN_SECRET"; then
+            if command -v openssl >/dev/null 2>&1; then
+                DISCORD_ADMIN_SECRET=$(openssl rand -hex 32 2>/dev/null)
+            else
+                DISCORD_ADMIN_SECRET=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 64)
+            fi
+        fi
+
         save_server_config
     fi
 
-    # 3) Shared Secret in Supabase setzen, falls CLI verfügbar
+    # 3) Secrets in Supabase setzen, falls CLI verfügbar
     local cli=""
     [[ -x "$SUPABASE_CLI" ]] && cli="$SUPABASE_CLI"
     command -v supabase >/dev/null 2>&1 && cli="${cli:-supabase}"
@@ -272,14 +282,24 @@ ensure_server_config() {
         else
             log_warn "Konnte CONFIG_SHARED_SECRET nicht in Supabase setzen"
         fi
+        log_info "Stelle sicher, dass DISCORD_ADMIN_SECRET in Supabase gesetzt ist..."
+        if "$cli" secrets set DISCORD_ADMIN_SECRET="$DISCORD_ADMIN_SECRET" 2>&1 | sed 's/^/    /'; then
+            log_ok "DISCORD_ADMIN_SECRET in Supabase gesetzt"
+        else
+            log_warn "Konnte DISCORD_ADMIN_SECRET nicht in Supabase setzen"
+        fi
     else
-        log_warn "supabase CLI nicht eingeloggt — CONFIG_SHARED_SECRET nur lokal gespeichert"
+        log_warn "supabase CLI nicht eingeloggt — Secrets nur lokal gespeichert"
         log_warn "  Später manuell setzen (Projekt muss mit 'supabase link' verknüpft sein):"
         log_warn "    supabase link"
         log_warn "    supabase secrets set CONFIG_SHARED_SECRET='$CONFIG_SHARED_SECRET'"
+        log_warn "    supabase secrets set DISCORD_ADMIN_SECRET='$DISCORD_ADMIN_SECRET'"
     fi
 
-    # 4) config.js-Permissions korrigieren (falls sie falsch sind)
+    # 4) Admin-Konfiguration mit Discord-Settings-Secret erzeugen
+    generate_admin_config
+
+    # 5) config.js-Permissions korrigieren (falls sie falsch sind)
     if [[ -f "${INSTALL_DIR}/config.js" ]]; then
         chmod 644 "${INSTALL_DIR}/config.js" 2>/dev/null || true
     fi
@@ -1575,6 +1595,12 @@ window.SUPABASE_CONFIG = {
   discordWebhookUrl: '${SUPABASE_URL}/functions/v1/discord-webhook',
 };
 
+// Geschützte Admin-Konfiguration (nur für /admin über nginx Basic Auth erreichbar)
+window.ADMIN_CONFIG = {
+  discordSettingsUrl: '${SUPABASE_URL}/functions/v1/discord-settings',
+  discordAdminSecret: '${DISCORD_ADMIN_SECRET}',
+};
+
 window.NAVIDROME_CONFIG = {
   enabled: ${NAV_ENABLED},
   url: '${NAV_URL}',
@@ -1594,6 +1620,26 @@ log_ok "config.js erstellt (chmod 644)"
 # Serverseitige Konfiguration sichern
 save_server_config
 
+# Geschützte Admin-Konfiguration erzeugen
+# Diese Datei liegt im /admin-Bereich und wird durch nginx Basic Auth geschützt.
+# Sie enthält nur das Discord-Settings-Secret, das schwächer ist als das
+# CONFIG_SHARED_SECRET für admin-proxy.
+generate_admin_config() {
+    local file="${INSTALL_DIR}/admin-config.js"
+    local tmp
+    tmp=$(mktemp "${file}.tmp.XXXXXX")
+    cat > "$tmp" <<EOF
+// OpenWeb Admin-Konfiguration — nur für /admin über nginx Basic Auth erreichbar.
+// Wird von install.sh erzeugt. NICHT in git committen.
+window.ADMIN_CONFIG = {
+  discordAdminSecret: '${DISCORD_ADMIN_SECRET}',
+};
+EOF
+    chmod 600 "$tmp"
+    mv -f "$tmp" "$file"
+    log_ok "Geschützte Admin-Konfiguration erstellt: ${file} (chmod 600)"
+}
+
 # --- Edge Functions deployen (falls supabase CLI verfügbar) ---
 deploy_edge_functions() {
     local cli=""
@@ -1612,7 +1658,7 @@ deploy_edge_functions() {
 
     log_info "Deploye Supabase Edge Functions..."
     local func
-    for func in admin-proxy navidrome-proxy discord-webhook save-config; do
+    for func in admin-proxy navidrome-proxy discord-webhook discord-settings save-config; do
         if [[ -d "${INSTALL_DIR}/supabase/functions/${func}" ]]; then
             if (cd "$INSTALL_DIR" && "$cli" functions deploy "$func" 2>&1) | sed 's/^/    /'; then
                 log_ok "  $func deployed"
@@ -1715,6 +1761,12 @@ server {
 
     # config.js: niemals cachen, sensible Daten
     location = /config.js {
+        add_header Cache-Control "no-store" always;
+        try_files \$uri =404;
+    }
+
+    # admin-config.js: ebenfalls niemals cachen, nur ueber /admin erreichbar
+    location = /admin-config.js {
         add_header Cache-Control "no-store" always;
         try_files \$uri =404;
     }
