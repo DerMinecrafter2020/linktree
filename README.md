@@ -165,8 +165,11 @@ sudo bash install.sh update
 
 - Nur Anwendungsdateien werden ersetzt.
 - Alle Supabase-Daten (Links, Profil, Admin-Settings) bleiben erhalten.
-- Die lokale `config.js` wird vor dem Update gesichert und danach wiederhergestellt.
-
----
+- Die lokale `config.js` und die serverseitige `.openweb.env` werden vor dem
+  Update gesichert und danach wiederhergestellt.
+- Falls `.openweb.env` noch nicht existiert, wird es automatisch aus der
+  bestehenden `config.js` erzeugt und `CONFIG_SHARED_SECRET` generiert.
+- Berechtigungen werden repariert (`config.js` bekommt `chmod 644`, damit
+  nginx sie ausliefern kann).
 
 Viel Spaß! 🎉

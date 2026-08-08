@@ -167,6 +167,19 @@ is_placeholder() {
     esac
 }
 
+# Wert aus config.js extrahieren (Format: key: 'value')
+_extract_config_js_value() {
+    local file="$1"
+    local key="$2"
+    grep -oE "${key}:\s*['\"][^'\"]*['\"]" "$file" 2>/dev/null | head -1 | sed -E "s/^.*${key}:\s*['\"]//;s/['\"],?\s*$//"
+}
+
+# Stellt sicher, dass temporaere Dateien im Fehlerfall entfernt werden
+_cleanup_temp_configs() {
+    [[ -n "${config_backup:-}" && -f "${config_backup}" ]] && rm -f "${config_backup}"
+    [[ -n "${server_config_backup:-}" && -f "${server_config_backup}" ]] && rm -f "${server_config_backup}"
+}
+
 # Serverseitige Konfiguration laden (.openweb.env)
 load_server_config() {
     if [[ ! -f "$SERVER_CONFIG_FILE" ]]; then
@@ -209,6 +222,72 @@ EOF
     chmod 600 "$tmp"
     mv -f "$tmp" "$file"
     log_ok "Server-Konfiguration gespeichert: ${file}"
+}
+
+# Sicherstellen, dass .openweb.env existiert (Migration / Repair)
+# Wird im Update-, Restore- und Install-Modus aufgerufen.
+ensure_server_config() {
+    local from_config=0
+
+    # 1) Wenn .openweb.env existiert: nur Secret prüfen/generieren und aktualisieren
+    if [[ -f "$SERVER_CONFIG_FILE" ]]; then
+        load_server_config
+        if [[ -z "${CONFIG_SHARED_SECRET:-}" ]] || is_placeholder "$CONFIG_SHARED_SECRET"; then
+            if command -v openssl >/dev/null 2>&1; then
+                CONFIG_SHARED_SECRET=$(openssl rand -hex 32 2>/dev/null)
+            else
+                CONFIG_SHARED_SECRET=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 64)
+            fi
+            save_server_config
+        fi
+        from_config=0
+    else
+        # 2) .openweb.env fehlt: Werte aus config.js übernehmen
+        if [[ -f "${INSTALL_DIR}/config.js" ]]; then
+            log_info "Erstelle ${SERVER_CONFIG_FILE} aus bestehender config.js..."
+            SUPABASE_URL=$(_extract_config_js_value "${INSTALL_DIR}/config.js" "url")
+            SUPABASE_ANON_KEY=$(_extract_config_js_value "${INSTALL_DIR}/config.js" "anonKey")
+            NAV_URL=$(_extract_config_js_value "${INSTALL_DIR}/config.js" "url")
+            from_config=1
+        fi
+
+        # Shared Secret generieren
+        if [[ -z "${CONFIG_SHARED_SECRET:-}" ]] || is_placeholder "$CONFIG_SHARED_SECRET"; then
+            if command -v openssl >/dev/null 2>&1; then
+                CONFIG_SHARED_SECRET=$(openssl rand -hex 32 2>/dev/null)
+            else
+                CONFIG_SHARED_SECRET=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 64)
+            fi
+        fi
+
+        save_server_config
+    fi
+
+    # 3) Shared Secret in Supabase setzen, falls CLI verfügbar
+    local cli=""
+    [[ -x "$SUPABASE_CLI" ]] && cli="$SUPABASE_CLI"
+    command -v supabase >/dev/null 2>&1 && cli="${cli:-supabase}"
+    if [[ -n "$cli" ]] && "$cli" projects list 2>/dev/null | grep -q "$SUPABASE_PROJECT_REF"; then
+        log_info "Stelle sicher, dass CONFIG_SHARED_SECRET in Supabase gesetzt ist..."
+        if "$cli" secrets set --project-ref "$SUPABASE_PROJECT_REF" CONFIG_SHARED_SECRET="$CONFIG_SHARED_SECRET" 2>&1 | sed 's/^/    /'; then
+            log_ok "CONFIG_SHARED_SECRET in Supabase gesetzt"
+        else
+            log_warn "Konnte CONFIG_SHARED_SECRET nicht in Supabase setzen"
+        fi
+    else
+        log_warn "supabase CLI nicht eingeloggt — CONFIG_SHARED_SECRET nur lokal gespeichert"
+        log_warn "  Später manuell setzen:"
+        log_warn "    supabase secrets set --project-ref $SUPABASE_PROJECT_REF CONFIG_SHARED_SECRET='$CONFIG_SHARED_SECRET'"
+    fi
+
+    # 4) config.js-Permissions korrigieren (falls sie falsch sind)
+    if [[ -f "${INSTALL_DIR}/config.js" ]]; then
+        chmod 644 "${INSTALL_DIR}/config.js" 2>/dev/null || true
+    fi
+
+    if [[ "$from_config" -eq 1 ]]; then
+        log_ok "Server-Konfiguration wurde aus config.js migriert"
+    fi
 }
 
 # Alte Backups löschen (Default: 30 Tage)
@@ -318,14 +397,38 @@ git_pull_safe() {
     fi
     log_info "Alle in Supabase gespeicherten Daten bleiben bei einem Update unberührt"
 
-    # 6) git reset + pull
-    if ! (cd "$workdir" && git reset --hard "origin/${REPO_BRANCH}" 2>&1 | sed 's/^/    /'); then
-        log_error "git reset --hard fehlgeschlagen"
-        [[ -n "$config_backup" ]] && mv -f "$config_backup" "${workdir}/config.js"
-        return 1
+    # 6) Update anwenden: erst stash, dann pull, bei Bedarf reset
+    local stash_done=0
+    if (cd "$workdir" && git status --porcelain 2>/dev/null | grep -q .); then
+        log_warn "Lokale Änderungen erkannt — werden vor dem Pull zwischengespeichert"
+        if (cd "$workdir" && git stash push -u -m "openweb-auto-stash-$(date +%Y%m%d-%H%M%S)" 2>&1 | sed 's/^/    /'); then
+            stash_done=1
+        else
+            log_warn "git stash fehlgeschlagen — versuche reset --hard"
+        fi
     fi
 
-    # 7) config.js und .openweb.env wiederherstellen
+    if ! (cd "$workdir" && git pull --ff-only origin "$REPO_BRANCH" 2>&1 | sed 's/^/    /'); then
+        log_warn "Fast-forward Pull fehlgeschlagen — versuche reset --hard"
+        if ! (cd "$workdir" && git reset --hard "origin/${REPO_BRANCH}" 2>&1 | sed 's/^/    /'); then
+            log_error "git reset --hard fehlgeschlagen"
+            [[ -n "$config_backup" ]] && mv -f "$config_backup" "${workdir}/config.js"
+            [[ -n "$server_config_backup" ]] && mv -f "$server_config_backup" "${workdir}/.openweb.env"
+            _cleanup_temp_configs
+            return 1
+        fi
+    fi
+
+    # Stash wieder anwenden, falls einer erstellt wurde
+    if [[ "$stash_done" -eq 1 ]]; then
+        if (cd "$workdir" && git stash pop 2>&1 | sed 's/^/    /'); then
+            log_ok "Lokale Änderungen wiederhergestellt (stash pop)"
+        else
+            log_warn "git stash pop fehlgeschlagen — Änderungen liegen im git-stash"
+        fi
+    fi
+
+    # 7) config.js und .openweb.env wiederherstellen (übernehmen lokale Anpassungen)
     if [[ -n "$config_backup" && -f "$config_backup" ]]; then
         mv -f "$config_backup" "${workdir}/config.js"
         chmod 644 "${workdir}/config.js"
@@ -336,6 +439,7 @@ git_pull_safe() {
         chmod 600 "${workdir}/.openweb.env"
         log_ok "Server-Konfiguration .openweb.env wiederhergestellt"
     fi
+    _cleanup_temp_configs
     log_info "Keine Datenbank/Supabase-Daten verändert — update sicher für bestehende Inhalte"
 
     # 8) Verifikation
@@ -347,6 +451,90 @@ git_pull_safe() {
     fi
 
     log_ok "Repo aktualisiert: ${local_sha:0:7} → ${new_sha:0:7}"
+    return 0
+}
+
+# Fallback: Aktuelle Anwendungsdateien direkt von GitHub RAW herunterladen
+# Wird verwendet, wenn git_pull_safe komplett fehlschlägt.
+download_latest_files() {
+    local workdir="${1:-$INSTALL_DIR}"
+    local base_url="https://raw.githubusercontent.com/DerMinecrafter2020/linktree/${REPO_BRANCH}"
+    local files=(
+        .gitignore
+        index.html admin.html
+        styles.css admin.css
+        app.js admin.js supabase-client.js icons.js
+        api/supabase.js api/client.js api/coverart.js api/nowplaying.js api/status.js
+        api/navidrome/_shared.js api/navidrome/control.js api/navidrome/coverart.js api/navidrome/nowplaying.js api/navidrome/status.js
+        api/discord.js
+        api/README.md
+        supabase/functions/save-config/index.ts
+        supabase/functions/admin-proxy/index.ts
+        supabase/functions/auth-login/index.ts
+        supabase/functions/auth-change-password/index.ts
+        supabase/functions/auth-init/index.ts
+        supabase/functions/navidrome-proxy/index.ts
+        supabase/functions/discord-webhook/index.ts
+    )
+
+    log_warn "Git-Update nicht möglich — lade aktuelle Dateien direkt von GitHub..."
+    local tmp_dir
+    tmp_dir=$(mktemp -d /tmp/openweb-download.XXXXXX)
+    local failed=0
+
+    for f in "${files[@]}"; do
+        local dest="${tmp_dir}/${f}"
+        mkdir -p "$(dirname "$dest")"
+        if safe_download "${base_url}/${f}" "$dest" 100; then
+            log_ok "  ${f} heruntergeladen"
+        else
+            log_warn "  ${f} konnte nicht heruntergeladen werden"
+            failed=$((failed + 1))
+        fi
+    done
+
+    if [[ "$failed" -gt 0 ]]; then
+        log_error "${failed} Datei(en) konnten nicht heruntergeladen werden — Fallback abgebrochen"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    # Sicherungen der lokalen Dateien erstellen
+    local config_backup=""
+    local server_config_backup=""
+    if [[ -f "${workdir}/config.js" ]]; then
+        config_backup=$(mktemp /tmp/openweb-config.XXXXXX.js)
+        cp -f "${workdir}/config.js" "$config_backup"
+    fi
+    if [[ -f "${workdir}/.openweb.env" ]]; then
+        server_config_backup=$(mktemp /tmp/openweb-server-config.XXXXXX.env)
+        cp -f "${workdir}/.openweb.env" "$server_config_backup"
+    fi
+
+    # Heruntergeladene Dateien ins Installationsverzeichnis kopieren
+    if cp -a "${tmp_dir}/." "${workdir}/" 2>&1 | sed 's/^/    /'; then
+        log_ok "Dateien nach ${workdir} kopiert"
+    else
+        log_error "Kopieren der heruntergeladenen Dateien fehlgeschlagen"
+        [[ -n "$config_backup" ]] && mv -f "$config_backup" "${workdir}/config.js"
+        [[ -n "$server_config_backup" ]] && mv -f "$server_config_backup" "${workdir}/.openweb.env"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    # Lokale Konfiguration wiederherstellen
+    if [[ -n "$config_backup" && -f "$config_backup" ]]; then
+        mv -f "$config_backup" "${workdir}/config.js"
+        chmod 644 "${workdir}/config.js"
+        log_ok "Lokale config.js wiederhergestellt"
+    fi
+    if [[ -n "$server_config_backup" && -f "$server_config_backup" ]]; then
+        mv -f "$server_config_backup" "${workdir}/.openweb.env"
+        chmod 600 "${workdir}/.openweb.env"
+        log_ok "Server-Konfiguration .openweb.env wiederhergestellt"
+    fi
+
+    rm -rf "$tmp_dir"
     return 0
 }
 
@@ -448,14 +636,27 @@ do_update() {
     log_info "Update von ${REPO_URL} (Branch: ${REPO_BRANCH})..."
     log_info "Hinweis: Mit 'update' werden nur Anwendungsdateien ersetzt. Alle Supabase-Daten und die lokale config.js bleiben erhalten."
 
+    # Sicherstellen, dass .openweb.env existiert und Shared Secret gesetzt ist
+    ensure_server_config
+
     local result
     git_pull_safe "$INSTALL_DIR"
     result=$?
 
     case $result in
-        0)
-            # Update erfolgreich — Services neu starten
-            log_info "Update angewendet — starte Services neu..."
+        0|2)
+            # 0 = Update erfolgreich, 2 = bereits aktuell
+            # In beiden Fällen Reparatur + Deployment ausführen
+            if [[ "$result" -eq 0 ]]; then
+                log_info "Update angewendet — starte Services neu..."
+            else
+                log_info "Bereits aktuell — führe trotzdem Reparatur + Edge-Function-Deployment durch..."
+            fi
+
+            # Edge Functions deployen (falls CLI verfügbar)
+            deploy_edge_functions || log_warn "Edge-Function-Deployment übersprungen"
+
+            # Services neu starten
             if ! _restart_services_post_update; then
                 log_error "Service-Restart fehlgeschlagen — versuche Rollback"
                 _rollback_from_backup "$INSTALL_DIR" || log_error "Rollback fehlgeschlagen — manuell eingreifen!"
@@ -464,18 +665,22 @@ do_update() {
             _log "INFO" "Update erfolgreich (Services neu gestartet)"
             log_info "Vorhandene Supabase-Daten und config.js wurden nicht verändert"
             ;;
-        2)
-            log_info "Kein Update notwendig"
-            # Trotzdem Services prüfen (falls sie manuell gestoppt wurden)
-            log_info "Prüfe Service-Status..."
-            if ! systemctl is-active --quiet nginx 2>/dev/null; then
-                log_warn "nginx läuft nicht — versuche zu starten..."
-                systemctl start nginx 2>/dev/null || log_warn "nginx-Start fehlgeschlagen"
-            fi
-            ;;
         *)
-            log_error "Update fehlgeschlagen"
-            return $EX_GIT
+            log_error "Git-Update fehlgeschlagen — versuche GitHub-Fallback..."
+            if download_latest_files "$INSTALL_DIR"; then
+                log_info "GitHub-Fallback erfolgreich — führe Reparatur + Edge-Function-Deployment durch..."
+                deploy_edge_functions || log_warn "Edge-Function-Deployment übersprungen"
+                if ! _restart_services_post_update; then
+                    log_error "Service-Restart fehlgeschlagen — versuche Rollback"
+                    _rollback_from_backup "$INSTALL_DIR" || log_error "Rollback fehlgeschlagen — manuell eingreifen!"
+                    return $EX_NGINX
+                fi
+                _log "INFO" "Update via GitHub-Fallback erfolgreich"
+                log_info "Vorhandene Supabase-Daten und config.js wurden nicht verändert"
+            else
+                log_error "Update komplett fehlgeschlagen (Git und GitHub-Fallback)"
+                return $EX_GIT
+            fi
             ;;
     esac
     return $EX_OK
@@ -1341,8 +1546,9 @@ elif [[ "$MODE" == "neuinstallieren" ]]; then
     log_info "  Modus 'neuinstallieren' — alle Werte werden neu abgefragt"
 fi
 
-# Serverseitige .openweb.env hat Vorrang gegenüber config.js
-load_server_config
+# Serverseitige .openweb.env hat Vorrang gegenüber config.js.
+# Wenn .openweb.env noch nicht existiert, wird es automatisch aus config.js migriert.
+ensure_server_config
 if [[ -n "${SUPABASE_URL:-}" ]] && ! is_placeholder "$SUPABASE_URL"; then
     EXISTING_URL="$SUPABASE_URL"
 fi
@@ -1392,26 +1598,8 @@ if command -v supabase >/dev/null 2>&1; then
     fi
 fi
 
-# Shared Secret für save-config (wird im Admin-Panel benötigt)
-if [[ -z "${CONFIG_SHARED_SECRET:-}" ]] || is_placeholder "$CONFIG_SHARED_SECRET"; then
-    if command -v openssl >/dev/null 2>&1; then
-        CONFIG_SHARED_SECRET=$(openssl rand -hex 32 2>/dev/null)
-    else
-        CONFIG_SHARED_SECRET=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 64)
-    fi
-fi
-if [[ "$SECRETS_READABLE" -eq 1 ]]; then
-    log_info "Setze Shared Secret für save-config in Supabase..."
-    if supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" CONFIG_SHARED_SECRET="$CONFIG_SHARED_SECRET" 2>&1 | sed 's/^/    /'; then
-        log_ok "CONFIG_SHARED_SECRET in Supabase gesetzt"
-    else
-        log_warn "Konnte CONFIG_SHARED_SECRET nicht in Supabase setzen"
-    fi
-else
-    log_warn "Shared Secret für save-config nur lokal gespeichert."
-    log_warn "  Später manuell in Supabase setzen:"
-    log_warn "    supabase secrets set --project-ref $SUPABASE_PROJECT_REF CONFIG_SHARED_SECRET='$CONFIG_SHARED_SECRET'"
-fi
+# Shared Secret ist bereits durch ensure_server_config() gesetzt
+    :
 
 # Navidrome-Werte abfragen
 echo ""
@@ -1510,12 +1698,27 @@ log_ok "config.js erstellt (chmod 644)"
 save_server_config
 
 # --- Edge Functions deployen (falls supabase CLI verfügbar) ---
-if command -v supabase >/dev/null 2>&1 && [[ "$SECRETS_READABLE" -eq 1 ]]; then
+deploy_edge_functions() {
+    local cli=""
+    [[ -x "$SUPABASE_CLI" ]] && cli="$SUPABASE_CLI"
+    command -v supabase >/dev/null 2>&1 && cli="${cli:-supabase}"
+    [[ -z "$cli" ]] && { log_warn "supabase CLI nicht verfügbar — Edge Functions müssen manuell deployed werden"; return 1; }
+    if ! "$cli" projects list 2>/dev/null | grep -q "$SUPABASE_PROJECT_REF"; then
+        log_warn "supabase CLI nicht eingeloggt — Edge Functions müssen manuell deployed werden:"
+        log_warn "  supabase functions deploy admin-proxy --project-ref $SUPABASE_PROJECT_REF"
+        log_warn "  supabase functions deploy auth-login --project-ref $SUPABASE_PROJECT_REF"
+        log_warn "  supabase functions deploy auth-change-password --project-ref $SUPABASE_PROJECT_REF"
+        log_warn "  supabase functions deploy navidrome-proxy --project-ref $SUPABASE_PROJECT_REF"
+        log_warn "  supabase functions deploy discord-webhook --project-ref $SUPABASE_PROJECT_REF"
+        log_warn "  supabase functions deploy save-config --project-ref $SUPABASE_PROJECT_REF"
+        return 1
+    fi
+
     log_info "Deploye Supabase Edge Functions..."
     local func
     for func in admin-proxy auth-login auth-change-password navidrome-proxy discord-webhook save-config; do
         if [[ -d "${INSTALL_DIR}/supabase/functions/${func}" ]]; then
-            if (cd "$INSTALL_DIR" && supabase functions deploy "$func" --project-ref "$SUPABASE_PROJECT_REF" 2>&1) | sed 's/^/    /'; then
+            if (cd "$INSTALL_DIR" && "$cli" functions deploy "$func" --project-ref "$SUPABASE_PROJECT_REF" 2>&1) | sed 's/^/    /'; then
                 log_ok "  $func deployed"
             else
                 log_warn "  $func konnte nicht deployed werden"
@@ -1524,14 +1727,11 @@ if command -v supabase >/dev/null 2>&1 && [[ "$SECRETS_READABLE" -eq 1 ]]; then
             log_info "  $func nicht vorhanden — übersprungen"
         fi
     done
-else
-    log_warn "supabase CLI nicht eingeloggt — Edge Functions müssen manuell deployed werden:"
-    log_warn "  supabase functions deploy admin-proxy --project-ref $SUPABASE_PROJECT_REF"
-    log_warn "  supabase functions deploy auth-login --project-ref $SUPABASE_PROJECT_REF"
-    log_warn "  supabase functions deploy auth-change-password --project-ref $SUPABASE_PROJECT_REF"
-    log_warn "  supabase functions deploy navidrome-proxy --project-ref $SUPABASE_PROJECT_REF"
-    log_warn "  supabase functions deploy discord-webhook --project-ref $SUPABASE_PROJECT_REF"
-fi
+    return 0
+}
+
+# Direkt bei Installation deployen
+deploy_edge_functions
 
 # --- Schritt 5: nginx konfigurieren ---
 log_info "Konfiguriere nginx..."
@@ -1709,7 +1909,7 @@ if ! tar -czf "$BACKUP_FILE" -C "$(dirname "$INSTALL_DIR")" "$NAME" 2>>"$LOG_FIL
 fi
 echo "[$(date -Iseconds)] Backup: $BACKUP_FILE" >> "$LOG_FILE"
 
-# config.js und serverseitige .openweb.env sichern (werden durch git reset --hard überschrieben)
+# config.js und serverseitige .openweb.env sichern
 CONFIG_BACKUP=""
 SERVER_CONFIG_BACKUP=""
 if [[ -f "${INSTALL_DIR}/config.js" ]]; then
@@ -1732,8 +1932,12 @@ rollback_update() {
     fi
 }
 
-# Update anwenden
-if git reset --hard "origin/${REPO_BRANCH}" >> "$LOG_FILE" 2>&1; then
+# Update anwenden (kein doppeltes fetch — bereits oben geschehen)
+if git stash push -u -m "timer-auto-stash-$(date +%Y%m%d-%H%M%S)" >>"$LOG_FILE" 2>&1 && \
+   git pull --ff-only origin "$REPO_BRANCH" >>"$LOG_FILE" 2>&1; then
+    if git stash list 2>/dev/null | grep -q "timer-auto-stash"; then
+        git stash pop >>"$LOG_FILE" 2>&1 || true
+    fi
     if [[ -n "$CONFIG_BACKUP" && -f "$CONFIG_BACKUP" ]]; then
         mv -f "$CONFIG_BACKUP" "${INSTALL_DIR}/config.js"
         chmod 644 "${INSTALL_DIR}/config.js"
@@ -1752,7 +1956,6 @@ if git reset --hard "origin/${REPO_BRANCH}" >> "$LOG_FILE" 2>&1; then
     fi
 
     if ! systemctl reload nginx >> "$LOG_FILE" 2>&1; then
-        # Reload schlug fehl — vollständigen Restart versuchen, sonst Rollback
         if systemctl restart nginx >> "$LOG_FILE" 2>&1; then
             echo "[$(date -Iseconds)] nginx reload failed, restart succeeded" >> "$LOG_FILE"
         else
@@ -1761,7 +1964,6 @@ if git reset --hard "origin/${REPO_BRANCH}" >> "$LOG_FILE" 2>&1; then
         fi
     fi
 
-    # Service Unit neu starten (kein Timer-Restart, verhindert rekursive Trigger)
     systemctl daemon-reload >> "$LOG_FILE" 2>&1 || echo "[$(date -Iseconds)] WARN: daemon-reload failed" >> "$LOG_FILE"
     if systemctl restart openweb-updater.service >> "$LOG_FILE" 2>&1; then
         echo "[$(date -Iseconds)] openweb-updater.service restarted" >> "$LOG_FILE"
@@ -1769,15 +1971,17 @@ if git reset --hard "origin/${REPO_BRANCH}" >> "$LOG_FILE" 2>&1; then
         echo "[$(date -Iseconds)] WARN: openweb-updater.service restart failed" >> "$LOG_FILE"
     fi
 
-    # Bestätigung dass nginx aktiv ist
     if systemctl is-active --quiet nginx; then
-        echo "[$(date -Iseconds)] Update applied successfully (nginx reloaded, service restarted)" >> "$LOG_FILE"
+        echo "[$(date -Iseconds)] Update applied successfully" >> "$LOG_FILE"
     else
         rollback_update "nginx not active after reload/restart"
         exit 1
     fi
 else
-    echo "[$(date -Iseconds)] ERROR: git reset failed" >> "$LOG_FILE"
+    echo "[$(date -Iseconds)] ERROR: git update failed" >> "$LOG_FILE"
+    if git stash list 2>/dev/null | grep -q "timer-auto-stash"; then
+        git stash pop >> "$LOG_FILE" 2>&1 || true
+    fi
     [[ -n "$CONFIG_BACKUP" ]] && mv -f "$CONFIG_BACKUP" "${INSTALL_DIR}/config.js"
     [[ -n "$SERVER_CONFIG_BACKUP" ]] && mv -f "$SERVER_CONFIG_BACKUP" "${INSTALL_DIR}/.openweb.env"
     exit 1

@@ -31,6 +31,28 @@ geschickt, dort gegen den DB-Hash verifiziert, und die App bekommt ein
 
 ---
 
+## Schnell-Update / Repair
+
+Falls du von einer älteren Version kommst und `config.js` von nginx nicht
+gelesen werden kann (**403**) oder `save-config` mit **401** antwortet:
+
+```bash
+cd /var/html
+sudo bash install.sh update
+```
+
+Das Skript erledigt dann automatisch:
+
+1. `.openweb.env` aus bestehender `config.js` erzeugen
+2. `CONFIG_SHARED_SECRET` generieren und in Supabase setzen
+3. `config.js` auf `chmod 644` setzen, damit nginx sie ausliefern kann
+4. `save-config` Edge Function deployen
+
+Danach steht das Shared Secret in `/var/html/.openweb.env` und wird im
+Admin-Panel unter „Supabase konfigurieren“ eingetragen.
+
+---
+
 ## Voraussetzungen
 
 - [Supabase CLI](https://supabase.com/docs/guides/cli) (`npm i -g supabase`)
