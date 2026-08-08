@@ -1391,10 +1391,14 @@ mkdir -p "$INSTALL_DIR"
 
 if [[ -d "${INSTALL_DIR}/.git" ]]; then
     log_info "Existierendes Git-Repo gefunden — aktualisiere via 'git pull'..."
-    if ! git_pull_safe "$INSTALL_DIR"; then
-        log_error "Update bei Install fehlgeschlagen"
-        exit $EX_GIT
-    fi
+    git_pull_safe "$INSTALL_DIR"
+    local pull_status=$?
+    case "$pull_status" in
+        0) log_ok "Repo aktualisiert" ;;
+        2) log_info "Repo bereits aktuell" ;;
+        *) log_error "Update bei Install fehlgeschlagen"
+           exit $EX_GIT ;;
+    esac
 else
     log_info "Klone Repo nach ${INSTALL_DIR}..."
     if [[ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
