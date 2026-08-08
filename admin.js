@@ -937,13 +937,18 @@
       if (!status) return;
       status.textContent = 'Sende Test…';
       try {
-        await window.db.sendDiscordWebhook({
+        const payload = {
           title: 'Test-Track',
           artist: 'OpenWeb',
           album: 'Admin-Panel',
           cover: '',
           url: ''
-        });
+        };
+        if (window.DiscordAPI?.send) {
+          await window.DiscordAPI.send(payload);
+        } else {
+          await window.db.sendDiscordWebhook(payload);
+        }
         status.textContent = '✅ Test gesendet';
       } catch (err) { status.textContent = '❌ ' + (err.message || 'Fehler'); }
     });

@@ -241,14 +241,19 @@
     },
 
     async notifyDiscord(track) {
-      if (!window.db?.sendDiscordWebhook) return;
-      await window.db.sendDiscordWebhook({
+      if (!window.DiscordAPI?.send && !window.db?.sendDiscordWebhook) return;
+      const payload = {
         title: track.title || 'Unbekannt',
         artist: track.artist || '',
         album: track.album || '',
         cover: track.coverUrl || '',
         url: track.url || ''
-      });
+      };
+      if (window.DiscordAPI?.send) {
+        await window.DiscordAPI.send(payload);
+      } else {
+        await window.db.sendDiscordWebhook(payload);
+      }
     },
 
     setState(state) {
