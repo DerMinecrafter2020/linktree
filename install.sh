@@ -215,6 +215,9 @@ load_server_config() {
             val="${line#*=}"
             # Entferne einfache/doppelte Anführungszeichen am Anfang/Ende
             val="${val#[\"\']}" && val="${val%[\"\']}"
+            # Trim: CR (\r), LF, Tab und Leerzeichen entfernen
+            val="${val//$'\r'/}"
+            val="${val#"${val%%[![:space:]]*}"}" && val="${val%"${val##*[![:space:]]}"}"
             export "$key"="$val"
         fi
     done < "$SERVER_CONFIG_FILE"
