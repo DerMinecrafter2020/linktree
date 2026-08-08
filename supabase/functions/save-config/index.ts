@@ -23,23 +23,28 @@ const CORS = {
 };
 
 const CONFIG_PATH = '/var/html/config.js';
-const SHARED_SECRET = Deno.env.get('CONFIG_SHARED_SECRET') || '';
-const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').filter(Boolean);
+const SHARED_SECRET = (Deno.env.get('CONFIG_SHARED_SECRET') || '').trim();
+const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').map(s => s.trim()).filter(Boolean);
+
+function corsFor(req) {
+  const origin = req?.headers.get('origin') || '';
+  if (ALLOWED_ORIGINS.length === 0) {
+    return { ...CORS, 'Access-Control-Allow-Origin': origin || '*' };
+  }
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    return { ...CORS, 'Access-Control-Allow-Origin': origin };
+  }
+  return {
+    'Access-Control-Allow-Origin': 'null',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-admin-secret',
+  };
+}
 
 function json(data, status, req) {
-  const origin = req?.headers.get('origin') || '';
-  const cors = ALLOWED_ORIGINS.length === 0
-    ? { ...CORS, 'Access-Control-Allow-Origin': origin || '*' }
-    : ALLOWED_ORIGINS.includes(origin)
-      ? { ...CORS, 'Access-Control-Allow-Origin': origin }
-      : {
-          'Access-Control-Allow-Origin': 'null',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-admin-secret',
-        };
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json', ...cors }
+    headers: { 'Content-Type': 'application/json', ...corsFor(req) }
   });
 }
 
@@ -62,19 +67,19 @@ Deno.serve(async (req) => {
   // Shared-Secret bevorzugt aus Header (nicht im JSON-Body/Proxy-Log sichtbar),
   // Fallback auf Body für alte Clients.
   if (SHARED_SECRET) {
-    const provided = String(req.headers.get('x-admin-secret') || body?.secret || '');
+    const provided = String(req.headers.get('x-admin-secret') || body?.secret || '').trim();
     if (provided !== SHARED_SECRET) {
       return json({ ok: false, error: 'unauthorized' }, 401, req);
     }
   }
 
   const newUrl = String(body.url || '').trim();
-  const newKey = String(body.anonKey || '').trim();
+  const newKey = String(body.anonKey || '').replace(/\s+/g, '').trim();
   if (!isValidUrl(newUrl)) {
     return json({ ok: false, error: 'invalid url' }, 400, req);
   }
-  if (newKey.length < 50) {
-    return json({ ok: false, error: 'anon-key too short' }, 400, req);
+  if (newKey.length < 40) {
+    return json({ ok: false, error: 'anon-key too short / invalid' }, 400, req);
   }
 
   // Bestehende config.js lesen
@@ -90,12 +95,13 @@ Deno.serve(async (req) => {
     await Deno.writeTextFile(CONFIG_PATH + '.bak', existing);
   } catch (_) { /* backup best-effort */ }
 
-  // Ersetze url: und anonKey: Zeilen mit den neuen Werten
+  // Ersetze url: und anonKey: Zeilen mit den neuen Werten (beide Quote-Typen)
+  const esc = (s) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   let updated = existing
-    .replace(/url:\s*'[^']*'/i, `url: '${newUrl}'`)
-    .replace(/anonKey:\s*'[^']*'/i, `anonKey: '${newKey}'`)
-    .replace(/adminProxyUrl:\s*'[^']*'/i, `adminProxyUrl: '${newUrl}/functions/v1/admin-proxy'`)
-    .replace(/proxyUrl:\s*'[^']*'/i, `proxyUrl: '${newUrl}/functions/v1/navidrome-proxy'`);
+    .replace(/url:\s*['"][^'"]*['"]/i, `url: '${esc(newUrl)}'`)
+    .replace(/anonKey:\s*['"][^'"]*['"]/i, `anonKey: '${esc(newKey)}'`)
+    .replace(/adminProxyUrl:\s*['"][^'"]*['"]/i, `adminProxyUrl: '${esc(newUrl)}/functions/v1/admin-proxy'`)
+    .replace(/proxyUrl:\s*['"][^'"]*['"]/i, `proxyUrl: '${esc(newUrl)}/functions/v1/navidrome-proxy'`);
 
   // Zurueckschreiben
   try {

@@ -30,25 +30,31 @@
   })();
   window.SupabaseHelpers = Helpers;
 
+  function cleanKey(k) {
+    return String(k || '').replace(/\s+/g, '').trim();
+  }
+
   function assertAnonKey(anonKey) {
-    if (!anonKey) throw new Error('Supabase anon-key fehlt — config.js prüfen / install.sh neu ausführen');
-    if (String(anonKey).length < 40) {
+    const k = cleanKey(anonKey);
+    if (!k) throw new Error('Supabase anon-key fehlt — config.js prüfen / install.sh neu ausführen');
+    if (k.length < 40) {
       throw new Error('Supabase anon-key zu kurz / ungültig — config.js prüfen');
     }
+    return k;
   }
 
   // ---------- Admin Proxy ----------
   window.SupabaseAPI.adminProxy = async function ({ url, action, data, extra, anonKey, secret }) {
     if (!url) throw new Error('adminProxyUrl not set');
     if (!secret) throw new Error('shared secret missing');
-    assertAnonKey(anonKey);
+    anonKey = assertAnonKey(anonKey);
 
     // Shared Secret kommt aus /admin/admin-config.js und wird im Header
     // übertragen, damit es nicht im JSON-Body landet.
     const headers = {
       apikey: anonKey,
       'Authorization': 'Bearer ' + anonKey,
-      'X-Admin-Secret': secret,
+      'X-Admin-Secret': String(secret || '').trim(),
     };
     const body = { action: action, data: data || {} };
     if (extra && typeof extra === 'object') {
@@ -67,10 +73,11 @@
 
   // ---------- Save Config ----------
   window.SupabaseAPI.saveConfig = async function ({ url, anonKey, secret }) {
-    assertAnonKey(anonKey);
+    anonKey = assertAnonKey(anonKey);
+    url = String(url || '').trim();
 
     // Regex erlaubt Unterstriche im Projekt-Ref und optionale Region (z. B. aws-0-us-east-1.pooler)
-    const m = String(url || '').match(/https:\/\/([a-z0-9_][a-z0-9_-]*)\.supabase\.co(\/functions\/v1)?/i);
+    const m = url.match(/https:\/\/([a-z0-9_][a-z0-9_-]*)\.supabase\.co(\/functions\/v1)?/i);
     if (!m) throw new Error('Ungueltige Supabase-URL (Format: https://<ref>.supabase.co)');
     const projectRef = m[1];
     const endpoint = `https://${projectRef}.supabase.co/functions/v1/save-config`;
@@ -80,7 +87,7 @@
       'Authorization': 'Bearer ' + anonKey,
       'Content-Type': 'application/json',
     };
-    if (secret) headers['X-Admin-Secret'] = secret;
+    if (secret) headers['X-Admin-Secret'] = String(secret).trim();
     const body = { url: url, anonKey: anonKey };
 
     try {

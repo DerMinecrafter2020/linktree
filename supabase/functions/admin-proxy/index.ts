@@ -31,7 +31,7 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-admin-secret',
 };
 
-const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').filter(Boolean);
+const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').map(s => s.trim()).filter(Boolean);
 
 function corsFor(req) {
   const origin = req.headers.get('origin') || '';
@@ -56,7 +56,7 @@ function json(data, status, req) {
   });
 }
 
-const SHARED_SECRET = Deno.env.get('CONFIG_SHARED_SECRET') || '';
+const SHARED_SECRET = (Deno.env.get('CONFIG_SHARED_SECRET') || '').trim();
 
 function isHttpUrl(u) {
   try {
@@ -162,7 +162,7 @@ async function authenticate(req, body) {
   if (!SHARED_SECRET) throw new Error('server not configured');
   // Secret bevorzugt aus Header (nicht im JSON-Body/Proxy-Log sichtbar),
   // Fallback auf Body für alte Clients.
-  const provided = String(req.headers.get('x-admin-secret') || body?.secret || '');
+  const provided = String(req.headers.get('x-admin-secret') || body?.secret || '').trim();
   if (provided !== SHARED_SECRET) throw new Error('unauthorized');
   return { sub: 'admin' };
 }

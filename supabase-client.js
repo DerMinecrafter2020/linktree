@@ -15,8 +15,8 @@
 (function () {
   'use strict';
 
-  const SUPABASE_URL = window.SUPABASE_CONFIG?.url;
-  const SUPABASE_KEY = window.SUPABASE_CONFIG?.anonKey;
+  const SUPABASE_URL = String(window.SUPABASE_CONFIG?.url || '').trim();
+  const SUPABASE_KEY = String(window.SUPABASE_CONFIG?.anonKey || '').replace(/\s+/g, '').trim();
 
   // Edge-Function URL (optional)
   const ADMIN_PROXY_URL  = window.SUPABASE_CONFIG?.adminProxyUrl;

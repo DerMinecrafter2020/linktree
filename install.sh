@@ -258,9 +258,9 @@ ensure_server_config() {
         load_server_config
         if [[ -z "${CONFIG_SHARED_SECRET:-}" ]] || is_placeholder "$CONFIG_SHARED_SECRET"; then
             if command -v openssl >/dev/null 2>&1; then
-                CONFIG_SHARED_SECRET=$(openssl rand -hex 32 2>/dev/null)
+                CONFIG_SHARED_SECRET=$(openssl rand -hex 32 2>/dev/null | tr -d '\r\n')
             else
-                CONFIG_SHARED_SECRET=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 64)
+                CONFIG_SHARED_SECRET=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 64 | tr -d '\r\n')
             fi
             save_server_config
         fi
@@ -278,9 +278,9 @@ ensure_server_config() {
         # Shared Secret generieren
         if [[ -z "${CONFIG_SHARED_SECRET:-}" ]] || is_placeholder "$CONFIG_SHARED_SECRET"; then
             if command -v openssl >/dev/null 2>&1; then
-                CONFIG_SHARED_SECRET=$(openssl rand -hex 32 2>/dev/null)
+                CONFIG_SHARED_SECRET=$(openssl rand -hex 32 2>/dev/null | tr -d '\r\n')
             else
-                CONFIG_SHARED_SECRET=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 64)
+                CONFIG_SHARED_SECRET=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 64 | tr -d '\r\n')
             fi
         fi
 
@@ -1231,7 +1231,14 @@ do_set_admin_enabled() {
 
     if [[ "$enabled" == "true" ]]; then
         log_info "Aktiviere Admin-Bereich..."
+        # Sicherstellen, dass admin-config.js das aktuelle Secret nutzt
+        generate_admin_config
+        local seen=("admin/admin-config.js")
         for f in "${files[@]}"; do
+            if [[ " ${seen[*]} " == *" ${f} "* ]]; then
+                continue
+            fi
+            seen+=("$f")
             local src="${disabled_dir}/${f}"
             local dst="${admin_dir}/${f}"
             if [[ -e "$src" ]]; then
