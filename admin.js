@@ -713,18 +713,46 @@
     form.pollIntervalSec.value = cfg.pollIntervalSec;
   }
 
+  async function loadNavidromeSettings() {
+    try {
+      const res = await window.db.getAdminSettings();
+      const s = res?.data || res || {};
+      if (s.navidrome_proxy_url || s.navidrome_enabled !== undefined) {
+        saveNavidromeConfig({
+          enabled: !!s.navidrome_enabled,
+          proxyUrl: s.navidrome_proxy_url || '',
+          pollIntervalSec: Number(s.navidrome_poll_interval_sec) || 30,
+        });
+        renderNavidromeForm();
+      }
+    } catch (err) {
+      console.warn('[admin] Navidrome-Settings konnten nicht geladen werden:', err.message);
+    }
+  }
+
   function bindNavidrome() {
     const form = $('#navidrome-form');
     if (!form) return;
     renderNavidromeForm();
-    form.addEventListener('submit', (e) => {
+    loadNavidromeSettings();
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const proxyUrl = (form.proxyUrl.value || '').trim();
       const poll = parseInt(form.pollIntervalSec.value || '30', 10) || 30;
       if (proxyUrl && !/^https?:\/\//i.test(proxyUrl)) { toast('Proxy-URL muss mit http(s) beginnen', true); return; }
       if (form.enabled.checked && !proxyUrl) { toast('Bitte Proxy-URL eintragen oder Player deaktivieren', true); return; }
-      saveNavidromeConfig({ enabled: !!form.enabled.checked, proxyUrl, pollIntervalSec: Math.min(600, Math.max(10, poll)) });
-      toast('🎵 Navidrome-Einstellungen gespeichert (lokal)');
+      const cfg = { enabled: !!form.enabled.checked, proxyUrl, pollIntervalSec: Math.min(600, Math.max(10, poll)) };
+      try {
+        await window.db.saveAdminSettings({
+          navidrome_enabled: cfg.enabled,
+          navidrome_proxy_url: cfg.proxyUrl,
+          navidrome_poll_interval_sec: cfg.pollIntervalSec,
+        });
+        saveNavidromeConfig(cfg);
+        toast('🎵 Navidrome-Einstellungen gespeichert');
+      } catch (err) {
+        toast('Fehler: ' + (err.message || 'Speichern fehlgeschlagen'), true);
+      }
     });
 
     $('#navidrome-test-btn')?.addEventListener('click', async () => {

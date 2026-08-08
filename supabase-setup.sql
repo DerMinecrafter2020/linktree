@@ -170,12 +170,12 @@ begin
 end
 $$;
 
--- 7) Admin-Einstellungen (Discord-Webhook etc.)
+-- 7) Admin-Einstellungen (Navidrome-Player etc.)
 create table if not exists public.admin_settings (
   id                        int          primary key default 1,
-  discord_webhook_enabled   boolean      not null default false,
-  discord_webhook_url       text         null,
-  discord_webhook_template  text         null default '{"content":"🎵 Jetzt läuft: {artist} - {title} ({album})"}',
+  navidrome_enabled             boolean      not null default false,
+  navidrome_proxy_url           text         null,
+  navidrome_poll_interval_sec   int          not null default 30,
   updated_at                timestamptz  not null default now(),
   constraint admin_settings_singleton check (id = 1)
 );

@@ -58,7 +58,19 @@ function isHttpUrl(u) {
 
 function validateAdminSettings(s) {
   if (!s || typeof s !== 'object') throw new Error('invalid admin settings');
-  return {};
+  const out = {};
+  if (typeof s.navidrome_enabled === 'boolean') out.navidrome_enabled = s.navidrome_enabled;
+  if (typeof s.navidrome_proxy_url === 'string') {
+    const u = s.navidrome_proxy_url.trim();
+    if (u && !/^https?:\/\//i.test(u)) throw new Error('invalid navidrome proxy url');
+    out.navidrome_proxy_url = u || null;
+  }
+  if (typeof s.navidrome_poll_interval_sec === 'number') {
+    const n = Number(s.navidrome_poll_interval_sec);
+    if (!Number.isFinite(n) || n < 10 || n > 600) throw new Error('invalid navidrome poll interval');
+    out.navidrome_poll_interval_sec = Math.round(n);
+  }
+  return out;
 }
 
 function validateProfile(p) {
@@ -234,14 +246,14 @@ Deno.serve(async (req) => {
       }
       case 'getAdminSettings': {
         const { data, error } = await admin.from('admin_settings')
-          .select('id')
+          .select('id,navidrome_enabled,navidrome_proxy_url,navidrome_poll_interval_sec')
           .eq('id', 1).maybeSingle();
         if (error) throw error;
         return json({ ok: true, data: data || {} }, 200, req);
       }
       case 'saveAdminSettings': {
         const settings = validateAdminSettings(body.data);
-        const { error } = await admin.from('admin_settings').upsert({ id: 1, ...settings });
+        const { error } = await admin.from('admin_settings').upsert({ id: 1, ...settings }, { onConflict: 'id' });
         if (error) throw error;
         return json({ ok: true }, 200, req);
       }
