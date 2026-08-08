@@ -194,6 +194,38 @@ code {
 .card-block.danger { border-color: rgba(255, 77, 109, 0.3); }
 .card-block.danger h3 { color: var(--neon-red); }
 
+.toggle-row {
+  display: flex; align-items: center; gap: 10px;
+  margin: 12px 0;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 14px;
+}
+.toggle-row input[type="checkbox"] {
+  width: 18px; height: 18px; accent-color: var(--neon-pink);
+}
+
+.hint.warning {
+  color: var(--neon-red);
+  background: rgba(255, 77, 109, 0.08);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border-left: 3px solid var(--neon-red);
+}
+
+body.admin-locked .content {
+  opacity: 0.6;
+  pointer-events: none;
+}
+body.admin-locked #admin-status-block,
+body.admin-locked #admin-status-block * {
+  opacity: 1;
+  pointer-events: auto;
+}
+body.admin-locked .side-nav {
+  opacity: 0.5;
+}
+
 /* =========================================================
    TOOLBAR
    ========================================================= */

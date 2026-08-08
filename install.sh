@@ -19,6 +19,8 @@
 #   sudo bash install.sh update-self         # Skript selbst updaten
 #   sudo bash install.sh install-cli         # Supabase CLI installieren
 #   sudo bash install.sh change-password     # Admin-Passwort ändern
+#   sudo bash install.sh enable-admin        # Admin-Bereich aktivieren
+#   sudo bash install.sh disable-admin       # Admin-Bereich deaktivieren
 #   sudo bash install.sh uninstall           # alles entfernen
 #
 # Voraussetzungen:
@@ -1186,6 +1188,50 @@ do_change_password() {
     return 0
 }
 
+# Admin-Bereich aktivieren / deaktivieren (nur serverseitig)
+do_set_admin_enabled() {
+    local enabled="$1"
+    if [[ -z "$enabled" ]]; then
+        log_error "Interner Fehler: do_set_admin_enabled braucht true/false"
+        exit $EX_USAGE
+    fi
+
+    load_or_ask_env "${INSTALL_DIR}/.openweb.env"
+    if [[ ! -f "${INSTALL_DIR}/.openweb.env" ]]; then
+        log_error "Keine ${INSTALL_DIR}/.openweb.env gefunden — bitte erst installieren"
+        exit $EX_CONFIG
+    fi
+
+    assert_vars SUPABASE_URL SUPABASE_ANON_KEY CONFIG_SHARED_SECRET
+
+    local bool_value
+    if [[ "$enabled" == "true" ]]; then bool_value=true; else bool_value=false; fi
+
+    log_info "Setze admin_enabled=${bool_value} über admin-proxy Edge Function..."
+
+    local temp_out
+    temp_out=$(mktemp)
+    local http_code
+    http_code=$(curl -sS -w '%{http_code}' -o "$temp_out" \
+        -X POST "${SUPABASE_URL%/}/functions/v1/admin-proxy" \
+        -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+        -H "Content-Type: application/json" \
+        -H "X-Admin-Secret: ${CONFIG_SHARED_SECRET}" \
+        -d "{\"action\":\"saveAdminSettings\",\"data\":{\"admin_enabled\":${bool_value}}}")
+
+    if [[ "$http_code" != "200" && "$http_code" != "201" ]]; then
+        log_error "admin-proxy antwortete mit HTTP ${http_code}"
+        log_error "Antwort: $(cat "$temp_out")"
+        rm -f "$temp_out"
+        exit $EX_SOFTWARE
+    fi
+
+    log_ok "admin_enabled=${bool_value} erfolgreich gesetzt"
+    log_info "Hinweis: /admin ist weiterhin via nginx Basic Auth geschützt; das Admin-UI zeigt jetzt den neuen Status."
+    rm -f "$temp_out"
+    return 0
+}
+
 # 8) Supabase CLI installieren (Helper)
 install_supabase_cli() {
     if [[ -x "$SUPABASE_CLI" ]] || command -v supabase >/dev/null 2>&1; then
@@ -1279,6 +1325,8 @@ EOF
         "Supabase CLI installieren / reparieren" \
         "Skript selbst updaten" \
         "Admin-Passwort ändern" \
+        "Admin-Bereich aktivieren" \
+        "Admin-Bereich deaktivieren" \
         "Backup erstellen" \
         "Backup wiederherstellen" \
         "Alles deinstallieren" \
@@ -1290,10 +1338,12 @@ EOF
             3) MODE="install-cli" ;;
             4) MODE="update-self" ;;
             5) MODE="change-password" ;;
-            6) MODE="backup" ;;
-            7) MODE="restore" ;;
-            8) MODE="uninstall" ;;
-            9) log_info "Abbruch"; exit 0 ;;
+            6) MODE="enable-admin" ;;
+            7) MODE="disable-admin" ;;
+            8) MODE="backup" ;;
+            9) MODE="restore" ;;
+            10) MODE="uninstall" ;;
+            11) log_info "Abbruch"; exit 0 ;;
             *) log_warn "Ungültige Auswahl: $REPLY"; continue ;;
         esac
         break
@@ -1302,10 +1352,10 @@ fi
 
 # Whitelist-Check
 case "$MODE" in
-    neuinstallieren|install|update|update-self|install-cli|change-password|backup|restore|uninstall) ;;
+    neuinstallieren|install|update|update-self|install-cli|change-password|enable-admin|disable-admin|backup|restore|uninstall) ;;
     *)
         log_error "Unbekannter Modus: $MODE"
-        log_info "Erlaubt: neuinstallieren, update, update-self, install-cli, change-password, backup, restore, uninstall"
+        log_info "Erlaubt: neuinstallieren, update, update-self, install-cli, change-password, enable-admin, disable-admin, backup, restore, uninstall"
         exit $EX_USAGE
         ;;
 esac
@@ -1319,6 +1369,8 @@ case "$MODE" in
     uninstall)       do_uninstall;       exit $? ;;
     install-cli)     do_install_cli;     exit $? ;;
     change-password) do_change_password; exit $? ;;
+    enable-admin)    do_set_admin_enabled true;  exit $? ;;
+    disable-admin)   do_set_admin_enabled false; exit $? ;;
     backup)          do_backup;          exit $? ;;
     restore)         do_restore;         exit $? ;;
 esac

@@ -68,6 +68,7 @@ function isHttpUrl(u) {
 function validateAdminSettings(s) {
   if (!s || typeof s !== 'object') throw new Error('invalid admin settings');
   const out = {};
+  if (typeof s.admin_enabled === 'boolean') out.admin_enabled = s.admin_enabled;
   if (typeof s.navidrome_enabled === 'boolean') out.navidrome_enabled = s.navidrome_enabled;
   if (typeof s.navidrome_proxy_url === 'string') {
     const u = s.navidrome_proxy_url.trim();
@@ -246,6 +247,25 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: 'unknown action' }, 400, req);
   }
 
+  // Wenn Admin-Bereich deaktiviert ist: Schreiboperationen blockieren,
+  // außer saveAdminSettings (damit man ihn wieder aktivieren kann).
+  const WRITE_ACTIONS = new Set([
+    'saveProfile', 'createLink', 'updateLink', 'deleteLink', 'reorderLinks'
+  ]);
+  if (WRITE_ACTIONS.has(body.action)) {
+    try {
+      const { data } = await admin.from('admin_settings')
+        .select('admin_enabled')
+        .eq('id', 1)
+        .maybeSingle();
+      if (data && data.admin_enabled === false) {
+        return json({ ok: false, error: 'admin area disabled' }, 403, req);
+      }
+    } catch (_) {
+      // Bei Fehler: weiter im Standard-Flow (fail-open ist hier akzeptabel)
+    }
+  }
+
   try {
     switch (body.action) {
       case 'saveProfile': {
@@ -256,10 +276,13 @@ Deno.serve(async (req) => {
       }
       case 'getAdminSettings': {
         const { data, error } = await admin.from('admin_settings')
-          .select('id,navidrome_enabled,navidrome_proxy_url,navidrome_poll_interval_sec')
+          .select('id,admin_enabled,navidrome_enabled,navidrome_proxy_url,navidrome_poll_interval_sec')
           .eq('id', 1).maybeSingle();
         if (error) throw error;
-        return json({ ok: true, data: data || {} }, 200, req);
+        // Sicherstellen, dass admin_enabled immer einen definierten Wert hat
+        const result = data || {};
+        if (typeof result.admin_enabled !== 'boolean') result.admin_enabled = true;
+        return json({ ok: true, data: result }, 200, req);
       }
       case 'saveAdminSettings': {
         const settings = validateAdminSettings(body.data);

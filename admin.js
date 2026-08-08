@@ -684,6 +684,45 @@
   }
 
   // ---- Settings ----
+  let adminEnabled = true;
+
+  async function loadAdminStatus() {
+    const statusText = $('#admin-status-text');
+    const hint = $('#admin-status-hint');
+    try {
+      const res = await window.db.getAdminSettings();
+      const s = res?.data || res || {};
+      adminEnabled = typeof s.admin_enabled === 'boolean' ? s.admin_enabled : true;
+      if (statusText) {
+        statusText.textContent = adminEnabled
+          ? '✅ Admin-Bereich ist aktiviert.'
+          : '🔒 Admin-Bereich ist deaktiviert — nur dieser Status-Bildschirm ist verfügbar.';
+      }
+      applyAdminLock();
+    } catch (err) {
+      console.warn('[admin] Admin-Status konnte nicht geladen werden:', err.message);
+      if (statusText) statusText.textContent = 'Status konnte nicht geladen werden.';
+      if (hint) hint.textContent = 'Fehler: ' + err.message;
+    }
+  }
+
+  function applyAdminLock() {
+    if (adminEnabled) {
+      document.body.classList.remove('admin-locked');
+      return;
+    }
+    document.body.classList.add('admin-locked');
+    // Alle Tabs außer Settings blockieren
+    $$('.side-btn[data-tab]:not([data-tab="settings"])').forEach(btn => {
+      btn.disabled = true;
+      btn.title = 'Admin-Bereich deaktiviert';
+    });
+    // Alle Tab-Inhalte außer Settings ausblenden
+    $$('.tab[data-tab]:not([data-tab="settings"])').forEach(t => t.hidden = true);
+    // Titel anpassen
+    $('#tab-title').textContent = 'Einstellungen';
+  }
+
   function bindSettings() {
     const hint = $('#change-pw-hint');
     if (hint) {
@@ -810,6 +849,9 @@
     bindData();
     bindSettings();
     bindNavidrome();
+
+    // Admin-Status früh laden (auch wenn db noch nicht ready)
+    loadAdminStatus();
 
     if (window.db?.needsSetup) {
       showSetupForm();

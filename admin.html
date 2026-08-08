@@ -155,7 +155,31 @@ supabase secrets set ALLOWED_ORIGINS="http://localhost:5500,https://deine-domain
           </ol>
         </div>
       </section>
-
+      <!-- ==================== TAB: SETTINGS ==================== -->
+      <section class="tab" data-tab="settings" hidden>
+        <div class="card-block" id="admin-status-block">
+          <h3>🛡️ Admin-Bereich</h3>
+          <p id="admin-status-text">Status wird geladen…</p>
+          <p id="admin-status-hint" class="hint">
+            Aktivieren/Deaktivieren nur auf dem Server via
+            <code>sudo bash install.sh enable-admin</code> oder
+            <code>sudo bash install.sh disable-admin</code>.
+          </p>
+        </div>
+        <div class="card-block">
+          <h3>🔌 Verbindung</h3>
+          <p id="settings-connection">…</p>
+          <code id="settings-url">…</code>
+        </div>
+        <div class="card-block">
+          <h3>🔑 Admin-Passwort</h3>
+          <p id="change-pw-hint">Das Passwort liegt nur serverseitig in <code>/etc/nginx/openweb-admin.htpasswd</code> und wird über <code>install.sh</code> verwaltet.</p>
+          <p>Ändere es direkt auf dem Server:</p>
+          <pre><code>sudo bash install.sh
+# Menü: „Passwort ändern"</code></pre>
+          <p class="hint">Der Browser zeigt beim nächsten Aufruf von <code>/admin</code> erneut den Basic-Auth-Dialog.</p>
+        </div>
+      </section>
       <!-- ==================== TAB: DATEN ==================== -->
       <section class="tab" data-tab="data" hidden>
         <div class="card-block">
@@ -176,22 +200,7 @@ supabase secrets set ALLOWED_ORIGINS="http://localhost:5500,https://deine-domain
         </div>
       </section>
 
-      <!-- ==================== TAB: SETTINGS ==================== -->
-      <section class="tab" data-tab="settings" hidden>
-        <div class="card-block">
-          <h3>🔌 Verbindung</h3>
-          <p id="settings-connection">…</p>
-          <code id="settings-url">…</code>
-        </div>
-        <div class="card-block">
-          <h3>🔑 Admin-Passwort</h3>
-          <p id="change-pw-hint">Das Passwort liegt nur serverseitig in <code>/etc/nginx/openweb-admin.htpasswd</code> und wird über <code>install.sh</code> verwaltet.</p>
-          <p>Ändere es direkt auf dem Server:</p>
-          <pre><code>sudo bash install.sh
-# Menü: „Passwort ändern"</code></pre>
-          <p class="hint">Der Browser zeigt beim nächsten Aufruf von <code>/admin</code> erneut den Basic-Auth-Dialog.</p>
-        </div>
-      </section>
+
     </main>
   </div>
 

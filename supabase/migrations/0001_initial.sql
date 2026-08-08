@@ -175,6 +175,7 @@ $$;
 --    Kein Passwort-Hash wird in Supabase gespeichert.
 create table if not exists public.admin_settings (
   id                            int          primary key default 1,
+  admin_enabled                 boolean      not null default true,
   navidrome_enabled             boolean      not null default false,
   navidrome_proxy_url           text         null,
   navidrome_poll_interval_sec   int          not null default 30,
@@ -182,7 +183,11 @@ create table if not exists public.admin_settings (
   constraint admin_settings_singleton check (id = 1)
 );
 
-insert into public.admin_settings (id) values (1) on conflict (id) do nothing;
+insert into public.admin_settings (id, admin_enabled) values (1, true) on conflict (id) do nothing;
+
+-- Migration: Spalte nachträglich hinzufügen, falls Tabelle schon existiert
+alter table public.admin_settings
+  add column if not exists admin_enabled boolean not null default true;
 
 -- RLS: niemand liest/schreibt direkt. Service-Role via Edge-Function.
 alter table public.admin_settings enable row level security;
