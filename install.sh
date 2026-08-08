@@ -263,8 +263,9 @@ git_pull_safe() {
     if [[ -f "${workdir}/config.js" ]]; then
         config_backup=$(mktemp /tmp/openweb-config.XXXXXX.js)
         cp -f "${workdir}/config.js" "$config_backup"
-        log_info "Lokale config.js temporär gesichert"
+        log_info "Lokale config.js temporär gesichert (wird nach Update wiederhergestellt)"
     fi
+    log_info "Alle in Supabase gespeicherten Daten bleiben bei einem Update unberührt"
 
     # 6) git reset + pull
     if ! (cd "$workdir" && git reset --hard "origin/${REPO_BRANCH}" 2>&1 | sed 's/^/    /'); then
@@ -278,6 +279,7 @@ git_pull_safe() {
         mv -f "$config_backup" "${workdir}/config.js"
         log_ok "Lokale config.js wiederhergestellt"
     fi
+    log_info "Keine Datenbank/Supabase-Daten verändert — update sicher für bestehende Inhalte"
 
     # 8) Verifikation
     local new_sha
@@ -387,6 +389,7 @@ do_update() {
     acquire_lock || exit $EX_USAGE
 
     log_info "Update von ${REPO_URL} (Branch: ${REPO_BRANCH})..."
+    log_info "Hinweis: Mit 'update' werden nur Anwendungsdateien ersetzt. Alle Supabase-Daten und die lokale config.js bleiben erhalten."
 
     local result
     git_pull_safe "$INSTALL_DIR"
@@ -402,6 +405,7 @@ do_update() {
                 return $EX_NGINX
             fi
             _log "INFO" "Update erfolgreich (Services neu gestartet)"
+            log_info "Vorhandene Supabase-Daten und config.js wurden nicht verändert"
             ;;
         2)
             log_info "Kein Update notwendig"
@@ -1291,6 +1295,7 @@ window.SUPABASE_CONFIG = {
   adminProxyUrl:         '${SUPABASE_URL}/functions/v1/admin-proxy',
   authLoginUrl:          '${SUPABASE_URL}/functions/v1/auth-login',
   authChangePasswordUrl: '${SUPABASE_URL}/functions/v1/auth-change-password',
+  discordWebhookUrl:     '${SUPABASE_URL}/functions/v1/discord-webhook',
 };
 
 window.NAVIDROME_CONFIG = {
@@ -1310,6 +1315,30 @@ EOF
 
 chmod 640 "${INSTALL_DIR}/config.js"
 log_ok "config.js erstellt (chmod 640)"
+
+# --- Edge Functions deployen (falls supabase CLI verfügbar) ---
+if command -v supabase >/dev/null 2>&1 && [[ "$SECRETS_READABLE" -eq 1 ]]; then
+    log_info "Deploye Supabase Edge Functions..."
+    local func
+    for func in admin-proxy auth-login auth-change-password navidrome-proxy discord-webhook save-config; do
+        if [[ -d "${INSTALL_DIR}/supabase/functions/${func}" ]]; then
+            if (cd "$INSTALL_DIR" && supabase functions deploy "$func" --project-ref "$SUPABASE_PROJECT_REF" 2>&1) | sed 's/^/    /'; then
+                log_ok "  $func deployed"
+            else
+                log_warn "  $func konnte nicht deployed werden"
+            fi
+        else
+            log_info "  $func nicht vorhanden — übersprungen"
+        fi
+    done
+else
+    log_warn "supabase CLI nicht eingeloggt — Edge Functions müssen manuell deployed werden:"
+    log_warn "  supabase functions deploy admin-proxy --project-ref $SUPABASE_PROJECT_REF"
+    log_warn "  supabase functions deploy auth-login --project-ref $SUPABASE_PROJECT_REF"
+    log_warn "  supabase functions deploy auth-change-password --project-ref $SUPABASE_PROJECT_REF"
+    log_warn "  supabase functions deploy navidrome-proxy --project-ref $SUPABASE_PROJECT_REF"
+    log_warn "  supabase functions deploy discord-webhook --project-ref $SUPABASE_PROJECT_REF"
+fi
 
 # --- Schritt 5: nginx konfigurieren ---
 log_info "Konfiguriere nginx..."

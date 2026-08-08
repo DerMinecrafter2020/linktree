@@ -99,19 +99,29 @@ Die Tabellen sind bereits in der `supabase_realtime`-Publication. Änderungen im
 # 1. Login
 supabase login
 
-# 2. Funktion deployen
+# 2. Funktionen deployen
 supabase functions deploy admin-proxy --project-ref fxywervpqojpjwreymdp
+supabase functions deploy auth-login --project-ref fxywervpqojpjwreymdp
+supabase functions deploy auth-change-password --project-ref fxywervpqojpjwreymdp
+supabase functions deploy navidrome-proxy --project-ref fxywervpqojpjwreymdp
+supabase functions deploy discord-webhook --project-ref fxywervpqojpjwreymdp
 
 # 3. Secrets setzen (serverseitig!)
 supabase secrets set SERVICE_ROLE_KEY=eyJ... --project-ref fxywervpqojpjwreymdp
+supabase secrets set JWT_SECRET=$(openssl rand -base64 48) --project-ref fxywervpqojpjwreymdp
 supabase secrets set ADMIN_PASSWORD=...   --project-ref fxywervpqojpjwreymdp
 supabase secrets set ALLOWED_ORIGINS=https://deine-domain.de --project-ref fxywervpqojpjwreymdp
+supabase secrets set NAVIDROME_URL='...' NAVIDROME_USER='...' NAVIDROME_PASS='...' --project-ref fxywervpqojpjwreymdp
 
 # 4. URL in config.js eintragen
 window.SUPABASE_CONFIG = {
   url: 'https://fxywervpqojpjwreymdp.supabase.co',
   anonKey: '...',
-  adminProxyUrl: 'https://fxywervpqojpjwreymdp.supabase.co/functions/v1/admin-proxy'
+  authEnabled: true,
+  adminProxyUrl:         'https://fxywervpqojpjwreymdp.supabase.co/functions/v1/admin-proxy',
+  authLoginUrl:          'https://fxywervpqojpjwreymdp.supabase.co/functions/v1/auth-login',
+  authChangePasswordUrl: 'https://fxywervpqojpjwreymdp.supabase.co/functions/v1/auth-change-password',
+  discordWebhookUrl:     'https://fxywervpqojpjwreymdp.supabase.co/functions/v1/discord-webhook',
 };
 ```
 
@@ -130,6 +140,25 @@ window.SUPABASE_CONFIG = {
 
 **Tabelle `links`**
 - `title`, `subtitle`, `url`, `icon`, `position`, `is_active`, `open_new`
+
+**Tabelle `admin_settings` (Singleton, `id = 1`)**
+- `discord_webhook_enabled` — `boolean`
+- `discord_webhook_url` — verschlüsselter Webhook-URL (text)
+- `discord_webhook_template` — Discord-Payload-Template (jsonb)
+
+---
+
+## 🔁 Updates
+
+Falls die App bereits läuft, kannst du sie jederzeit aktualisieren:
+
+```bash
+sudo bash install.sh update
+```
+
+- Nur Anwendungsdateien werden ersetzt.
+- Alle Supabase-Daten (Links, Profil, Admin-Settings) bleiben erhalten.
+- Die lokale `config.js` wird vor dem Update gesichert und danach wiederhergestellt.
 
 ---
 

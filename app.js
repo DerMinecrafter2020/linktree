@@ -221,13 +221,34 @@
           this.renderIdle();
           return;
         }
+        const previousId = this.currentTrack ? this.trackId(this.currentTrack) : null;
         this.currentTrack = newTrack;
         this.renderTrack(this.currentTrack);
+        if (previousId !== this.trackId(newTrack)) {
+          this.notifyDiscord(this.currentTrack).catch(err => {
+            console.warn('[discord webhook] notify failed:', err.message);
+          });
+        }
       } catch (err) {
         console.warn('[navidrome] poll failed:', err.message);
         this.currentTrack = null;
         this.renderIdle();
       }
+    },
+
+    trackId(t) {
+      return [t.title, t.artist, t.album].filter(Boolean).join('::');
+    },
+
+    async notifyDiscord(track) {
+      if (!window.db?.sendDiscordWebhook) return;
+      await window.db.sendDiscordWebhook({
+        title: track.title || 'Unbekannt',
+        artist: track.artist || '',
+        album: track.album || '',
+        cover: track.coverUrl || '',
+        url: track.url || ''
+      });
     },
 
     setState(state) {

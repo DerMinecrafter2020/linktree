@@ -183,6 +183,37 @@
         return data;
       },
 
+      async getAdminSettings() {
+        if (AUTH_ENABLED && ADMIN_PROXY_URL) {
+          return adminProxy('getAdminSettings', null, getToken());
+        }
+        // Ohne Edge-Function: nicht lesbar (RLS blockt anon)
+        throw new Error('getAdminSettings erfordert adminProxyUrl + authEnabled=true');
+      },
+
+      async saveAdminSettings(settings) {
+        if (AUTH_ENABLED && ADMIN_PROXY_URL) {
+          return adminProxy('saveAdminSettings', settings, getToken());
+        }
+        throw new Error('saveAdminSettings erfordert adminProxyUrl + authEnabled=true');
+      },
+
+      async sendDiscordWebhook(track) {
+        const url = window.SUPABASE_CONFIG?.discordWebhookUrl;
+        if (!url) {
+          // Kein Fehler werfen: bei Updates kann config.js kurzzeitig
+          // fehlen, Discord ist optional.
+          return { sent: false, reason: 'discordWebhookUrl nicht konfiguriert' };
+        }
+        // Kein Admin-Token nötig: die Edge Function liest die Webhook-URL
+        // serverseitig aus admin_settings und postet selbst zu Discord.
+        return window.SupabaseAPI.discordWebhook({
+          url,
+          track,
+          anonKey: SUPABASE_KEY,
+        });
+      },
+
       async listLinks() {
         const { data, error } = await client
           .from('links').select('*').order('position', { ascending: true });
@@ -258,6 +289,9 @@
       needsSetup: true,
       async getProfile() { throw err; },
       async saveProfile() { throw err; },
+      async getAdminSettings() { throw err; },
+      async saveAdminSettings() { throw err; },
+      async sendDiscordWebhook() { throw err; },
       async listLinks() { throw err; },
       async createLink() { throw err; },
       async updateLink() { throw err; },

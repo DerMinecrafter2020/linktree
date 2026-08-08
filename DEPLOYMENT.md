@@ -54,7 +54,11 @@ supabase functions deploy auth-init
 supabase functions deploy auth-login
 supabase functions deploy auth-change-password
 supabase functions deploy admin-proxy
+supabase functions deploy navidrome-proxy
+supabase functions deploy discord-webhook
 ```
+
+Optional: `install.sh` deployed diese automatisch, wenn `supabase CLI` eingeloggt ist.
 
 ## 3. Secrets setzen
 
@@ -170,3 +174,38 @@ Falls Edge-Functions Ärger machen:
 - `role`: Wird in `admin-proxy` geprüft (`payload.role === 'admin'`)
 - `exp`: Unix-Sekunden, Edge-Function lehnt abgelaufene Tokens ab
 - `jti`: Eindeutige ID, präventiv für zukünftige Token-Revocation-Listen
+## Discord Now-Playing Webhook
+
+### Voraussetzungen
+- Navidrome-Player ist aktiviert und erreichbar.
+- Ein Discord-Kanal-Webhook (Server-Einstellungen → Integrationen → Webhooks).
+
+### Migration anwenden
+Führe im Supabase SQL-Editor den Inhalt von
+`supabase/migrations/0004_discord_webhook.sql` aus. Erzeugt die Tabelle
+`public.admin_settings` mit RLS, damit der Webhook-URL nur von
+serverseitigen Edge Functions gelesen werden kann.
+
+### Edge Function
+```bash
+supabase functions deploy discord-webhook
+```
+
+### Admin-Panel konfigurieren
+1. `admin.html` öffnen → Tab **Musik**.
+2. Discord-Webhook aktivieren.
+3. Discord-Webhook-URL einfügen.
+4. (Optional) JSON-Template anpassen. Verfügbare Variablen:
+   - `{{title}}` — Titel
+   - `{{artist}}` — Interpret
+   - `{{album}}` — Album
+   - `{{duration}}` — Dauer als Text
+   - `{{coverArt}}` — Cover-Art-URL
+   - `{{playerUrl}}` — Link zum Navidrome-Player
+5. **Speichern**, dann **Testen**.
+
+### Sicherheit
+- Der Webhook-URL wird **niemals** an den Browser ausgeliefert.
+- `admin_settings` blockt Lesezugriff für `anon` und `authenticated`.
+- Nur `discord-webhook` (mit `service_role`) darf die URL lesen und an Discord weitergeben.
+- Test-Nachrichten werden über `admin-proxy` + `discord-webhook` versendet, nicht clientseitig.

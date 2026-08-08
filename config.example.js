@@ -13,6 +13,7 @@ window.SUPABASE_CONFIG = {
   adminProxyUrl:         'https://YOUR-PROJECT.supabase.co/functions/v1/admin-proxy',
   authLoginUrl:          'https://YOUR-PROJECT.supabase.co/functions/v1/auth-login',
   authChangePasswordUrl: 'https://YOUR-PROJECT.supabase.co/functions/v1/auth-change-password',
+  discordWebhookUrl:     'https://YOUR-PROJECT.supabase.co/functions/v1/discord-webhook',
 };
 
 // =========================================================

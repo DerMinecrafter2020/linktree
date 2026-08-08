@@ -864,6 +864,89 @@
       } catch (err) { status.textContent = '❌ ' + (err.message || 'Netzwerkfehler'); }
       finally { if (saved !== undefined) window.NAVIDROME_CONFIG.proxyUrl = saved; }
     });
+
+    bindDiscordWebhook();
+  }
+
+  // ---- Discord Webhook (Now Playing) ----
+  function renderDiscordForm(settings) {
+    const form = $('#discord-form');
+    if (!form) return;
+    const s = settings || {};
+    form.enabled.checked = !!s.discord_webhook_enabled;
+    form.webhookUrl.value = s.discord_webhook_url || '';
+    form.template.value = s.discord_webhook_template || '';
+  }
+
+  function safeDiscordWebhookUrl(u) {
+    if (typeof u !== 'string') return null;
+    const t = u.trim();
+    if (!t) return null;
+    try {
+      const url = new URL(t);
+      if (url.protocol !== 'https:' || !/^(discord\.com|discordapp\.com)$/i.test(url.hostname) || !url.pathname.startsWith('/api/webhooks/')) return null;
+      return t;
+    } catch { return null; }
+  }
+
+  function isValidJson(text) {
+    try { JSON.parse(text); return true; } catch { return false; }
+  }
+
+  function bindDiscordWebhook() {
+    const form = $('#discord-form');
+    const status = $('#discord-status');
+    if (!form) return;
+
+    (async () => {
+      if (!window.SUPABASE_CONFIG?.authEnabled) {
+        if (status) {
+          status.textContent = '⚠️ Discord-Webhook erfordert serverseitige Authentifizierung (authEnabled: true). Siehe DEPLOYMENT.md.';
+          status.classList.add('error');
+        }
+        form.querySelectorAll('input, textarea, button').forEach(el => { if (el.type !== 'button') el.disabled = true; });
+        return;
+      }
+      try {
+        const res = await window.db.getAdminSettings();
+        renderDiscordForm(res?.data || res);
+      } catch (err) {
+        if (status) { status.textContent = '⚠️ ' + err.message; status.classList.add('error'); }
+      }
+    })();
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const url = safeDiscordWebhookUrl(form.webhookUrl.value);
+      if (form.webhookUrl.value.trim() && !url) { toast('Ungültige Discord-Webhook-URL', true); return; }
+      const template = (form.template.value || '').trim();
+      if (template && !isValidJson(template)) { toast('Template muss gültiges JSON sein', true); return; }
+      const settings = {
+        discord_webhook_enabled: form.enabled.checked,
+        discord_webhook_url: url,
+        discord_webhook_template: template
+      };
+      try {
+        await window.db.saveAdminSettings(settings);
+        toast('🔔 Discord-Webhook gespeichert');
+        if (status) status.textContent = '';
+      } catch (err) { toast('Fehler: ' + err.message, true); }
+    });
+
+    $('#discord-test-btn')?.addEventListener('click', async () => {
+      if (!status) return;
+      status.textContent = 'Sende Test…';
+      try {
+        await window.db.sendDiscordWebhook({
+          title: 'Test-Track',
+          artist: 'OpenWeb',
+          album: 'Admin-Panel',
+          cover: '',
+          url: ''
+        });
+        status.textContent = '✅ Test gesendet';
+      } catch (err) { status.textContent = '❌ ' + (err.message || 'Fehler'); }
+    });
   }
 
   // ---- Reload ----

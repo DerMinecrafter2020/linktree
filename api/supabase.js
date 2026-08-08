@@ -96,4 +96,12 @@
     }
     return json;
   };
+
+  // ---------- Discord Webhook (Now Playing) ----------
+  window.SupabaseAPI.discordWebhook = async function ({ url, token, track, anonKey, authEnabled }) {
+    if (!url) throw new Error('discordWebhookUrl not set');
+    const headers = { apikey: anonKey || '', 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + (authEnabled ? token : (anonKey || ''));
+    return await Helpers.postJSON(url, headers, { track });
+  };
 })();

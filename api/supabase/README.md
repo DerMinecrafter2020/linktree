@@ -17,6 +17,9 @@ Alle clientseitigen Supabase-Calls sind jetzt in **einem** Bundle gebündelt.
 | `SupabaseAPI.authLogin(email, password)` | Login |
 | `SupabaseAPI.authChangePassword(newPassword, token)` | Passwort ändern |
 | `SupabaseAPI.saveConfig(config)` | Einstellungen speichern |
+| `SupabaseAPI.discordWebhook(track)` | Now-Playing an Discord-Webhook senden |
+| `SupabaseAPI.adminProxy({ action: 'getAdminSettings' })` | Discord-Webhook-Einstig. lesen |
+| `SupabaseAPI.adminProxy({ action: 'saveAdminSettings', settings })` | Discord-Webhook-Einstig. speichern |
 
 ## Hinweise
 
