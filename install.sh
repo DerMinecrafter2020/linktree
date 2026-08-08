@@ -1242,7 +1242,12 @@ do_set_admin_enabled() {
     # Sicherstellen, dass die Include-Zeile in der nginx-Config existiert
     if ! grep -qF "$include_line" "$NGINX_CONF" 2>/dev/null; then
         log_warn "Include-Zeile fehlt in ${NGINX_CONF} — füge sie hinzu"
-        sed -i "/auth_basic.*OpenWeb Admin/i\\        ${include_line}" "$NGINX_CONF"
+        if grep -q "auth_basic.*OpenWeb Admin" "$NGINX_CONF"; then
+            sed -i "/auth_basic.*OpenWeb Admin/i\\        include ${NGINX_ADMIN_STATE};" "$NGINX_CONF"
+        else
+            # Fallback: hinter der Admin-location öffnenden Zeile einfügen
+            sed -i "/location ~ \^\/(admin|admin-.*\\\\\.(html|css|js))\$/a\\        include ${NGINX_ADMIN_STATE};" "$NGINX_CONF"
+        fi
     fi
 
     reload_nginx
