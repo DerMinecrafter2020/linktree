@@ -207,6 +207,8 @@ load_server_config() {
     log_info "Lade serverseitige Konfiguration aus ${SERVER_CONFIG_FILE}..."
     local line key val
     while IFS= read -r line || [[ -n "$line" ]]; do
+        # Zeilenumbruch-Reste entfernen
+        line="${line%$'\r'}"
         case "$line" in
             ''|\#*) continue ;;
         esac
