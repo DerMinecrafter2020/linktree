@@ -30,11 +30,18 @@
   })();
   window.SupabaseHelpers = Helpers;
 
+  function assertAnonKey(anonKey) {
+    if (!anonKey) throw new Error('Supabase anon-key fehlt — config.js prüfen / install.sh neu ausführen');
+    if (String(anonKey).length < 40) {
+      throw new Error('Supabase anon-key zu kurz / ungültig — config.js prüfen');
+    }
+  }
+
   // ---------- Admin Proxy ----------
   window.SupabaseAPI.adminProxy = async function ({ url, action, data, extra, anonKey, secret }) {
     if (!url) throw new Error('adminProxyUrl not set');
     if (!secret) throw new Error('shared secret missing');
-    if (!anonKey) throw new Error('anonKey missing');
+    assertAnonKey(anonKey);
 
     // Shared Secret kommt aus /admin/admin-config.js und wird im Header
     // übertragen, damit es nicht im JSON-Body landet.
@@ -50,36 +57,50 @@
       }
     }
 
-    return await Helpers.postJSON(url, headers, body);
+    try {
+      return await Helpers.postJSON(url, headers, body);
+    } catch (err) {
+      console.error('[adminProxy] Request fehlgeschlagen:', { url, action, headerKeys: Object.keys(headers), error: err.message });
+      throw err;
+    }
   };
 
   // ---------- Save Config ----------
   window.SupabaseAPI.saveConfig = async function ({ url, anonKey, secret }) {
-    const m = String(url || '').match(/https:\/\/([a-z0-9][a-z0-9-]*)\.supabase\.co/i);
+    assertAnonKey(anonKey);
+
+    // Regex erlaubt Unterstriche im Projekt-Ref und optionale Region (z. B. aws-0-us-east-1.pooler)
+    const m = String(url || '').match(/https:\/\/([a-z0-9_][a-z0-9_-]*)\.supabase\.co(\/functions\/v1)?/i);
     if (!m) throw new Error('Ungueltige Supabase-URL (Format: https://<ref>.supabase.co)');
     const projectRef = m[1];
     const endpoint = `https://${projectRef}.supabase.co/functions/v1/save-config`;
 
     const headers = {
-      apikey: anonKey || '',
-      'Authorization': 'Bearer ' + (anonKey || ''),
+      apikey: anonKey,
+      'Authorization': 'Bearer ' + anonKey,
       'Content-Type': 'application/json',
     };
     if (secret) headers['X-Admin-Secret'] = secret;
     const body = { url: url, anonKey: anonKey };
 
-    const r = await fetch(endpoint, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(body),
-    });
-    const text = await r.text();
-    let json;
-    try { json = JSON.parse(text); } catch (_) { json = { ok: false, error: text }; }
-    if (!r.ok || !json.ok) {
-      throw new Error(json.error || ('HTTP ' + r.status));
+    try {
+      const r = await fetch(endpoint, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(body),
+      });
+      const text = await r.text();
+      let json;
+      try { json = JSON.parse(text); } catch (_) { json = { ok: false, error: text }; }
+      if (!r.ok || !json.ok) {
+        console.error('[saveConfig] Response:', { status: r.status, body: text.slice(0, 500) });
+        throw new Error(json.error || ('HTTP ' + r.status));
+      }
+      return json;
+    } catch (err) {
+      console.error('[saveConfig] Request fehlgeschlagen:', { endpoint, headerKeys: Object.keys(headers), error: err.message });
+      throw err;
     }
-    return json;
   };
 
 })();

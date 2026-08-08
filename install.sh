@@ -1610,6 +1610,10 @@ EOF
     log_ok "Geschützte Admin-Konfiguration erstellt: ${file} (chmod 600)"
 }
 
+# Geschützte Admin-Konfiguration erzeugen
+save_server_config
+generate_admin_config
+
 # --- Edge Functions deployen (falls supabase CLI verfügbar) ---
 deploy_edge_functions() {
     local cli=""
