@@ -12,7 +12,6 @@ window.SUPABASE_CONFIG = {
   // Admin-Login läuft über nginx Basic Auth. Keine weiteren URLs nötig.
   // Admin-Login läuft jetzt über nginx Basic Auth.
   adminProxyUrl:     'https://YOUR-PROJECT.supabase.co/functions/v1/admin-proxy',
-  discordWebhookUrl: 'https://YOUR-PROJECT.supabase.co/functions/v1/discord-webhook',
 };
 
 // =========================================================

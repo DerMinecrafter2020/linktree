@@ -58,28 +58,7 @@ function isHttpUrl(u) {
 
 function validateAdminSettings(s) {
   if (!s || typeof s !== 'object') throw new Error('invalid admin settings');
-  const out = {};
-  if (typeof s.discord_webhook_enabled === 'boolean') out.discord_webhook_enabled = s.discord_webhook_enabled;
-  if (typeof s.discord_webhook_url === 'string') {
-    const u = s.discord_webhook_url.trim();
-    if (u) {
-      try {
-        const url = new URL(u);
-        if (url.protocol !== 'https:' || !/^(discord\.com|discordapp\.com)$/i.test(url.hostname) || !url.pathname.startsWith('/api/webhooks/')) {
-          throw new Error('invalid discord webhook url');
-        }
-      } catch { throw new Error('invalid discord webhook url'); }
-    }
-    out.discord_webhook_url = u || null;
-  }
-  if (typeof s.discord_webhook_template === 'string') {
-    const t = s.discord_webhook_template.trim();
-    if (t) {
-      try { JSON.parse(t); } catch { throw new Error('invalid discord webhook template (must be valid JSON)'); }
-      out.discord_webhook_template = t;
-    }
-  }
-  return out;
+  return {};
 }
 
 function validateProfile(p) {
@@ -255,7 +234,7 @@ Deno.serve(async (req) => {
       }
       case 'getAdminSettings': {
         const { data, error } = await admin.from('admin_settings')
-          .select('discord_webhook_url,discord_webhook_enabled,discord_webhook_template')
+          .select('id')
           .eq('id', 1).maybeSingle();
         if (error) throw error;
         return json({ ok: true, data: data || {} }, 200, req);

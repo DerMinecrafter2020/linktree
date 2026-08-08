@@ -119,55 +119,20 @@
       },
 
       async getAdminSettings() {
-        const discordUrl = window.SUPABASE_CONFIG?.discordSettingsUrl || window.ADMIN_CONFIG?.discordSettingsUrl;
-        const discordSecret = window.SUPABASE_CONFIG?.discordAdminSecret || window.ADMIN_CONFIG?.discordAdminSecret;
-        if (discordUrl && discordSecret) {
-          return window.SupabaseAPI.discordSettings({
-            url: discordUrl,
-            action: 'get',
-            anonKey: SUPABASE_KEY,
-            secret: discordSecret,
-          });
-        }
         if (ADMIN_PROXY_URL) {
           return adminProxy('getAdminSettings');
         }
-        throw new Error('getAdminSettings erfordert adminProxyUrl oder discordSettingsUrl');
+        throw new Error('getAdminSettings erfordert adminProxyUrl');
       },
 
       async saveAdminSettings(settings) {
-        const discordUrl = window.SUPABASE_CONFIG?.discordSettingsUrl || window.ADMIN_CONFIG?.discordSettingsUrl;
-        const discordSecret = window.SUPABASE_CONFIG?.discordAdminSecret || window.ADMIN_CONFIG?.discordAdminSecret;
-        if (discordUrl && discordSecret) {
-          return window.SupabaseAPI.discordSettings({
-            url: discordUrl,
-            action: 'save',
-            data: settings,
-            anonKey: SUPABASE_KEY,
-            secret: discordSecret,
-          });
-        }
         if (ADMIN_PROXY_URL) {
           return adminProxy('saveAdminSettings', settings);
         }
-        throw new Error('saveAdminSettings erfordert adminProxyUrl oder discordSettingsUrl');
+        throw new Error('saveAdminSettings erfordert adminProxyUrl');
       },
 
-      async sendDiscordWebhook(track) {
-        const url = window.SUPABASE_CONFIG?.discordWebhookUrl;
-        if (!url) {
-          // Kein Fehler werfen: bei Updates kann config.js kurzzeitig
-          // fehlen, Discord ist optional.
-          return { sent: false, reason: 'discordWebhookUrl nicht konfiguriert' };
-        }
-        // Kein Admin-Token nötig: die Edge Function liest die Webhook-URL
-        // serverseitig aus admin_settings und postet selbst zu Discord.
-        return window.SupabaseAPI.discordWebhook({
-          url,
-          track,
-          anonKey: SUPABASE_KEY,
-        });
-      },
+
 
       async listLinks() {
         const { data, error } = await client
@@ -244,7 +209,6 @@
       async saveProfile() { throw err; },
       async getAdminSettings() { throw err; },
       async saveAdminSettings() { throw err; },
-      async sendDiscordWebhook() { throw err; },
       async listLinks() { throw err; },
       async createLink() { throw err; },
       async updateLink() { throw err; },

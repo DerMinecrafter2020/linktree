@@ -82,8 +82,7 @@ Deno.serve(async (req) => {
   let updated = existing
     .replace(/url:\s*'[^']*'/i, `url: '${newUrl}'`)
     .replace(/anonKey:\s*'[^']*'/i, `anonKey: '${newKey}'`)
-    .replace(/adminProxyUrl:\s*'[^']*'/i, `adminProxyUrl: '${newUrl}/functions/v1/admin-proxy'`)
-    .replace(/discordWebhookUrl:\s*'[^']*'/i, `discordWebhookUrl: '${newUrl}/functions/v1/discord-webhook'`)
+    .replace(/adminProxyUrl:\s*'[^']*'/i, `adminProxyUrl: '${newUrl}/functions/v1/admin-proxy'`);
     .replace(/proxyUrl:\s*'[^']*'/i, `proxyUrl: '${newUrl}/functions/v1/navidrome-proxy'`);
 
   // Zurueckschreiben

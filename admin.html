@@ -154,32 +154,6 @@ supabase secrets set ALLOWED_ORIGINS="http://localhost:5500,https://deine-domain
             <li>Hauptseite neu laden — Player erscheint</li>
           </ol>
         </div>
-
-        <div class="card-block">
-          <h3>🔔 Discord-Webhook (Now Playing)</h3>
-          <p>Postet automatisch in einen Discord-Channel, sobald ein neuer Track in Navidrome anfängt. Die Webhook-URL wird serverseitig in Supabase gespeichert und nie im Browser angezeigt.</p>
-
-          <form id="discord-form" class="form">
-            <label class="row">
-              <input type="checkbox" name="enabled" />
-              <span>Webhook aktivieren</span>
-            </label>
-            <label>
-              <span>Discord-Webhook-URL</span>
-              <input name="webhookUrl" type="url" placeholder="https://discord.com/api/webhooks/…" />
-            </label>
-            <label>
-              <span>Nachrichten-Template (JSON, Platzhalter: <code>{title}</code>, <code>{artist}</code>, <code>{album}</code>, <code>{cover}</code>, <code>{url}</code>)</span>
-              <textarea name="template" rows="12" placeholder="Discord-JSON-Body …"></textarea>
-            </label>
-
-            <div class="form-actions">
-              <button type="button" id="discord-test-btn" class="btn ghost">Test senden</button>
-              <button type="submit" class="btn primary">Speichern</button>
-            </div>
-            <p id="discord-status" class="hint" aria-live="polite"></p>
-          </form>
-        </div>
       </section>
 
       <!-- ==================== TAB: DATEN ==================== -->
@@ -282,12 +256,10 @@ supabase secrets set ALLOWED_ORIGINS="http://localhost:5500,https://deine-domain
   <div id="toast" class="toast" hidden></div>
 
   <script src="config.js"></script>
-  <script src="admin-config.js"></script>
   <script src="supabase-client.js"></script>
   <script src="icons.js"></script>
   <script src="api/supabase.js"></script>
   <script src="api/navidrome.js"></script>
-  <script src="api/discord.js"></script>
   <script src="admin.js"></script>
 </body>
 </html>

@@ -15,10 +15,6 @@ config.local.js
 # und beim Restore wiederhergestellt.
 .openweb.env
 
-# Geschuetzte Admin-Konfiguration mit Discord-Settings-Secret.
-# Wird von install.sh erzeugt, nur im /admin-Bereich erreichbar.
-admin-config.js
-
 # --- Lokale Test-/Debug-Skripte -------------------------------------------
 test-attack.bat
 final-check.bat

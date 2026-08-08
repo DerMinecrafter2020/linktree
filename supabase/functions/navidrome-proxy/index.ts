@@ -245,7 +245,7 @@ async function navFetch(path, params) {
 // ACTIONS
 // =========================================================
 
-async function getNowPlaying(coverMode = 'base64') {
+async function getNowPlaying() {
   const serverUrl = NAVIDROME_URL.replace(/\/+$/, '');
   try {
     const params = subsonicParams();
@@ -277,14 +277,14 @@ async function getNowPlaying(coverMode = 'base64') {
       }
       // Wenn state='paused' (oder kein state) UND gerade erst gestoppt
       // (< 5 Min): Track anzeigen mit paused=true
-      const result = await buildPlayingEntry(entry, 'nowPlaying', serverUrl, coverMode);
+      const result = await buildPlayingEntry(entry, 'nowPlaying', serverUrl);
       result.paused = (state !== 'playing');
       result.state = state || 'unknown';
       return result;
     }
     // Falls kein Eintrag fuer unseren User, schauen wir in der eigenen
     // Play-Queue nach.
-    const queue = await getPlayQueueForUser(coverMode);
+    const queue = await getPlayQueueForUser();
     if (queue) return queue;
     return { playing: false, url: serverUrl, filteredOut: entries.length };
   } catch (err) {
@@ -293,7 +293,7 @@ async function getNowPlaying(coverMode = 'base64') {
   }
 }
 
-async function getPlayQueueForUser(coverMode = 'base64') {
+async function getPlayQueueForUser() {
   try {
     const params = subsonicParams();
     const data = await navFetch('getPlayQueue', params);
@@ -311,7 +311,7 @@ async function getPlayQueueForUser(coverMode = 'base64') {
     const serverUrl = NAVIDROME_URL.replace(/\/+$/, '');
     const positionNum = Number(queue.position || 0) || 0;
     const durationNum = Number(current.duration || 0) || 0;
-    const coverUrl = current.coverArt ? await getCoverArt(current.coverArt, 220, coverMode) : '';
+    const coverUrl = current.coverArt ? await getCoverArt(current.coverArt, 220) : '';
 
     return {
       playing:    true,
@@ -332,8 +332,8 @@ async function getPlayQueueForUser(coverMode = 'base64') {
   }
 }
 
-async function buildPlayingEntry(entry, source, serverUrl, coverMode = 'base64') {
-  const coverUrl = entry.coverArt ? await getCoverArt(entry.coverArt, 220, coverMode) : '';
+async function buildPlayingEntry(entry, source, serverUrl) {
+  const coverUrl = entry.coverArt ? await getCoverArt(entry.coverArt, 220) : '';
   const player = entry.player || {};
   const minutesAgoNum = Number(entry.minutesAgo || 0) || 0;
   const durationNum = Number(entry.duration || 0) || 0;
@@ -353,20 +353,12 @@ async function buildPlayingEntry(entry, source, serverUrl, coverMode = 'base64')
   };
 }
 
-async function getCoverArt(id, size, mode = 'base64') {
+async function getCoverArt(id, size) {
   if (!id) return '';
   const sizeNum = Number(size) || 220;
   const params = subsonicParams({ id: id, size: sizeNum });
   const base = NAVIDROME_URL.replace(/\/+$/, '');
   const url = base + '/rest/getCoverArt?' + params.toString();
-
-  if (mode === 'proxy') {
-    // Fuer Discord/Webhooks: echte URL (mit Credentials im Query) zurueckgeben.
-    // Achtung: Die URL enthaelt das Passwort im Klartext im Query-String.
-    // Sie darf daher NIE an den Browser gegeben werden, sondern nur an
-    // vertrauenswuerdige Server (z. B. discord-webhook Edge Function).
-    return url;
-  }
 
   try {
     console.log('[coverArt] fetching', url);
@@ -502,10 +494,10 @@ Deno.serve(async (req) => {
     let data;
     switch (action) {
       case 'nowPlaying':
-        data = await getNowPlaying((body && body.coverMode) || 'base64');
+        data = await getNowPlaying();
         break;
       case 'coverArt':
-        data = { coverUrl: await getCoverArt(body.id, body.size, (body && body.coverMode) || 'base64') };
+        data = { coverUrl: await getCoverArt(body.id, body.size) };
         break;
       case 'control':
         data = await controlPlayer(body.controlAction);

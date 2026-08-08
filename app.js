@@ -217,7 +217,7 @@
 
     async tick() {
       try {
-        const newTrack = await window.NavidromeAPI.nowPlaying('proxy');
+        const newTrack = await window.NavidromeAPI.nowPlaying();
         if (!newTrack || newTrack.playing !== true) {
           this.currentTrack = null;
           this.renderIdle();
@@ -226,14 +226,6 @@
         const previousId = this.currentTrack ? this.trackId(this.currentTrack) : null;
         this.currentTrack = newTrack;
         this.renderTrack(this.currentTrack, newTrack.paused === true ? 'paused' : 'playing');
-        if (previousId !== this.trackId(newTrack) && newTrack.paused !== true) {
-          const discordTrack = Object.assign({}, this.currentTrack, {
-            coverUrlExternal: this.currentTrack.coverUrl || ''
-          });
-          this.notifyDiscord(discordTrack).catch(err => {
-            console.warn('[discord webhook] notify failed:', err.message);
-          });
-        }
       } catch (err) {
         console.warn('[navidrome] poll failed:', err.message);
         this.currentTrack = null;
@@ -243,22 +235,6 @@
 
     trackId(t) {
       return [t.title, t.artist, t.album].filter(Boolean).join('::');
-    },
-
-    async notifyDiscord(track) {
-      if (!window.DiscordAPI?.send && !window.db?.sendDiscordWebhook) return;
-      const payload = {
-        title: track.title || 'Unbekannt',
-        artist: track.artist || '',
-        album: track.album || '',
-        cover: track.coverUrlExternal || track.coverUrl || '',
-        url: track.url || ''
-      };
-      if (window.DiscordAPI?.send) {
-        await window.DiscordAPI.send(payload);
-      } else {
-        await window.db.sendDiscordWebhook(payload);
-      }
     },
 
     setState(state) {
