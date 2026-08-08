@@ -1700,7 +1700,11 @@ if ! create_backup "$INSTALL_DIR/config.js" "pre-write" >/dev/null; then
     log_warn "Pre-Write-Backup von config.js fehlgeschlagen — fahre trotzdem fort"
 fi
 
-cat > "${INSTALL_DIR}/config.js" <<EOF
+# config.js nur überschreiben, wenn gültige Supabase-Daten vorhanden sind.
+# Im Update-Menü-Modus sollen absichtlich leere/entfernte Werte erhalten bleiben.
+if [[ -n "${SUPABASE_URL:-}" ]] && ! is_placeholder "$SUPABASE_URL" \
+    && [[ -n "${SUPABASE_ANON_KEY:-}" ]] && ! is_placeholder "$SUPABASE_ANON_KEY"; then
+    cat > "${INSTALL_DIR}/config.js" <<EOF
 // Lokale Server-Konfiguration — wird vom Install-Skript erzeugt.
 // Bearbeite diese Datei NICHT direkt; stattdessen \`sudo bash install.sh\` erneut ausführen.
 window.SUPABASE_CONFIG = {
@@ -1727,13 +1731,15 @@ window.NAVIDROME_CONFIG = {
 // Serverseitige Authentifizierung über /etc/nginx/openweb-admin.htpasswd
 EOF
 
-chmod 644 "${INSTALL_DIR}/config.js"
-log_ok "config.js erstellt (chmod 644)"
+    chmod 644 "${INSTALL_DIR}/config.js"
+    log_ok "config.js erstellt (chmod 644)"
+else
+    log_warn "config.js wird NICHT überschrieben: Supabase-URL oder anon-key fehlen/ungültig."
+    log_warn "  Trage sie ein mit: sudo bash install.sh  →  Option 1 (neu installieren)"
+fi
 
 # Serverseitige Konfiguration sichern
 save_server_config
-
-# Geschützte Admin-Konfiguration erzeugen (Shared Secret für admin-proxy)
 # (Funktion generate_admin_config ist weiter oben definiert.)
 generate_admin_config
 

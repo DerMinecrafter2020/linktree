@@ -850,13 +850,15 @@
     bindSettings();
     bindNavidrome();
 
-    // Admin-Status früh laden (auch wenn db noch nicht ready)
-    loadAdminStatus();
-
+    // Keine Admin-Daten laden, wenn Supabase noch nicht konfiguriert ist
     if (window.db?.needsSetup) {
       showSetupForm();
       return;
     }
+
+    // Admin-Status früh laden (auch wenn db noch nicht ready)
+    loadAdminStatus();
+
     const start = () => {
       if (appInitialized) return;
       if (window.db) { appInitialized = true; initApp(); }
