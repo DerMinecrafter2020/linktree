@@ -215,15 +215,15 @@
     async tick() {
       try {
         const newTrack = await window.NavidromeAPI.nowPlaying();
-        if (!newTrack || newTrack.playing !== true || newTrack.paused === true) {
+        if (!newTrack || newTrack.playing !== true) {
           this.currentTrack = null;
           this.renderIdle();
           return;
         }
         const previousId = this.currentTrack ? this.trackId(this.currentTrack) : null;
         this.currentTrack = newTrack;
-        this.renderTrack(this.currentTrack);
-        if (previousId !== this.trackId(newTrack)) {
+        this.renderTrack(this.currentTrack, newTrack.paused === true ? 'paused' : 'playing');
+        if (previousId !== this.trackId(newTrack) && newTrack.paused !== true) {
           this.notifyDiscord(this.currentTrack).catch(err => {
             console.warn('[discord webhook] notify failed:', err.message);
           });
@@ -275,8 +275,8 @@
       }
     },
 
-    renderTrack(data) {
-      this.setState('playing');
+    renderTrack(data, state = 'playing') {
+      this.setState(state);
       const wrap = $('#navidrome-player');
       if (wrap) wrap.hidden = false;
       const cover = wrap?.querySelector('.np-cover');
@@ -291,8 +291,11 @@
         }
       }
 
+      let artist = data.artist || data.album || '';
+      if (state === 'paused' && artist) artist += ' (pausiert)';
+      else if (state === 'paused') artist = 'Pausiert';
       setText('.np-title', data.title || 'Unbekannt', wrap);
-      setText('.np-artist', data.artist || data.album || '', wrap);
+      setText('.np-artist', artist, wrap);
     },
 
     async control(action) {

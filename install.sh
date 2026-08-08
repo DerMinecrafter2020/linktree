@@ -864,8 +864,20 @@ do_change_password() {
     fi
     log_info "  aktuelles Passwort in config.js: ${current_pw:0:3}*** (Länge: ${#current_pw})"
 
+    # Prüfen, ob serverseitiger Edge-Auth aktiv ist
+    local auth_enabled=0
+    if grep -qE "authEnabled:\s*true" "${INSTALL_DIR}/config.js"; then
+        auth_enabled=1
+        log_info "  serverseitige Authentifizierung (authEnabled: true) erkannt"
+    fi
+
     change_admin_password
     local new_pw="$ADMIN_PASSWORD"
+
+    # Wenn serverseitiger Auth aktiv: Hash in Supabase zurücksetzen
+    if [[ "$auth_enabled" -eq 1 ]]; then
+        _reset_admin_auth_hash "$new_pw"
+    fi
 
     if ! create_backup "$INSTALL_DIR/config.js" "pre-pwchange" >/dev/null; then
         log_warn "Pre-Passwortänderungs-Backup fehlgeschlagen — fahre trotzdem fort"
@@ -899,9 +911,75 @@ do_change_password() {
     chmod 640 "${INSTALL_DIR}/config.js"
 
     log_ok "Admin-Passwort in ${INSTALL_DIR}/config.js aktualisiert"
+    if [[ "$auth_enabled" -eq 1 ]]; then
+        log_info "Hinweis: Das serverseitige Passwort in Supabase wurde ebenfalls neu gesetzt (falls CLI verfügbar)."
+    fi
     log_info "Hinweis: Browser muss den Hash im localStorage (linktree-admin-pw-hash) leeren,"
     log_info "         damit der neue Hash beim Login-Versuch berechnet wird."
     log_info "         Im Browser-Console: localStorage.clear(); dann /admin.html neu laden."
+}
+
+# Hilfsfunktion: Setzt admin_auth in Supabase zurück (nur für authEnabled=true)
+_reset_admin_auth_hash() {
+    local new_pw="$1"
+    if [[ -z "$new_pw" ]]; then
+        log_warn "Kein neues Passwort übergeben — Supabase-Hash wird nicht zurückgesetzt"
+        return 1
+    fi
+
+    log_info "Setze serverseitiges Passwort in Supabase zurück..."
+
+    local cli=""
+    [[ -x "$SUPABASE_CLI" ]] && cli="$SUPABASE_CLI"
+    command -v supabase >/dev/null 2>&1 && cli="${cli:-supabase}"
+    if [[ -z "$cli" ]]; then
+        log_warn "supabase CLI nicht verfügbar — serverseitiges Passwort konnte nicht zurückgesetzt werden"
+        log_info "  Führe anschließend manuell aus:"
+        log_info "    supabase functions deploy auth-init --project-ref $SUPABASE_PROJECT_REF"
+        log_info "    curl -X POST .../auth-init -H \"Authorization: Bearer \$SERVICE_ROLE_KEY\" -d '{\"default_password\":\"$new_pw\"}'"
+        return 1
+    fi
+
+    local service_key
+    service_key=$(get_supabase_secret "SERVICE_ROLE_KEY" 2>/dev/null)
+    if [[ -z "$service_key" ]]; then
+        log_warn "SERVICE_ROLE_KEY konnte nicht aus Supabase Secrets gelesen werden"
+        log_info "  Stelle sicher, dass 'supabase login' und 'supabase link' aktiv sind."
+        return 1
+    fi
+
+    local url
+    url=$(grep -oE "url:\s*['\"]https://[^'\"]+['\"]" "${INSTALL_DIR}/config.js" 2>/dev/null | head -1 | sed -E "s/^.*url:\s*['\"]//;s/['\"]\s*$/")
+    if [[ -z "$url" ]]; then
+        url="https://${SUPABASE_PROJECT_REF}.supabase.co"
+    fi
+
+    # admin_auth Eintrag zurücksetzen (Placeholder setzen, damit auth-init erlaubt)
+    log_info "  Lösche bestehenden admin_auth Hash..."
+    local psql_out
+    psql_out=$(supabase db query --project-ref "$SUPABASE_PROJECT_REF" "DELETE FROM public.admin_auth WHERE id=1;" 2>&1) || {
+        log_warn "Konnte admin_auth nicht per 'supabase db query' löschen: $psql_out"
+        log_info "  Alternativ in der Supabase-SQL-Konsole: DELETE FROM public.admin_auth WHERE id=1;"
+        return 1
+    }
+
+    # auth-init aufrufen
+    log_info "  Initialisiere neuen Hash..."
+    local init_res
+    init_res=$(curl -sS -X POST "${url}/functions/v1/auth-init" \
+        -H "Authorization: Bearer ${service_key}" \
+        -H "apikey: ${service_key}" \
+        -H "Content-Type: application/json" \
+        -d "{\"default_password\":\"$(json_escape <<< "$new_pw")\"}" 2>&1)
+    if [[ "$init_res" == *'"ok":true'* ]]; then
+        log_ok "  Serverseitiges Passwort erfolgreich neu gesetzt"
+        return 0
+    else
+        log_warn "  auth-init-Aufruf fehlgeschlagen: $init_res"
+        log_info "  Bitte manuell ausführen:"
+        log_info "    curl -X POST ${url}/functions/v1/auth-init -H \"Authorization: Bearer \$SERVICE_ROLE_KEY\" -H \"apikey: \$SERVICE_ROLE_KEY\" -d '{\"default_password\":\"$new_pw\"}'"
+        return 1
+    fi
 }
 
 # 8) Supabase CLI installieren (Helper)
@@ -1106,29 +1184,40 @@ change_admin_password() {
     echo ""
     log_info "Admin-Passwort ändern"
     echo ""
-    while true; do
+
+    if [[ ! -t 0 ]]; then
+        log_error "Passwortänderung erfordert ein interaktives Terminal (TTY)."
+        log_info "  Alternative: ADMIN_PASSWORD='neuesPW' sudo bash install.sh change-password"
+        exit $EX_USAGE
+    fi
+
+    local tries=0
+    local max_tries=3
+    while [[ $tries -lt $max_tries ]]; do
+        tries=$((tries + 1))
         echo -n "  Neues Admin-Passwort: "
-        read -r NEW_PW
+        read -rs NEW_PW
+        echo ""
         if [[ -z "$NEW_PW" ]]; then
             log_warn "Passwort darf nicht leer sein"
             continue
         fi
-        # Standard-Default ablehnen, außer im Headless-Modus
         if [[ "$NEW_PW" == "admin123" ]]; then
             log_warn "'admin123' ist der bekannte Default — bitte ein sicheres Passwort wählen"
             continue
         fi
-        if [[ -t 0 ]]; then
-            echo -n "  Passwort bestätigen: "
-            read -r CONFIRM_PW
-            if [[ "$NEW_PW" != "$CONFIRM_PW" ]]; then
-                log_warn "Passwörter stimmen nicht überein — erneut versuchen"
-                continue
-            fi
+        echo -n "  Passwort bestätigen: "
+        read -rs CONFIRM_PW
+        echo ""
+        if [[ "$NEW_PW" != "$CONFIRM_PW" ]]; then
+            log_warn "Passwörter stimmen nicht überein — erneut versuchen"
+            continue
         fi
-        break
+        ADMIN_PASSWORD="$NEW_PW"
+        return 0
     done
-    ADMIN_PASSWORD="$NEW_PW"
+    log_error "Zu viele Fehlversuche — Passwortänderung abgebrochen"
+    exit $EX_USAGE
 }
 
 # --- Schritt 3: /var/html vorbereiten + Repo klonen/updaten ---
