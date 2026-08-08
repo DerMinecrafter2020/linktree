@@ -1234,6 +1234,7 @@ do_set_admin_enabled() {
         -X POST "${SUPABASE_URL%/}/functions/v1/admin-proxy" \
         -H "apikey: ${SUPABASE_ANON_KEY}" \
         -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+        -H "x-client-info: supabase-js/2.0" \
         -H "Content-Type: application/json" \
         -H "X-Admin-Secret: ${CONFIG_SHARED_SECRET}" \
         -d "{\"action\":\"saveAdminSettings\",\"data\":{\"admin_enabled\":${bool_value}}}")
