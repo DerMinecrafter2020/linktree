@@ -122,8 +122,21 @@ code {
 .login-error { color: var(--neon-red); font-size: 13px; min-height: 18px; }
 .login-card small { color: var(--text-faint); font-size: 11px; margin-top: 14px; display: block; }
 
+#login-form .link-btn {
+  align-self: center;
+  background: transparent;
+  border: none;
+  color: var(--neon-cyan);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+#login-form .link-btn:hover { color: var(--text); }
+
 /* =========================================================
-   MODALS (Setup / Force-Change)
+   MODALS (Setup / Force-Change / Forgot-Password)
    ========================================================= */
 .modal-overlay {
   position: fixed; inset: 0;

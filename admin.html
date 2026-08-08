@@ -39,10 +39,27 @@
         <input type="text" name="website" tabindex="-1" autocomplete="off" class="honeypot" aria-hidden="true" />
         <input type="password" id="login-password" placeholder="Passwort" required
                autocomplete="current-password" />
-        <button type="submit">Anmelden</button>
-        <p id="login-error" class="login-error"></p>
+        <button type="submit">Anmelden</button>        <button type="button" id="forgot-password-btn" class="link-btn">Passwort vergessen?</button>        <p id="login-error" class="login-error"></p>
       </form>
       <small>Hinweis: Standard-Passwort ist <code>admin123</code> – beim ersten Login als PBKDF2-Hash gespeichert. Ändern unter <strong>Einstellungen → Passwort ändern</strong>.</small>
+    </div>
+  </div>
+
+  <!-- Passwort-vergessen-Hilfe -->
+  <div id="forgot-password-overlay" class="modal-overlay" hidden>
+    <div class="modal-card">
+      <h2>🔑 Passwort vergessen?</h2>
+      <p>Es gibt keinen automatischen E-Mail-Reset, da OpenWeb keinen eigenen Mail-Versand nutzt.</p>
+      <p>So setzt du das Passwort zurck:</p>
+      <ol>
+        <li>Melde dich am Server an (SSH).</li>
+        <li>Fhre aus:<br><code class="code-inline">sudo bash install.sh</code> und whle im Men <strong>Passwort ndern</strong>.</li>
+        <li>Alternativ kann ein Supabase-Admin in der Tabelle <code class="code-inline">admin_auth</code> den Hash lschen und anschlieend <code class="code-inline">supabase functions deploy auth-init</code> ausfhren.</li>
+      </ol>
+      <p class="hint">Danach kannst du dich mit dem neuen Passwort anmelden.</p>
+      <div class="form-actions">
+        <button type="button" id="forgot-password-close" class="btn primary">Schlieen</button>
+      </div>
     </div>
   </div>
 

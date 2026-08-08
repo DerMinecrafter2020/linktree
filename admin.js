@@ -282,6 +282,16 @@
 
   // ---- Login ----
   function bindLogin() {
+    const forgotBtn = $('#forgot-password-btn');
+    const forgotOverlay = $('#forgot-password-overlay');
+    if (forgotBtn && forgotOverlay) {
+      forgotBtn.addEventListener('click', () => { forgotOverlay.hidden = false; });
+      $('#forgot-password-close')?.addEventListener('click', () => { forgotOverlay.hidden = true; });
+      forgotOverlay.addEventListener('click', (e) => {
+        if (e.target === forgotOverlay) forgotOverlay.hidden = true;
+      });
+    }
+
     $('#login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const form = e.target;
