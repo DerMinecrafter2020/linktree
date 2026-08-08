@@ -1116,6 +1116,46 @@ do_uninstall() {
 }
 
 # 7) Admin-Passwort ändern (config.js)
+change_admin_password() {
+    echo ""
+    log_info "Admin-Passwort ändern"
+    echo ""
+
+    if [[ ! -t 0 ]]; then
+        log_error "Passwortänderung erfordert ein interaktives Terminal (TTY)."
+        log_info "  Alternative: ADMIN_PASSWORD='neuesPW' sudo bash install.sh change-password"
+        exit $EX_USAGE
+    fi
+
+    local tries=0
+    local max_tries=3
+    while [[ $tries -lt $max_tries ]]; do
+        tries=$((tries + 1))
+        echo -n "  Neues Admin-Passwort: "
+        read -rs NEW_PW
+        echo ""
+        if [[ -z "$NEW_PW" ]]; then
+            log_warn "Passwort darf nicht leer sein"
+            continue
+        fi
+        if [[ "$NEW_PW" == "admin123" ]]; then
+            log_warn "'admin123' ist der bekannte Default — bitte ein sicheres Passwort wählen"
+            continue
+        fi
+        echo -n "  Passwort bestätigen: "
+        read -rs CONFIRM_PW
+        echo ""
+        if [[ "$NEW_PW" != "$CONFIRM_PW" ]]; then
+            log_warn "Passwörter stimmen nicht überein — erneut versuchen"
+            continue
+        fi
+        ADMIN_PASSWORD="$NEW_PW"
+        return 0
+    done
+    log_error "Zu viele Fehlversuche — Passwortänderung abgebrochen"
+    exit $EX_USAGE
+}
+
 do_change_password() {
     if [[ ! -d "$INSTALL_DIR" ]]; then
         log_error "Kein OpenWeb-Install unter ${INSTALL_DIR} — bitte erst installieren"
@@ -1346,46 +1386,6 @@ prompt_admin_password() {
     if [[ "$ADMIN_PASSWORD" == "admin123" ]]; then
         log_warn "  ACHTUNG: Default-Passwort 'admin123' gewählt — bitte sofort nach dem ersten Login ändern!"
     fi
-}
-
-change_admin_password() {
-    echo ""
-    log_info "Admin-Passwort ändern"
-    echo ""
-
-    if [[ ! -t 0 ]]; then
-        log_error "Passwortänderung erfordert ein interaktives Terminal (TTY)."
-        log_info "  Alternative: ADMIN_PASSWORD='neuesPW' sudo bash install.sh change-password"
-        exit $EX_USAGE
-    fi
-
-    local tries=0
-    local max_tries=3
-    while [[ $tries -lt $max_tries ]]; do
-        tries=$((tries + 1))
-        echo -n "  Neues Admin-Passwort: "
-        read -rs NEW_PW
-        echo ""
-        if [[ -z "$NEW_PW" ]]; then
-            log_warn "Passwort darf nicht leer sein"
-            continue
-        fi
-        if [[ "$NEW_PW" == "admin123" ]]; then
-            log_warn "'admin123' ist der bekannte Default — bitte ein sicheres Passwort wählen"
-            continue
-        fi
-        echo -n "  Passwort bestätigen: "
-        read -rs CONFIRM_PW
-        echo ""
-        if [[ "$NEW_PW" != "$CONFIRM_PW" ]]; then
-            log_warn "Passwörter stimmen nicht überein — erneut versuchen"
-            continue
-        fi
-        ADMIN_PASSWORD="$NEW_PW"
-        return 0
-    done
-    log_error "Zu viele Fehlversuche — Passwortänderung abgebrochen"
-    exit $EX_USAGE
 }
 
 # --- Schritt 3: /var/html vorbereiten + Repo klonen/updaten ---
