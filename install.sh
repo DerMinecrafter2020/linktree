@@ -1231,9 +1231,10 @@ EOF
     if [[ -z "${CONFIG_SHARED_SECRET:-}" ]]; then
         log_warn "CONFIG_SHARED_SECRET ist leer — admin-config.js enthält kein Shared Secret"
     fi
-    chmod 600 "$tmp"
+    # nginx muss die Datei lesen können; Schutz erfolgt über auth_basic + location.
+    chmod 644 "$tmp"
     mv -f "$tmp" "$file"
-    log_ok "Geschützte Admin-Konfiguration erstellt: ${file} (chmod 600)"
+    log_ok "Geschützte Admin-Konfiguration erstellt: ${file} (chmod 644, durch Basic Auth geschützt)"
 }
 
 # Admin-Bereich aktivieren / deaktivieren (nur serverseitig).
