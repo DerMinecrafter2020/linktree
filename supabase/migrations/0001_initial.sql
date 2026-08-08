@@ -154,8 +154,21 @@ alter table public.links
   );
 
 -- 6) Realtime aktivieren (optional, damit Änderungen live auf der Hauptseite ankommen)
-alter publication supabase_realtime add table public.profile;
-alter publication supabase_realtime add table public.links;
+-- Wir ignorieren 42710 (Tabelle bereits in der Publication), falls das Skript mehrfach läuft.
+do $$
+begin
+  begin
+    alter publication supabase_realtime add table public.profile;
+  exception
+    when duplicate_object then null;
+  end;
+  begin
+    alter publication supabase_realtime add table public.links;
+  exception
+    when duplicate_object then null;
+  end;
+end
+$$;
 
 -- 7) Admin-Einstellungen (Discord-Webhook etc.)
 --    Admin-Authentifizierung läuft über nginx Basic Auth (serverseitig).
