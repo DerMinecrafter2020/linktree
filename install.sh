@@ -35,6 +35,7 @@ readonly REPO_URL="https://github.com/DerMinecrafter2020/linktree.git"
 readonly REPO_BRANCH="main"
 readonly INSTALL_DIR="/var/html"
 readonly BACKUP_DIR="/var/backups/openweb"
+readonly SERVER_CONFIG_FILE="${INSTALL_DIR}/.openweb.env"
 readonly SUPABASE_PROJECT_REF="fxywervpqojpjwreymdp"
 readonly SUPABASE_CLI="${SUPABASE_CLI:-/usr/local/bin/supabase}"
 readonly NGINX_SITE_NAME="openweb"
@@ -166,6 +167,50 @@ is_placeholder() {
     esac
 }
 
+# Serverseitige Konfiguration laden (.openweb.env)
+load_server_config() {
+    if [[ ! -f "$SERVER_CONFIG_FILE" ]]; then
+        return 0
+    fi
+    log_info "Lade serverseitige Konfiguration aus ${SERVER_CONFIG_FILE}..."
+    local line key val
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        case "$line" in
+            ''|\#*) continue ;;
+        esac
+        if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+            key="${line%%=*}"
+            val="${line#*=}"
+            # Entferne einfache/doppelte Anführungszeichen am Anfang/Ende
+            val="${val#[\"\']}" && val="${val%[\"\']}"
+            export "$key"="$val"
+        fi
+    done < "$SERVER_CONFIG_FILE"
+}
+
+# Serverseitige Konfiguration speichern (.openweb.env)
+save_server_config() {
+    local file="$SERVER_CONFIG_FILE"
+    local tmp
+    tmp=$(mktemp "${file}.tmp.XXXXXX")
+    cat > "$tmp" <<EOF
+# OpenWeb serverseitige Konfiguration
+# Wird von install.sh geschrieben. Enthält serverseitige Einstellungen
+# (URL, anon-Key, Discord/Navidrome, Shared Secret für save-config).
+# Niemals in git committen — steht in .gitignore.
+SUPABASE_PROJECT_REF='${SUPABASE_PROJECT_REF}'
+SUPABASE_URL='${SUPABASE_URL:-}'
+SUPABASE_ANON_KEY='${SUPABASE_ANON_KEY:-}'
+CONFIG_SHARED_SECRET='${CONFIG_SHARED_SECRET:-}'
+NAVIDROME_URL='${NAV_URL:-}'
+NAVIDROME_USER='${NAV_USER:-}'
+NAVIDROME_PASS='${NAVIDROME_PASS:-}'
+EOF
+    chmod 600 "$tmp"
+    mv -f "$tmp" "$file"
+    log_ok "Server-Konfiguration gespeichert: ${file}"
+}
+
 # Alte Backups löschen (Default: 30 Tage)
 cleanup_old_backups() {
     local days="${1:-$BACKUP_RETENTION_DAYS}"
@@ -258,12 +303,18 @@ git_pull_safe() {
         cleanup_old_backups
     fi
 
-    # 5) Lokale config.js sichern (git reset --hard würde sie überschreiben)
+    # 5) Lokale config.js und serverseitige .openweb.env sichern
     local config_backup=""
+    local server_config_backup=""
     if [[ -f "${workdir}/config.js" ]]; then
         config_backup=$(mktemp /tmp/openweb-config.XXXXXX.js)
         cp -f "${workdir}/config.js" "$config_backup"
         log_info "Lokale config.js temporär gesichert (wird nach Update wiederhergestellt)"
+    fi
+    if [[ -f "${workdir}/.openweb.env" ]]; then
+        server_config_backup=$(mktemp /tmp/openweb-server-config.XXXXXX.env)
+        cp -f "${workdir}/.openweb.env" "$server_config_backup"
+        log_info "Server-Konfiguration .openweb.env temporär gesichert"
     fi
     log_info "Alle in Supabase gespeicherten Daten bleiben bei einem Update unberührt"
 
@@ -274,10 +325,16 @@ git_pull_safe() {
         return 1
     fi
 
-    # 7) config.js wiederherstellen
+    # 7) config.js und .openweb.env wiederherstellen
     if [[ -n "$config_backup" && -f "$config_backup" ]]; then
         mv -f "$config_backup" "${workdir}/config.js"
+        chmod 644 "${workdir}/config.js"
         log_ok "Lokale config.js wiederhergestellt"
+    fi
+    if [[ -n "$server_config_backup" && -f "$server_config_backup" ]]; then
+        mv -f "$server_config_backup" "${workdir}/.openweb.env"
+        chmod 600 "${workdir}/.openweb.env"
+        log_ok "Server-Konfiguration .openweb.env wiederhergestellt"
     fi
     log_info "Keine Datenbank/Supabase-Daten verändert — update sicher für bestehende Inhalte"
 
@@ -597,11 +654,16 @@ do_restore() {
     log_info "Sichere aktuellen Stand vor Restore..."
     create_backup "$INSTALL_DIR" "pre-restore" >/dev/null || log_warn "Pre-Restore-Backup fehlgeschlagen"
 
-    # config.js separat sichern (falls im Backup nicht enthalten oder neuer)
+    # config.js und .openweb.env separat sichern (falls im Backup nicht enthalten oder neuer)
     local config_backup=""
+    local server_config_backup=""
     if [[ -f "${INSTALL_DIR}/config.js" ]]; then
         config_backup=$(mktemp /tmp/openweb-config.XXXXXX.js)
         cp -f "${INSTALL_DIR}/config.js" "$config_backup"
+    fi
+    if [[ -f "${INSTALL_DIR}/.openweb.env" ]]; then
+        server_config_backup=$(mktemp /tmp/openweb-server-config.XXXXXX.env)
+        cp -f "${INSTALL_DIR}/.openweb.env" "$server_config_backup"
     fi
 
     # Restore durchführen
@@ -698,7 +760,7 @@ do_restore() {
 
     rm -rf "$extract_dir"
 
-    # config.js wiederherstellen (lokale Anpassung hat Vorrang, falls im Backup kein config.js)
+    # config.js und .openweb.env wiederherstellen (lokale Anpassung hat Vorrang, falls im Backup keine vorhanden)
     if [[ -n "$config_backup" && -f "$config_backup" ]]; then
         if [[ -f "${INSTALL_DIR}/config.js" ]]; then
             # Im Backup war eine config.js enthalten — lokale Kopie wegwerfen
@@ -710,10 +772,22 @@ do_restore() {
             log_ok "Lokale config.js beibehalten (nicht überschrieben)"
         fi
     fi
+    if [[ -n "$server_config_backup" && -f "$server_config_backup" ]]; then
+        if [[ -f "${INSTALL_DIR}/.openweb.env" ]]; then
+            rm -f "$server_config_backup"
+            log_info ".openweb.env aus Backup übernommen"
+        else
+            mv -f "$server_config_backup" "${INSTALL_DIR}/.openweb.env"
+            log_ok "Lokale .openweb.env beibehalten (nicht überschrieben)"
+        fi
+    fi
 
     # Permissions sicherstellen
     if [[ -f "${INSTALL_DIR}/config.js" ]]; then
-        chmod 640 "${INSTALL_DIR}/config.js" 2>/dev/null || log_warn "Konnte chmod 640 für config.js nicht setzen"
+        chmod 644 "${INSTALL_DIR}/config.js" 2>/dev/null || log_warn "Konnte chmod 644 für config.js nicht setzen"
+    fi
+    if [[ -f "${INSTALL_DIR}/.openweb.env" ]]; then
+        chmod 600 "${INSTALL_DIR}/.openweb.env" 2>/dev/null || log_warn "Konnte chmod 600 für .openweb.env nicht setzen"
     fi
 
     # Services neu starten
@@ -908,12 +982,9 @@ do_change_password() {
         rm -f "$tmp_conf"
         exit $EX_PERM
     fi
-    chmod 640 "${INSTALL_DIR}/config.js"
+    chmod 644 "${INSTALL_DIR}/config.js"
 
     log_ok "Admin-Passwort in ${INSTALL_DIR}/config.js aktualisiert"
-    if [[ "$auth_enabled" -eq 1 ]]; then
-        log_info "Hinweis: Das serverseitige Passwort in Supabase wurde ebenfalls neu gesetzt (falls CLI verfügbar)."
-    fi
     log_info "Hinweis: Browser muss den Hash im localStorage (linktree-admin-pw-hash) leeren,"
     log_info "         damit der neue Hash beim Login-Versuch berechnet wird."
     log_info "         Im Browser-Console: localStorage.clear(); dann /admin.html neu laden."
@@ -1270,6 +1341,15 @@ elif [[ "$MODE" == "neuinstallieren" ]]; then
     log_info "  Modus 'neuinstallieren' — alle Werte werden neu abgefragt"
 fi
 
+# Serverseitige .openweb.env hat Vorrang gegenüber config.js
+load_server_config
+if [[ -n "${SUPABASE_URL:-}" ]] && ! is_placeholder "$SUPABASE_URL"; then
+    EXISTING_URL="$SUPABASE_URL"
+fi
+if [[ -n "${SUPABASE_ANON_KEY:-}" ]] && ! is_placeholder "$SUPABASE_ANON_KEY"; then
+    EXISTING_ANON_KEY="$SUPABASE_ANON_KEY"
+fi
+
 prompt_admin_password
 
 # Supabase-URL
@@ -1310,6 +1390,27 @@ if command -v supabase >/dev/null 2>&1; then
         log_warn "    supabase login"
         log_warn "    supabase link --project-ref $SUPABASE_PROJECT_REF"
     fi
+fi
+
+# Shared Secret für save-config (wird im Admin-Panel benötigt)
+if [[ -z "${CONFIG_SHARED_SECRET:-}" ]] || is_placeholder "$CONFIG_SHARED_SECRET"; then
+    if command -v openssl >/dev/null 2>&1; then
+        CONFIG_SHARED_SECRET=$(openssl rand -hex 32 2>/dev/null)
+    else
+        CONFIG_SHARED_SECRET=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 64)
+    fi
+fi
+if [[ "$SECRETS_READABLE" -eq 1 ]]; then
+    log_info "Setze Shared Secret für save-config in Supabase..."
+    if supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" CONFIG_SHARED_SECRET="$CONFIG_SHARED_SECRET" 2>&1 | sed 's/^/    /'; then
+        log_ok "CONFIG_SHARED_SECRET in Supabase gesetzt"
+    else
+        log_warn "Konnte CONFIG_SHARED_SECRET nicht in Supabase setzen"
+    fi
+else
+    log_warn "Shared Secret für save-config nur lokal gespeichert."
+    log_warn "  Später manuell in Supabase setzen:"
+    log_warn "    supabase secrets set --project-ref $SUPABASE_PROJECT_REF CONFIG_SHARED_SECRET='$CONFIG_SHARED_SECRET'"
 fi
 
 # Navidrome-Werte abfragen
@@ -1402,8 +1503,11 @@ window.NAVIDROME_CONFIG = {
 window.ADMIN_DEFAULT_PASSWORD = ${ADMIN_PASS_JSON};
 EOF
 
-chmod 640 "${INSTALL_DIR}/config.js"
-log_ok "config.js erstellt (chmod 640)"
+chmod 644 "${INSTALL_DIR}/config.js"
+log_ok "config.js erstellt (chmod 644)"
+
+# Serverseitige Konfiguration sichern
+save_server_config
 
 # --- Edge Functions deployen (falls supabase CLI verfügbar) ---
 if command -v supabase >/dev/null 2>&1 && [[ "$SECRETS_READABLE" -eq 1 ]]; then
@@ -1605,11 +1709,16 @@ if ! tar -czf "$BACKUP_FILE" -C "$(dirname "$INSTALL_DIR")" "$NAME" 2>>"$LOG_FIL
 fi
 echo "[$(date -Iseconds)] Backup: $BACKUP_FILE" >> "$LOG_FILE"
 
-# config.js sichern (wird durch git reset --hard überschrieben)
+# config.js und serverseitige .openweb.env sichern (werden durch git reset --hard überschrieben)
 CONFIG_BACKUP=""
+SERVER_CONFIG_BACKUP=""
 if [[ -f "${INSTALL_DIR}/config.js" ]]; then
     CONFIG_BACKUP=$(mktemp /tmp/openweb-config.XXXXXX.js)
     cp -f "${INSTALL_DIR}/config.js" "$CONFIG_BACKUP"
+fi
+if [[ -f "${INSTALL_DIR}/.openweb.env" ]]; then
+    SERVER_CONFIG_BACKUP=$(mktemp /tmp/openweb-server-config.XXXXXX.env)
+    cp -f "${INSTALL_DIR}/.openweb.env" "$SERVER_CONFIG_BACKUP"
 fi
 
 # Rollback-Helfer (wiederverwendbar)
@@ -1627,7 +1736,13 @@ rollback_update() {
 if git reset --hard "origin/${REPO_BRANCH}" >> "$LOG_FILE" 2>&1; then
     if [[ -n "$CONFIG_BACKUP" && -f "$CONFIG_BACKUP" ]]; then
         mv -f "$CONFIG_BACKUP" "${INSTALL_DIR}/config.js"
+        chmod 644 "${INSTALL_DIR}/config.js"
         echo "[$(date -Iseconds)] config.js restored" >> "$LOG_FILE"
+    fi
+    if [[ -n "$SERVER_CONFIG_BACKUP" && -f "$SERVER_CONFIG_BACKUP" ]]; then
+        mv -f "$SERVER_CONFIG_BACKUP" "${INSTALL_DIR}/.openweb.env"
+        chmod 600 "${INSTALL_DIR}/.openweb.env"
+        echo "[$(date -Iseconds)] .openweb.env restored" >> "$LOG_FILE"
     fi
 
     # nginx reload mit Rollback bei Fehler
@@ -1664,6 +1779,7 @@ if git reset --hard "origin/${REPO_BRANCH}" >> "$LOG_FILE" 2>&1; then
 else
     echo "[$(date -Iseconds)] ERROR: git reset failed" >> "$LOG_FILE"
     [[ -n "$CONFIG_BACKUP" ]] && mv -f "$CONFIG_BACKUP" "${INSTALL_DIR}/config.js"
+    [[ -n "$SERVER_CONFIG_BACKUP" ]] && mv -f "$SERVER_CONFIG_BACKUP" "${INSTALL_DIR}/.openweb.env"
     exit 1
 fi
 UPDATE_EOF

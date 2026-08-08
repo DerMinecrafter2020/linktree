@@ -10,6 +10,11 @@
 config.js
 config.local.js
 
+# Serverseitige OpenWeb-Konfiguration (URL, Keys, Secrets).
+# Wird von install.sh beim Install/Update erstellt/gesichert
+# und beim Restore wiederhergestellt.
+.openweb.env
+
 # --- Lokale Test-/Debug-Skripte -------------------------------------------
 test-attack.bat
 final-check.bat

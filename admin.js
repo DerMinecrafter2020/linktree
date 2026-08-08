@@ -224,7 +224,7 @@
     const form = el('form', { id: 'setup-form' },
       el('label', {}, el('span', { text: 'Supabase URL' }), el('input', { type: 'url', name: 'url', required: true, placeholder: 'https://… .supabase.co' })),
       el('label', {}, el('span', { text: 'anon-key' }), el('input', { type: 'text', name: 'anonKey', required: true, placeholder: 'eyJhbGciOi…' })),
-      el('label', {}, el('span', { text: 'Shared Secret (optional)' }), el('input', { type: 'password', name: 'secret', placeholder: 'leer lassen falls nicht gesetzt' })),
+      el('label', {}, el('span', { text: 'Shared Secret' }), el('input', { type: 'password', name: 'secret', placeholder: 'aus /var/html/.openweb.env (CONFIG_SHARED_SECRET)' })),
       el('div', { class: 'form-actions' }, el('button', { type: 'submit', class: 'btn primary', text: 'Speichern & neu laden' })),
       err
     );
@@ -243,7 +243,11 @@
         setTimeout(() => location.reload(), 1500);
       } catch (err2) {
         err.style.color = 'var(--neon-red)';
-        err.textContent = 'Fehler: ' + err2.message;
+        let msg = 'Fehler: ' + err2.message;
+        if (err2.message.includes('401')) {
+          msg += ' — Shared Secret falsch oder leer. Prüfe /var/html/.openweb.env (CONFIG_SHARED_SECRET) und trage es oben ein.';
+        }
+        err.textContent = msg;
       }
     });
     makeModal('supabase-setup-modal', '🔧 Supabase konfigurieren', [

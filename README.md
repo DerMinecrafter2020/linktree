@@ -105,12 +105,14 @@ supabase functions deploy auth-login --project-ref fxywervpqojpjwreymdp
 supabase functions deploy auth-change-password --project-ref fxywervpqojpjwreymdp
 supabase functions deploy navidrome-proxy --project-ref fxywervpqojpjwreymdp
 supabase functions deploy discord-webhook --project-ref fxywervpqojpjwreymdp
+supabase functions deploy save-config --project-ref fxywervpqojpjwreymdp
 
 # 3. Secrets setzen (serverseitig!)
 supabase secrets set SERVICE_ROLE_KEY=eyJ... --project-ref fxywervpqojpjwreymdp
 supabase secrets set JWT_SECRET=$(openssl rand -base64 48) --project-ref fxywervpqojpjwreymdp
 supabase secrets set ADMIN_PASSWORD=...   --project-ref fxywervpqojpjwreymdp
 supabase secrets set ALLOWED_ORIGINS=https://deine-domain.de --project-ref fxywervpqojpjwreymdp
+supabase secrets set CONFIG_SHARED_SECRET=$(openssl rand -hex 32) --project-ref fxywervpqojpjwreymdp
 supabase secrets set NAVIDROME_URL='...' NAVIDROME_USER='...' NAVIDROME_PASS='...' --project-ref fxywervpqojpjwreymdp
 
 # 4. URL in config.js eintragen
@@ -124,6 +126,11 @@ window.SUPABASE_CONFIG = {
   discordWebhookUrl:     'https://fxywervpqojpjwreymdp.supabase.co/functions/v1/discord-webhook',
 };
 ```
+
+> **Hinweis:** Bei Verwendung von `install.sh` werden `save-config` und
+> `CONFIG_SHARED_SECRET` automatisch angelegt. Das Secret wird in
+> `/var/html/.openweb.env` gespeichert und im Admin-Panel beim ersten
+> Supabase-Setup eingetragen.
 
 ### Was aktuell noch offen ist
 

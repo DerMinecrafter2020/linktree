@@ -56,6 +56,7 @@ supabase functions deploy auth-change-password
 supabase functions deploy admin-proxy
 supabase functions deploy navidrome-proxy
 supabase functions deploy discord-webhook
+supabase functions deploy save-config
 ```
 
 Optional: `install.sh` deployed diese automatisch, wenn `supabase CLI` eingeloggt ist.
@@ -66,11 +67,18 @@ Optional: `install.sh` deployed diese automatisch, wenn `supabase CLI` eingelogg
 supabase secrets set SERVICE_ROLE_KEY=eyJ...      # schon bekannt
 supabase secrets set JWT_SECRET=$(openssl rand -base64 48)
 supabase secrets set ALLOWED_ORIGINS=https://deine-domain.com,http://localhost:5500
+supabase secrets set CONFIG_SHARED_SECRET=$(openssl rand -hex 32)
 ```
 
 `JWT_SECRET` MUSS mindestens 32 Bytes (Base64) lang sein. Er wird für
 HS256-Signaturen verwendet — ändere ihn regelmäßig; alte JWTs werden
 danach ungültig (und die User müssen sich neu einloggen).
+
+`CONFIG_SHARED_SECRET` schützt die `save-config` Edge Function. Wenn du
+`install.sh` nutzt, wird das Secret automatisch generiert, in
+`/var/html/.openweb.env` gespeichert und im Supabase-Secret hinterlegt.
+Im Admin-Panel „Supabase konfigurieren" muss es als **Shared Secret**
+eingetragen werden, sonst antwortet `save-config` mit **401**.
 
 ## 4. Init: Default-Passwort hashen
 
