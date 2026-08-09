@@ -54,7 +54,7 @@ router.get('/config', async (req, res) => {
     res.json({
       ok: true,
       data: {
-        envFileExists,
+        envFileExists: envExists,
         databaseUrl,
         port: env.PORT || '3000',
         appUrl: env.APP_URL || '',
@@ -64,7 +64,6 @@ router.get('/config', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('[setup/config error]', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
