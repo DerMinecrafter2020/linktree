@@ -38,11 +38,24 @@ router.get('/config', async (req, res) => {
   try {
     const envExists = setup.envFileExists();
     const env = envExists ? setup.parseEnv(setup.readEnvFile()) : {};
+
+    let databaseUrl = env.DATABASE_URL || '';
+    if (!databaseUrl && env.DB_HOST) {
+      const user = env.DB_USER || '';
+      const pass = env.DB_PASSWORD || '';
+      const host = env.DB_HOST || '';
+      const port = env.DB_PORT || '5432';
+      const db = env.DB_NAME || '';
+      if (user && host && db) {
+        databaseUrl = `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}:${port}/${encodeURIComponent(db)}`;
+      }
+    }
+
     res.json({
       ok: true,
       data: {
         envFileExists,
-        databaseUrl: env.DATABASE_URL || '',
+        databaseUrl,
         port: env.PORT || '3000',
         appUrl: env.APP_URL || '',
         adminEmail: env.ADMIN_EMAIL || '',
