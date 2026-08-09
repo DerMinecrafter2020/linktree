@@ -64,6 +64,7 @@ router.get('/config', async (req, res) => {
       },
     });
   } catch (err) {
+    console.error('[setup/config error]', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
