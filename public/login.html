@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a0a14" />
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src 'self' https://fonts.gstatic.com;
+    img-src 'self' data: https: blob:;
+    connect-src 'self';
+    base-uri 'self';
+    form-action 'self';
+    object-src 'none';
+  " />
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+  <meta http-equiv="Permissions-Policy" content="geolocation=(), microphone=(), camera=(), payment=()" />
+  <title>Admin Login · OpenWeb</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/admin.css" />
+</head>
+<body class="login-page">
+
+  <div class="login-card">
+    <h1>🔐 Admin Login</h1>
+    <p>Melde dich mit deiner Admin-E-Mail und deinem Passwort an.</p>
+
+    <form id="login-form" class="form">
+      <label>
+        <span>E-Mail</span>
+        <input name="email" type="email" autocomplete="email" required placeholder="admin@example.com" />
+      </label>
+      <label>
+        <span>Passwort</span>
+        <input name="password" type="password" autocomplete="current-password" required placeholder="••••••••" />
+      </label>
+      <div class="form-actions">
+        <button type="submit" class="btn primary">Anmelden</button>
+      </div>
+    </form>
+    <p id="login-error" class="login-error"></p>
+  </div>
+
+  <script src="/js/api-client.js"></script>
+  <script>
+    (() => {
+      'use strict';
+      const form = document.getElementById('login-form');
+      const errorEl = document.getElementById('login-error');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorEl.textContent = '';
+        const email = form.email.value.trim();
+        const password = form.password.value;
+
+        try {
+          await window.api.login(email, password);
+          location.href = '/admin';
+        } catch (err) {
+          errorEl.textContent = err.message || 'Login fehlgeschlagen';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

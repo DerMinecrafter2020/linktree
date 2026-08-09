@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a0a14" />
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src 'self' https://fonts.gstatic.com;
+    img-src 'self' data: https: blob:;
+    connect-src 'self';
+    base-uri 'self';
+    form-action 'self';
+    object-src 'none';
+  " />
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+  <meta http-equiv="Permissions-Policy" content="geolocation=(), microphone=(), camera=(), payment=()" />
+  <title>Admin · OpenWeb</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/admin.css" />
+</head>
+<body>
+
+  <div id="app" class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span>Link Admin</span>
+      </div>
+      <nav class="side-nav">
+        <button class="side-btn active" data-tab="links">🔗 Links</button>
+        <button class="side-btn" data-tab="profile">👤 Profil</button>
+        <button class="side-btn" data-tab="music">🎵 Musik</button>
+        <button class="side-btn" data-tab="data">💾 Daten</button>
+        <button class="side-btn" data-tab="settings">⚙️ Einstellungen</button>
+      </nav>
+      <div class="side-footer">
+        <a href="/" target="_blank" class="side-link">↗ Seite oeffnen</a>
+        <button id="logout-btn" class="side-link">↩ Abmelden</button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="content-head">
+        <h2 id="tab-title">Links</h2>
+        <span id="connection-state" class="connection-state">…</span>
+      </header>
+
+      <!-- TAB: LINKS -->
+      <section class="tab" data-tab="links">
+        <div class="toolbar">
+          <button id="add-link-btn" class="btn primary">+ Neuer Link</button>
+          <small class="hint">Tipp: Pfeile oder Drag & Drop zum Sortieren</small>
+        </div>
+        <ul id="links-list" class="links-list"></ul>
+      </section>
+
+      <!-- TAB: PROFIL -->
+      <section class="tab" data-tab="profile" hidden>
+        <form id="profile-form" class="form">
+          <div class="avatar-upload">
+            <div class="avatar-preview" id="avatar-preview" aria-label="Avatar-Vorschau">
+              <span id="avatar-preview-text">CA</span>
+              <img id="avatar-preview-img" alt="" hidden />
+              <button type="button" class="avatar-remove" id="avatar-remove" title="Bild entfernen" hidden>✕</button>
+            </div>
+            <div class="avatar-upload-controls">
+              <label for="avatar-file" class="btn">📷 Bild hochladen</label>
+              <input id="avatar-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+              <p class="hint">PNG, JPG, WebP oder GIF · max. 5 MB · wird automatisch auf 512×512 verkleinert</p>
+              <label class="avatar-fallback-row">
+                <input type="checkbox" id="avatar-use-text" />
+                <span>Fallback-Buchstaben verwenden (statt Bild)</span>
+              </label>
+              <input name="avatar" type="text" maxlength="2" placeholder="CA" class="avatar-text-input" />
+            </div>
+          </div>
+
+          <label>
+            <span>Name (Anzeige-Titel)</span>
+            <input name="name" type="text" placeholder="@corneliusahner" />
+          </label>
+          <label>
+            <span>Handle (Untertitel)</span>
+            <input name="handle" type="text" placeholder="Cornelius Ahner" />
+          </label>
+          <label>
+            <span>Bio</span>
+            <textarea name="bio" rows="3" placeholder="Azubi, 21 Jahre alt"></textarea>
+          </label>
+
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Speichern</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- TAB: MUSIK (NAVIDROME) -->
+      <section class="tab" data-tab="music" hidden>
+        <div class="card-block">
+          <h3>🎵 Navidrome / Subsonic</h3>
+          <p>
+            Die Navidrome-Credentials werden <strong>ausschliesslich in der PostgreSQL-Datenbank</strong>
+            gespeichert (Passwort verschlüsselt). Sie sind weder im Browser noch in <code>localStorage</code> sichtbar.
+          </p>
+
+          <form id="navidrome-form" class="form">
+            <label class="row">
+              <input type="checkbox" name="enabled" />
+              <span>Player aktivieren</span>
+            </label>
+            <label>
+              <span>Navidrome URL</span>
+              <input name="url" type="url" placeholder="https://music.example.com" />
+            </label>
+            <label>
+              <span>Username</span>
+              <input name="username" type="text" placeholder="dein_user" />
+            </label>
+            <label id="password-label">
+              <span>Passwort</span>
+              <input name="password" type="password" placeholder="••••••••" />
+              <small class="hint">Nur ausfuellen, wenn du das Passwort aendern willst.</small>
+            </label>
+            <label>
+              <span>Polling-Intervall (Sekunden)</span>
+              <input name="pollIntervalSec" type="number" min="5" max="600" step="5" />
+            </label>
+
+            <div class="form-actions">
+              <button type="button" id="navidrome-test-btn" class="btn ghost">Verbindung testen</button>
+              <button type="submit" class="btn primary">Speichern</button>
+            </div>
+            <p id="navidrome-status" class="hint" aria-live="polite"></p>
+          </form>
+        </div>
+      </section>
+
+      <!-- TAB: SETTINGS -->
+      <section class="tab" data-tab="settings" hidden>
+        <div class="card-block" id="admin-status-block">
+          <h3>🛡️ Admin-Bereich</h3>
+          <p id="admin-status-text">Status wird geladen…</p>
+          <p id="admin-status-hint" class="hint">
+            Aktivieren/Deaktivieren nur auf dem Server via Umgebungsvariable <code>ADMIN_ENABLED</code>.
+          </p>
+        </div>
+        <div class="card-block">
+          <h3>🔌 Verbindung</h3>
+          <p id="settings-connection">Mit eigener PostgreSQL-Datenbank verbunden.</p>
+        </div>
+        <div class="card-block">
+          <h3>🔑 Passwort aendern</h3>
+          <form id="change-password-form" class="form">
+            <label>
+              <span>Aktuelles Passwort</span>
+              <input name="currentPassword" type="password" required />
+            </label>
+            <label>
+              <span>Neues Passwort</span>
+              <input name="newPassword" type="password" minlength="8" required />
+            </label>
+            <div class="form-actions">
+              <button type="submit" class="btn primary">Passwort aendern</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- TAB: DATEN -->
+      <section class="tab" data-tab="data" hidden>
+        <div class="card-block">
+          <h3>📤 Export</h3>
+          <p>Lade alle Einstellungen und Links als JSON-Datei herunter.</p>
+          <button id="export-btn" class="btn">JSON exportieren</button>
+        </div>
+        <div class="card-block">
+          <h3>📥 Import</h3>
+          <p>Spielt eine zuvor exportierte JSON-Datei wieder ein.</p>
+          <input type="file" id="import-input" accept="application/json" hidden />
+          <button id="import-btn" class="btn">JSON importieren</button>
+        </div>
+        <div class="card-block danger">
+          <h3>🗑️ Zuruecksetzen</h3>
+          <p>Setzt alle Links und das Profil auf den Auslieferungszustand zurueck.</p>
+          <button id="reset-btn" class="btn danger">Alles zuruecksetzen</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Link-Editor -->
+  <dialog id="link-dialog" class="dialog">
+    <form id="link-form" method="dialog" class="form">
+      <h3 id="link-dialog-title">Neuer Link</h3>
+
+      <label>
+        <span>Titel</span>
+        <input name="title" type="text" required placeholder="z. B. YouTube" />
+      </label>
+      <label>
+        <span>Untertitel</span>
+        <input name="subtitle" type="text" placeholder="z. B. Mein Kanal" />
+      </label>
+      <label>
+        <span>URL</span>
+        <input name="url" type="url" required placeholder="https://…" />
+      </label>
+      <label>
+        <span>Icon (Emoji, Bild-URL oder Marken-Name)</span>
+        <div class="icon-picker">
+          <input name="icon" type="text" placeholder="🔗 / https://… / instagram" autocomplete="off" />
+          <button type="button" id="icon-picker-toggle" class="icon-picker-btn" title="Icon auswaehlen">🎨</button>
+        </div>
+        <div id="icon-picker-panel" class="icon-picker-panel" hidden>
+          <input type="text" id="icon-search" class="icon-search" placeholder="Suche: instagram, github, youtube …" />
+          <div class="icon-preview">
+            <span class="icon-preview-label">Vorschau:</span>
+            <span id="icon-preview-target" class="icon-preview-target"></span>
+            <code id="icon-preview-name" class="icon-preview-name">—</code>
+          </div>
+          <div id="icon-grid" class="icon-grid">
+            <div class="icon-empty">Tippe oben, um Icons zu suchen …</div>
+          </div>
+          <div class="icon-suggested">
+            <span>Vorschlaege:</span>
+            <div id="icon-suggested-list"></div>
+          </div>
+        </div>
+      </label>
+      <label class="row">
+        <input name="is_active" type="checkbox" checked />
+        <span>Aktiv (auf der Seite anzeigen)</span>
+      </label>
+      <label class="row">
+        <input name="open_new" type="checkbox" checked />
+        <span>In neuem Tab oeffnen</span>
+      </label>
+
+      <div class="form-actions">
+        <button type="button" id="link-cancel" class="btn ghost">Abbrechen</button>
+        <button type="submit" class="btn primary">Speichern</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="/js/api-client.js"></script>
+  <script src="/js/icons.js"></script>
+  <script src="/js/navidrome.js"></script>
+  <script src="/js/admin.js"></script>
+</body>
+</html>

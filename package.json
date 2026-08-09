@@ -1,0 +1,39 @@
+{
+  "name": "openweb",
+  "version": "2.0.0",
+  "description": "Link-in-Bio Seite mit Node.js, Express und PostgreSQL",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "db:migrate": "node db/migrate.js",
+    "db:seed": "node db/seed.js",
+    "db:reset": "node db/reset.js",
+    "test": "echo \"Tests noch nicht konfiguriert\" && exit 0"
+  },
+  "keywords": [
+    "linktree",
+    "link-in-bio",
+    "navidrome",
+    "postgres"
+  ],
+  "author": "Cornelius Ahner",
+  "license": "MIT",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "connect-pg-simple": "^9.0.1",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "helmet": "^7.1.0",
+    "pg": "^8.12.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

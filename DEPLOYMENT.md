@@ -1,14 +1,7 @@
-# Server-seitige Konfiguration: Deployment-Anleitung
+# OpenWeb Deployment-Anleitung
 
-Diese Anleitung beschreibt die aktuelle Architektur:
-
-- **Admin-Login** erfolgt über **nginx Basic Auth**. Das Passwort liegt als
-  Hash in `/etc/nginx/openweb-admin.htpasswd` und wird nirgendwo sonst
-  gespeichert.
-- Schreibzugriffe auf Supabase laufen über die Edge-Function `admin-proxy`,
-  die den Service-Role-Key serverseitig nutzt.
-- Konfigurationen werden in `/var/html/.openweb.env` (chmod 600) gespeichert
-  und können mit `install.sh update` selbstheilend repariert werden.
+OpenWeb ist ein Node.js + Express + PostgreSQL Projekt. Die komplette Anwendung
+laeuft auf einem einzelnen Server (eigenstaendig oder mit Docker Compose).
 
 ---
 
@@ -16,198 +9,213 @@ Diese Anleitung beschreibt die aktuelle Architektur:
 
 ```
 ┌──────────────┐        ┌─────────────────────┐        ┌──────────────┐
-│  Browser     │  TLS   │  nginx              │        │  Supabase DB │
-│  (admin.js)  │───────▶│  /admin Basic Auth  │        │  profile     │
-│              │ 401/   │  htpasswd           │        │  links       │
-│              │ 200    │                     │        │              │
-│              │◀───────│  → admin.html       │        │              │
+│  Browser     │  TLS   │  nginx (optional)   │        │  Node.js     │
+│  public/js   │───────▶│  Reverse Proxy      │───────▶│  server.js   │
 │              │        │                     │        │              │
-│              │───────▶│  admin-proxy        │───────▶│  admin_proxy │
-│              │ Bearer │  - Shared Secret    │ Service│  schreibt    │
-│              │ Token  │  - JWT/Secret prüft │ Role   │  Mutationen  │
-└──────────────┘        └─────────────────────┘        └──────────────┘
+└──────────────┘        └─────────────────────┘        └──────┬───────┘
+                                                                │
+                                                                │ pg Pool
+                                                                ▼
+                                                       ┌──────────────┐
+                                                       │  PostgreSQL  │
+                                                       │  users       │
+                                                       │  profile     │
+                                                       │  links       │
+                                                       │  navidrome_* │
+                                                       └──────────────┘
+```
+
+- Der Browser fragt **nur** die eigene API an (`/api/*`).
+- Navidrome-Credentials liegen **verschluesselt** in PostgreSQL; der Node-Server
+  proxyt Subsonic-Anfragen.
+- Sessions werden mit `connect-pg-simple` in PostgreSQL gespeichert.
+
+---
+
+## Schnellstart mit `install.sh`
+
+Auf einem frischen Debian/Ubuntu-Server mit Node.js >= 18:
+
+```bash
+cd /opt
+# Repository klonen
+git clone https://github.com/DerMinecrafter2020/linktree.git openweb
+cd openweb
+
+# Interaktives Setup
+bash install.sh
+```
+
+Das Script fragt ab:
+- Datenbank-Variante (Docker Postgres oder externe URL)
+- Admin-E-Mail + Passwort
+- Session-Secret + Navidrome-Encryption-Key (automatisch generiert)
+- Port + Domain
+- Navidrome-URL/User/Pass (optional)
+
+Anschliessend startet es optional Postgres, fuehrt Migrationen + Seeding aus,
+installiert npm-Abhaengigkeiten und richtet optional systemd + nginx ein.
+
+---
+
+## Manuelles Deployment
+
+### 1. Systemvoraussetzungen
+
+- Node.js >= 18
+- PostgreSQL >= 14
+- npm
+
+### 2. `.env` anlegen
+
+```bash
+cp .env.example .env
+```
+
+Beispiel `.env` fuer Produktion:
+```env
+NODE_ENV=production
+PORT=3000
+APP_URL=https://deine-domain.de
+DATABASE_URL=postgres://openweb:geheim@localhost:5432/openweb
+SESSION_SECRET=...
+SESSION_MAX_AGE_MS=86400000
+ADMIN_EMAIL=admin@deine-domain.de
+ADMIN_PASSWORD=...
+NAVIDROME_ENCRYPTION_KEY=...
+NAVIDROME_ENABLED=true
+NAVIDROME_URL=https://music.deine-domain.de
+NAVIDROME_USERNAME=openweb
+NAVIDROME_PASSWORD=...
+```
+
+`SESSION_SECRET` und `NAVIDROME_ENCRYPTION_KEY` muessen jeweils 64 Hex-Zeichen
+(32 Bytes) sein. Generieren z. B. mit:
+```bash
+openssl rand -hex 32
+```
+
+### 3. Datenbank vorbereiten
+
+```bash
+npm run db:migrate
+npm run db:seed
+```
+
+### 4. Server starten
+
+```bash
+npm start
+```
+
+Fuer Entwicklung mit Auto-Reload:
+```bash
+npm run dev
+```
+
+### 5. nginx als Reverse Proxy (empfohlen)
+
+```nginx
+server {
+    listen 80;
+    server_name deine-domain.de;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+Danach SSL mit certbot einrichten:
+```bash
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d deine-domain.de
 ```
 
 ---
 
-## Schnell-Update / Repair
+## systemd-Service (empfohlen)
 
-Falls du von einer älteren Version kommst und `config.js` von nginx nicht
-gelesen werden kann (**403**) oder `save-config` mit **401** antwortet:
+`/etc/systemd/system/openweb.service`:
+```ini
+[Unit]
+Description=OpenWeb Link-in-Bio
+After=network.target
 
-```bash
-cd /var/html
-sudo bash install.sh update
+[Service]
+Type=simple
+User=openweb
+Group=openweb
+WorkingDirectory=/opt/openweb
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+EnvironmentFile=/opt/openweb/.env
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-Das Skript erledigt dann automatisch:
-
-1. `.openweb.env` aus bestehender `config.js` erzeugen
-2. `CONFIG_SHARED_SECRET` generieren und in Supabase setzen
-3. `config.js` auf `chmod 644` setzen, damit nginx sie ausliefern kann
-4. Edge Functions deployen (außer auth-init/auth-login/auth-change-password)
-5. nginx-Basic-Auth-Datei (`htpasswd`) erzeugen oder erneuern
-
-Danach steht das Shared Secret in `/var/html/.openweb.env` und wird im
-Admin-Panel unter „Supabase konfigurieren" eingetragen.
+Aktivieren:
+```bash
+sudo useradd -r -s /bin/false openweb
+sudo chown -R openweb:openweb /opt/openweb
+sudo systemctl daemon-reload
+sudo systemctl enable openweb
+sudo systemctl start openweb
+sudo systemctl status openweb
+```
 
 ---
 
-## Voraussetzungen
+## Wartung
 
-- [Supabase CLI](https://supabase.com/docs/guides/cli) (`npm i -g supabase`)
-- Supabase-Projekt (linkes Projekt wird automatisch verwendet; kein `<PROJECT_REF>` nötig)
-- Edge Functions lokal im Verzeichnis `supabase/functions/`:
-  - `admin-proxy`
-  - `navidrome-proxy`
-  - `discord-webhook`
-  - `save-config`
-
-> Die Edge Functions `auth-init`, `auth-login` und `auth-change-password`
-> werden nicht mehr verwendet. Das Admin-Passwort liegt jetzt ausschließlich
-> serverseitig in der nginx `htpasswd`.
-
-## 1. Einmalig: SQL ausführen
-
-Im Supabase SQL-Editor (`/dashboard/project/_/sql`) den Inhalt von
-`supabase-setup.sql` ausführen. Erzeugt die Tabellen `profile`, `links` und
-`admin_settings`.
-
-## 2. Edge Functions deployen
-
+### Code aktualisieren
 ```bash
-supabase functions deploy admin-proxy
-supabase functions deploy navidrome-proxy
-supabase functions deploy discord-webhook
-supabase functions deploy save-config
+cd /opt/openweb
+bash install.sh update
 ```
 
-Optional: `install.sh` deployed diese automatisch, wenn `supabase CLI`
-eingeloggt ist.
-
-## 3. Secrets setzen
-
+### Admin-Passwort aendern
 ```bash
-supabase secrets set SERVICE_ROLE_KEY=eyJ...      # schon bekannt
-supabase secrets set ALLOWED_ORIGINS=https://deine-domain.com,http://localhost:5500
-supabase secrets set CONFIG_SHARED_SECRET=$(openssl rand -hex 32)
+cd /opt/openweb
+bash install.sh change-password
 ```
 
-`CONFIG_SHARED_SECRET` schützt die `save-config` Edge Function. Wenn du
-`install.sh` nutzt, wird das Secret automatisch generiert, in
-`/var/html/.openweb.env` gespeichert und im Supabase-Secret hinterlegt.
-Im Admin-Panel „Supabase konfigurieren" muss es als **Shared Secret**
-eingetragen werden, sonst antwortet `save-config` mit **401**.
-
-## 4. Admin-Passwort setzen
-
+### Navidrome-Credentials aendern
 ```bash
-sudo bash install.sh
+cd /opt/openweb
+bash install.sh change-navidrome
 ```
 
-Im Menü „neuinstallieren" oder „Passwort ändern" das gewünschte Passwort
-eingeben. `install.sh` schreibt dann `/etc/nginx/openweb-admin.htpasswd`
-und aktiviert `auth_basic` für `/admin` in der nginx-Konfiguration.
-
-Standard-Benutzername ist `admin`.
-
-## 5. Frontend aktivieren
-
-In `config.js` (wird von `install.sh` automatisch geschrieben):
-
-```js
-window.SUPABASE_CONFIG = {
-  url: 'https://DEIN-PROJEKT.supabase.co',
-  anonKey: 'YOUR-ANON-KEY',
-  adminProxyUrl: 'https://DEIN-PROJEKT.supabase.co/functions/v1/admin-proxy',
-  discordWebhookUrl: 'https://DEIN-PROJEKT.supabase.co/functions/v1/discord-webhook',
-};
-```
-
-> Kein `authEnabled`, keine `authLoginUrl`, keine `authChangePasswordUrl`,
-> kein `ADMIN_DEFAULT_PASSWORD` mehr nötig.
-
-Speichern, nginx neu laden, Browser neu laden.
-
-## 6. Login testen
-
-- `/admin` öffnen.
-- Der Browser zeigt den nativen Basic-Auth-Dialog.
-- Benutzername: `admin`, Passwort: das bei `install.sh` gesetzte.
-- Nach erfolgreicher Authentifizierung wird `admin.html` ausgeliefert.
-
-## 7. Passwort ändern
-
+### Datenbank zuruecksetzen
 ```bash
-sudo bash install.sh
-# Menü: „Passwort ändern"
+cd /opt/openweb
+bash install.sh reset-db
 ```
 
-`install.sh` aktualisiert `/etc/nginx/openweb-admin.htpasswd`. Es ist kein
-Supabase-Update mehr nötig.
-
-## 8. Realtime-Test
-
-- Hauptseite (`index.html`) öffnen.
-- Im Admin „Externer Link" hinzufügen.
-- Innerhalb 1s erscheint er live auf der Hauptseite.
+### Logs anzeigen
+```bash
+sudo journalctl -u openweb -f
+```
 
 ---
 
 ## Sicherheits-Checkliste
 
-- [ ] `CONFIG_SHARED_SECRET` ist mindestens 32 Bytes zufällig (Hex).
-- [ ] `ALLOWED_ORIGINS` enthält nur deine echten Domains.
-- [ ] `SERVICE_ROLE_KEY` ist **niemals** im Browser-Code.
-- [ ] `anonKey` darf in `config.js` stehen (public).
-- [ ] `/etc/nginx/openweb-admin.htpasswd` hat `chmod 640` und gehört `root:www-data`.
-- [ ] `/var/html/.openweb.env` hat `chmod 600`.
-- [ ] Frontend CSP blockt `connect-src` auf Supabase-Domain.
-- [ ] Kein `auth-init`, `auth-login`, `auth-change-password` mehr deployed.
-
-## Rollback auf client-seitigen Login
-
-Falls nginx Basic Auth doch nicht gewünscht ist:
-
-1. `sudo rm /etc/nginx/openweb-admin.htpasswd` oder Basic-Auth-Block in
-   nginx-Konfiguration auskommentieren.
-2. `sudo systemctl reload nginx`
-
-Ein vollständiger client-seitiger Login ist in dieser Version nicht mehr
-vorgesehen; bei Bedarf muss er manuell wieder eingebaut werden.
-
-## Discord Now-Playing Webhook
-
-### Voraussetzungen
-- Navidrome-Player ist aktiviert und erreichbar.
-- Ein Discord-Kanal-Webhook (Server-Einstellungen → Integrationen → Webhooks).
-
-### Migration anwenden
-Führe im Supabase SQL-Editor den Inhalt von
-`supabase/migrations/0004_discord_webhook.sql` aus. Erzeugt die Tabelle
-`public.admin_settings` mit RLS, damit der Webhook-URL nur von
-serverseitigen Edge Functions gelesen werden kann.
-
-### Edge Function
-```bash
-supabase functions deploy discord-webhook
-```
-
-### Admin-Panel konfigurieren
-1. `admin.html` öffnen → Tab **Musik**.
-2. Discord-Webhook aktivieren.
-3. Discord-Webhook-URL einfügen.
-4. (Optional) JSON-Template anpassen. Verfügbare Variablen:
-   - `{{title}}` — Titel
-   - `{{artist}}` — Interpret
-   - `{{album}}` — Album
-   - `{{duration}}` — Dauer als Text
-   - `{{coverArt}}` — Cover-Art-URL
-   - `{{playerUrl}}` — Link zum Navidrome-Player
-5. **Speichern**, dann **Testen**.
-
-### Sicherheit
-- Der Webhook-URL wird **niemals** an den Browser ausgeliefert.
-- `admin_settings` blockt Lesezugriff für `anon` und `authenticated`.
-- Nur `discord-webhook` (mit `service_role`) darf die URL lesen und an Discord weitergeben.
-- Test-Nachrichten werden über `admin-proxy` + `discord-webhook` versendet, nicht clientseitig.
+- [ ] `.env` hat `chmod 600` und gehoert dem App-User.
+- [ ] `SESSION_SECRET` ist ein zufaelliger 32-Byte-Key.
+- [ ] `NAVIDROME_ENCRYPTION_KEY` ist ein zufaelliger 32-Byte-Key.
+- [ ] `ADMIN_PASSWORD` hat mindestens 8 Zeichen.
+- [ ] Datenbank ist nicht oeffentlich erreichbar (nur localhost/VPN).
+- [ ] nginx leitet `X-Forwarded-Proto` weiter, damit Cookies in Production `secure` sind.
+- [ ] Das `.env`-File wird **niemals** in git committet (`.gitignore` pruefen).
+- [ ] Navidrome-Credentials sind nicht im Browser oder in Logs sichtbar.

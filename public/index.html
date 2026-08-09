@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Alle wichtigen Links auf einen Blick." />
+  <meta name="theme-color" content="#0a0a14" />
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src 'self' https://fonts.gstatic.com;
+    img-src 'self' data: https: blob:;
+    connect-src 'self';
+    base-uri 'self';
+    form-action 'self';
+    object-src 'none';
+  " />
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+  <meta http-equiv="Permissions-Policy" content="geolocation=(), microphone=(), camera=(), payment=()" />
+  <title>OpenWeb · Links</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="aurora" aria-hidden="true">
+    <span class="blob blob-1"></span>
+    <span class="blob blob-2"></span>
+    <span class="blob blob-3"></span>
+  </div>
+
+  <main class="card">
+    <header class="profile">
+      <div class="avatar-wrap">
+        <div class="avatar-ring"></div>
+        <div class="avatar" aria-label="Profilbild">CA</div>
+      </div>
+      <h1 class="name">@corneliusahner</h1>
+      <p class="handle">Cornelius Ahner</p>
+      <p class="bio">Azubi, 21 Jahre alt</p>
+    </header>
+
+    <section id="navidrome-player" class="np-player idle" aria-label="Aktuell gespielter Track" hidden>
+      <div class="np-cover" aria-hidden="true"></div>
+      <div class="np-info">
+        <div class="np-title">Verbinde mit Navidrome…</div>
+        <div class="np-artist">—</div>
+      </div>
+    </section>
+
+    <nav class="links" aria-label="Wichtige Links">
+      <!-- Links werden dynamisch geladen -->
+    </nav>
+
+    <footer class="footer">
+      <span class="dot"></span>
+      <span>made with <span class="heart">♥</span> · <span class="year"></span></span>
+    </footer>
+  </main>
+
+  <script src="/js/api-client.js"></script>
+  <script src="/js/icons.js"></script>
+  <script src="/js/navidrome.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

@@ -1,25 +1,28 @@
-﻿# =========================================================
-# .gitignore — OpenWeb
-# =========================================================
-# Sensible Daten (Supabase-Keys, anon-Key, service_role) NIEMALS einchecken.
+.env
+.env.*
+!.env.example
 
-# --- Lokale Server-Konfiguration --------------------------------------
-# config.js enthaelt Supabase-Keys, Navidrome-Credentials und
-# das Admin-Passwort. Wird vom install.sh erzeugt und NIE
-# committed — config.example.js dient als Template.
-config.js
-config.local.js
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Serverseitige OpenWeb-Konfiguration (URL, Keys, Secrets).
-# Wird von install.sh beim Install/Update erstellt/gesichert
-# und beim Restore wiederhergestellt.
-.openweb.env
+# Build / Editor
+.vscode/
+.idea/
+dist/
+build/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
 
-# Geschützte Admin-Konfiguration im /admin-Bereich. Wird von install.sh
-# erzeugt, nur via nginx Basic Auth erreichbar. Enthält CONFIG_SHARED_SECRET.
-admin/admin-config.js
+# Datenbank-Dumps
+*.sql.bak
+*.dump
 
-# --- Lokale Test-/Debug-Skripte -------------------------------------------
+# Lokale Test-/Debug-Skripte
 test-attack.bat
 final-check.bat
 retest.bat
@@ -28,44 +31,14 @@ inspect2.bat
 check-policies.bat
 security-test.ps1
 
-# --- Lokale Notizbuecher / Memory-Ordner --------------------------------
+# Screenshots (lokal)
+screenshots/
+screenshots/*.png
+screenshots/*.jpg
+screenshots/*.jpeg
+
+# Lokale Memory-Notizen
 .github/memory/
 
-# --- Temporaere Logs/Outputs ----------------------------------------------
+# Logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.env
-.env.*
-!.env.example
-
-# --- Node / Build-Artefakte ---------------------------------------------
-node_modules/
-dist/
-build/
-.vscode/
-.idea/
-*.swp
-*.swo
-.DS_Store
-Thumbs.db
-
-# --- Supabase Edge Function lokale Deploy-Artefakte ----------------------
-supabase/.branches/
-supabase/.temp/
-supabase/.env
-
-# --- Datenbank-Dumps -----------------------------------------------------
-*.sql.bak
-*.dump
-
-# --- Editor --------------------------------------------------------------
-.vscode/*
-!.vscode/settings.json
-
-# --- Screenshots (lokal) -------------------------------------------------
-Screenshots/
-Screenshots/*.png
-Screenshots/*.jpg
-Screenshots/*.jpeg
