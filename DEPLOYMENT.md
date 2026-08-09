@@ -42,7 +42,7 @@ cd /opt
 git clone https://github.com/DerMinecrafter2020/linktree.git openweb
 cd openweb
 
-# Interaktives Setup
+# Interaktives Setup (erstellt .env, DB, Admin, systemd, nginx)
 bash install.sh
 ```
 
@@ -55,6 +55,34 @@ Das Script fragt ab:
 
 Anschliessend startet es optional Postgres, fuehrt Migrationen + Seeding aus,
 installiert npm-Abhaengigkeiten und richtet optional systemd + nginx ein.
+
+---
+
+## Web-basiertes Initial-Setup
+
+Wenn du OpenWeb **ohne** `install.sh` startest (z. B. lokal oder auf einem
+System, auf dem das Script nicht passt), erkennt `server.js` automatisch, dass
+noch kein Admin existiert, und zeigt `/setup.html` an.
+
+Voraussetzung: Node.js und eine erreichbare PostgreSQL-Datenbank.
+
+```bash
+npm install
+npm start
+# Oeffne http://localhost:3000/setup.html
+```
+
+Im Setup-Formular kannst du setzen:
+- PostgreSQL URL
+- Server Port + App URL
+- Admin-E-Mail/Passwort
+- Profil (Name, Handle, Bio, Avatar)
+- Erste Links
+- Navidrome-Credentials (optional)
+
+Das Setup schreibt alle Werte in `.env` und in die Datenbank. Anschliessend
+musst du den Server **einmal neu starten**, damit die Session-Middleware mit dem
+generierten `SESSION_SECRET` aktiviert wird.
 
 ---
 

@@ -55,11 +55,17 @@ async function run() {
     console.log('[migrate] Fertig');
   } finally {
     client.release();
-    await db.pool.end();
   }
 }
 
-run().catch((err) => {
-  console.error('[migrate] Fehler:', err);
-  process.exit(1);
-});
+module.exports = { run };
+
+// Direkter CLI-Aufruf
+if (require.main === module) {
+  run().then(async () => {
+    await db.pool.end();
+  }).catch((err) => {
+    console.error('[migrate] Fehler:', err);
+    process.exit(1);
+  });
+}

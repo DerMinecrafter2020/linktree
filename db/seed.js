@@ -8,13 +8,12 @@ const bcrypt = require('bcrypt');
 const db = require('../lib/db');
 const { encrypt } = require('../lib/crypto');
 
-async function seed() {
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
-  const adminPassword = process.env.ADMIN_PASSWORD;
+async function seed(overrides = {}) {
+  const adminEmail = overrides.adminEmail || process.env.ADMIN_EMAIL || 'admin@example.com';
+  const adminPassword = overrides.adminPassword || process.env.ADMIN_PASSWORD;
 
-  if (!adminPassword || adminPassword.startsWith('__SET_ME')) {
-    console.error('[seed] ADMIN_PASSWORD ist nicht konfiguriert. Abbruch.');
-    process.exit(1);
+  if (!adminPassword || String(adminPassword).length < 8) {
+    throw new Error('ADMIN_PASSWORD muss mindestens 8 Zeichen lang sein.');
   }
 
   const passwordHash = await bcrypt.hash(adminPassword, 12);
@@ -29,11 +28,26 @@ async function seed() {
   `, [adminEmail.toLowerCase(), passwordHash]);
   console.log(`[seed] Admin-User: ${adminEmail}`);
 
+  const profile = overrides.profile || {};
   await db.query(`
     INSERT INTO profile (id, name, handle, bio, avatar, avatar_url, theme)
-    VALUES (1, '@corneliusahner', 'Cornelius Ahner', 'Azubi, 21 Jahre alt', 'CA', NULL, 'dark')
-    ON CONFLICT (id) DO NOTHING
-  `);
+    VALUES (1, $1, $2, $3, $4, $5, $6)
+    ON CONFLICT (id) DO UPDATE SET
+      name = EXCLUDED.name,
+      handle = EXCLUDED.handle,
+      bio = EXCLUDED.bio,
+      avatar = EXCLUDED.avatar,
+      avatar_url = EXCLUDED.avatar_url,
+      theme = EXCLUDED.theme,
+      updated_at = NOW()
+  `, [
+    (profile.name || '@corneliusahner').slice(0, 80),
+    (profile.handle || 'Cornelius Ahner').slice(0, 80),
+    (profile.bio || 'Azubi, 21 Jahre alt').slice(0, 280),
+    (profile.avatar || 'CA').toUpperCase().slice(0, 2) || 'CA',
+    profile.avatarUrl || null,
+    ['dark', 'neon', 'midnight'].includes(profile.theme) ? profile.theme : 'dark',
+  ]);
   console.log('[seed] Profil angelegt');
 
   await db.query(`
@@ -43,25 +57,36 @@ async function seed() {
   `);
   console.log('[seed] Admin-Settings angelegt');
 
+  const seedLinks = overrides.links;
   const existingLinks = await db.query('SELECT COUNT(*)::int AS count FROM links');
   if (existingLinks.rows[0].count === 0) {
-    const defaults = [
-      { title: 'Instagram', subtitle: '@cornelius_0511', url: 'https://www.instagram.com/cornelius_0511/', icon: '📸', position: 0 },
-      { title: 'GitHub', subtitle: 'Projekte auf Github', url: 'https://github.com/DerMinecrafter2020', icon: '💻', position: 1 },
-      { title: 'Kontakt', subtitle: 'admin@derminecrafter2020.com', url: 'mailto:admin@derminecrafter2020.com', icon: '✉️', position: 2 },
-    ];
+    const defaults = seedLinks && seedLinks.length > 0
+      ? seedLinks.map((l, i) => ({ ...l, position: i }))
+      : [
+          { title: 'Instagram', subtitle: '@cornelius_0511', url: 'https://www.instagram.com/cornelius_0511/', icon: '📸', position: 0 },
+          { title: 'GitHub', subtitle: 'Projekte auf Github', url: 'https://github.com/DerMinecrafter2020', icon: '💻', position: 1 },
+          { title: 'Kontakt', subtitle: 'admin@derminecrafter2020.com', url: 'mailto:admin@derminecrafter2020.com', icon: '✉️', position: 2 },
+        ];
+
     for (const link of defaults) {
       await db.query(`
         INSERT INTO links (title, subtitle, url, icon, position, is_active, open_new)
         VALUES ($1, $2, $3, $4, $5, true, true)
-      `, [link.title, link.subtitle, link.url, link.icon, link.position]);
+      `, [
+        String(link.title || '').slice(0, 80),
+        String(link.subtitle || '').slice(0, 120),
+        String(link.url || '').slice(0, 500),
+        String(link.icon || '🔗').slice(0, 500),
+        parseInt(link.position || 0, 10),
+      ]);
     }
     console.log('[seed] Default-Links angelegt');
   }
 
-  const navUrl = process.env.NAVIDROME_URL ? process.env.NAVIDROME_URL.trim() : '';
-  const navUser = process.env.NAVIDROME_USERNAME ? process.env.NAVIDROME_USERNAME.trim() : '';
-  const navPass = process.env.NAVIDROME_PASSWORD ? process.env.NAVIDROME_PASSWORD.trim() : '';
+  const nav = overrides.navidrome || {};
+  const navUrl = (nav.url || process.env.NAVIDROME_URL || '').trim();
+  const navUser = (nav.username || process.env.NAVIDROME_USERNAME || '').trim();
+  const navPass = (nav.password || process.env.NAVIDROME_PASSWORD || '').trim();
   const navEnabled = !!(navUrl && navUser && navPass);
   const pollInterval = parseInt(process.env.NAVIDROME_POLL_INTERVAL_SEC || '30', 10) || 30;
 
@@ -87,11 +112,18 @@ async function seed() {
   `, [navEnabled, navUrl || null, navUser || null, encryptedPass, pollInterval]);
   console.log(`[seed] Navidrome-Settings: ${navEnabled ? 'aktiviert' : 'deaktiviert'}`);
 
-  await db.pool.end();
-  console.log('[seed] Fertig');
+  return { adminEmail };
 }
 
-seed().catch((err) => {
-  console.error('[seed] Fehler:', err);
-  process.exit(1);
-});
+module.exports = { seed };
+
+// Direkter CLI-Aufruf
+if (require.main === module) {
+  seed().then(async () => {
+    await db.pool.end();
+    console.log('[seed] Fertig');
+  }).catch((err) => {
+    console.error('[seed] Fehler:', err);
+    process.exit(1);
+  });
+}

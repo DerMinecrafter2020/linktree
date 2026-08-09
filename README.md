@@ -21,11 +21,13 @@ Eine komplette Link-in-Bio-Seite (a la Linktree) im **Dark & Neon**-Stil mit eig
 | `routes/public.js` | Oeffentliche API (`/api/profile`, `/api/links`, `/api/login`) |
 | `routes/admin.js` | Geschuetzte Admin-API |
 | `routes/navidrome.js` | Backend-Proxy fuer Navidrome/Subsonic |
-| `public/` | Frontend: `index.html`, `admin.html`, `login.html`, JS, CSS |
+| `public/` | Frontend: `index.html`, `admin.html`, `login.html`, `setup.html`, JS, CSS |
 | `db/migrations/` | SQL-Migrationen |
 | `db/migrate.js` | Migration-Runner |
 | `db/seed.js` | Erzeugt Admin-User, Profil, Default-Links |
 | `db/reset.js` | Setzt alle Daten zurueck |
+| `lib/setup.js` | Initial-Setup-Logik |
+| `routes/setup.js` | Setup-API |
 
 ---
 
@@ -35,30 +37,35 @@ Eine komplette Link-in-Bio-Seite (a la Linktree) im **Dark & Neon**-Stil mit eig
 - Node.js >= 18
 - PostgreSQL (lokal oder Docker)
 
-### 1) Abhaengigkeiten installieren
+### Variante A: Web-basiertes Initial-Setup (empfohlen)
+
 ```bash
 npm install
+npm start
+# Oeffne http://localhost:3000/setup.html
 ```
 
-### 2) `.env` anlegen
+Beim ersten Start erkennt der Server automatisch, dass noch kein Admin-User
+existiert, und zeigt das Initial-Setup. Dort kannst du setzen:
+
+- PostgreSQL-Verbindung
+- Admin-E-Mail/Passwort
+- Profil-Daten
+- Erste Links
+- Navidrome-Credentials (optional)
+
+Nach dem Setup musst du den Server **einmal neu starten**, damit die
+Session-Konfiguration aktiv wird. Danach ist `/login` erreichbar.
+
+### Variante B: Manuell ueber `.env`
+
 ```bash
+npm install
 cp .env.example .env
-# Danach .env bearbeiten
-```
-
-### 3) Datenbank starten (Docker-Variante)
-```bash
+# .env bearbeiten
 docker compose up -d postgres
-```
-
-### 4) Migrationen + Seeding
-```bash
 npm run db:migrate
 npm run db:seed
-```
-
-### 5) Entwicklungsserver starten
-```bash
 npm run dev
 ```
 

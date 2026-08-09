@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a0a14" />
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline';
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data:;
+    connect-src 'self';
+    base-uri 'self';
+    form-action 'self';
+    object-src 'none';
+  " />
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+  <title>Initial Setup · OpenWeb</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/admin.css" />
+  <style>
+    body { min-height: 100vh; display: grid; place-items: center; padding: 2rem; }
+    .setup-card { width: min(720px, 100%); background: var(--bg-2); border: 1px solid var(--border-strong); border-radius: 1.5rem; padding: 2rem; box-shadow: 0 24px 80px rgba(0,0,0,.35); }
+    .setup-card h1 { margin: 0 0 .5rem; font-size: 1.6rem; }
+    .setup-card p.lead { color: var(--text-dim); margin-bottom: 1.5rem; }
+    .setup-card h2 { font-size: 1.1rem; margin: 2rem 0 1rem; border-bottom: 1px solid var(--border); padding-bottom: .5rem; }
+    .setup-card .hint { color: var(--muted, #9aa0b2); font-size: .85rem; }
+    .setup-card .success { background: rgba(0,255,136,.1); border: 1px solid rgba(0,255,136,.3); color: #00ff88; padding: 1rem; border-radius: .75rem; margin: 1rem 0; }
+    .setup-card .error { background: rgba(255,43,214,.1); border: 1px solid rgba(255,43,214,.3); color: #ff2bd6; padding: 1rem; border-radius: .75rem; margin: 1rem 0; }
+    .link-row { display: grid; grid-template-columns: 1fr 1fr 80px; gap: .5rem; margin-bottom: .5rem; }
+    .link-row input { width: 100%; }
+    .actions { display: flex; gap: .75rem; margin-top: 2rem; }
+  </style>
+</head>
+<body class="login-page">
+  <div class="setup-card">
+    <h1>🚀 OpenWeb Initial Setup</h1>
+    <p class="lead">
+      Richte deine OpenWeb-Instanz einmalig ein. Alle Angaben werden in die lokale <code>.env</code>
+      und in die PostgreSQL-Datenbank geschrieben.
+    </p>
+
+    <form id="setup-form" class="form">
+      <h2>🔌 Datenbank & Server</h2>
+      <label>
+        <span>PostgreSQL URL</span>
+        <input name="databaseUrl" type="text" placeholder="postgresql://openweb:pass@localhost:5432/openweb" required />
+        <small class="hint">Der Server braucht diese Verbindung, um Daten zu speichern.</small>
+      </label>
+      <button type="button" id="test-db-btn" class="btn ghost">Verbindung testen</button>
+      <p id="db-status" class="hint"></p>
+
+      <label>
+        <span>Server Port</span>
+        <input name="port" type="number" value="3000" />
+      </label>
+      <label>
+        <span>App URL</span>
+        <input name="appUrl" type="url" placeholder="https://deine-domain.de" />
+        <small class="hint">Optional. Standard ist http://localhost:PORT</small>
+      </label>
+
+      <h2>🔐 Admin-Account</h2>
+      <label>
+        <span>Admin E-Mail</span>
+        <input name="adminEmail" type="email" placeholder="admin@example.com" required />
+      </label>
+      <label>
+        <span>Admin Passwort</span>
+        <input name="adminPassword" type="password" minlength="8" required />
+        <small class="hint">Mindestens 8 Zeichen.</small>
+      </label>
+      <label>
+        <span>Passwort wiederholen</span>
+        <input name="adminPasswordConfirm" type="password" required />
+      </label>
+
+      <h2>👤 Profil</h2>
+      <label>
+        <span>Name / Handle (z. B. @corneliusahner)</span>
+        <input name="profileName" type="text" value="@corneliusahner" />
+      </label>
+      <label>
+        <span>Anzeigename</span>
+        <input name="profileHandle" type="text" value="Cornelius Ahner" />
+      </label>
+      <label>
+        <span>Bio</span>
+        <textarea name="profileBio" rows="2">Azubi, 21 Jahre alt</textarea>
+      </label>
+      <label>
+        <span>Avatar-Buchstaben (max. 2)</span>
+        <input name="profileAvatar" type="text" maxlength="2" value="CA" />
+      </label>
+
+      <h2>🔗 Erste Links (optional)</h2>
+      <div id="links-list">
+        <div class="link-row">
+          <input type="text" data-field="title" placeholder="Titel" value="Instagram" />
+          <input type="url" data-field="url" placeholder="https://..." value="https://www.instagram.com/cornelius_0511/" />
+          <input type="text" data-field="icon" placeholder="Icon" value="📸" />
+        </div>
+        <div class="link-row">
+          <input type="text" data-field="title" placeholder="Titel" value="GitHub" />
+          <input type="url" data-field="url" placeholder="https://..." value="https://github.com/DerMinecrafter2020" />
+          <input type="text" data-field="icon" placeholder="Icon" value="💻" />
+        </div>
+        <div class="link-row">
+          <input type="text" data-field="title" placeholder="Titel" value="Kontakt" />
+          <input type="url" data-field="url" placeholder="https://..." value="mailto:admin@derminecrafter2020.com" />
+          <input type="text" data-field="icon" placeholder="Icon" value="✉️" />
+        </div>
+      </div>
+
+      <h2>🎵 Navidrome (optional)</h2>
+      <label>
+        <span>Navidrome URL</span>
+        <input name="navidromeUrl" type="url" placeholder="https://music.example.com" />
+      </label>
+      <label>
+        <span>Username</span>
+        <input name="navidromeUsername" type="text" />
+      </label>
+      <label>
+        <span>Passwort</span>
+        <input name="navidromePassword" type="password" />
+      </label>
+
+      <div id="message"></div>
+
+      <div class="actions">
+        <button type="submit" class="btn primary">Setup abschliessen</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="/js/setup.js"></script>
+</body>
+</html>
