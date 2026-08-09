@@ -34,6 +34,27 @@ router.get('/status', async (req, res) => {
   }
 });
 
+router.get('/config', async (req, res) => {
+  try {
+    const envExists = setup.envFileExists();
+    const env = envExists ? setup.parseEnv(setup.readEnvFile()) : {};
+    res.json({
+      ok: true,
+      data: {
+        envFileExists,
+        databaseUrl: env.DATABASE_URL || '',
+        port: env.PORT || '3000',
+        appUrl: env.APP_URL || '',
+        adminEmail: env.ADMIN_EMAIL || '',
+        navidromeUrl: env.NAVIDROME_URL || '',
+        navidromeUsername: env.NAVIDROME_USERNAME || '',
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 router.post('/test-database', async (req, res) => {
   try {
     const url = v.safeText(req.body.databaseUrl, 500);

@@ -48,12 +48,30 @@
     return json.data;
   }
 
+  async function loadExistingConfig() {
+    try {
+      const cfg = await api('GET', '/setup/config');
+      if (!cfg) return;
+      if (cfg.databaseUrl) form.databaseUrl.value = cfg.databaseUrl;
+      if (cfg.port) form.port.value = cfg.port;
+      if (cfg.appUrl) form.appUrl.value = cfg.appUrl;
+      if (cfg.adminEmail) form.adminEmail.value = cfg.adminEmail;
+      if (cfg.navidromeUrl) form.navidromeUrl.value = cfg.navidromeUrl;
+      if (cfg.navidromeUsername) form.navidromeUsername.value = cfg.navidromeUsername;
+      if (cfg.databaseUrl) {
+        dbStatus.textContent = 'Vorhandene Datenbank-URL geladen. Du kannst sie testen oder ändern.';
+      }
+    } catch (err) {
+      console.warn('Konnte vorhandene Config nicht laden:', err.message);
+    }
+  }
+
   testDbBtn.addEventListener('click', async () => {
     const url = form.databaseUrl.value.trim();
     if (!url) { dbStatus.textContent = 'Bitte eine URL eingeben.'; return; }
     dbStatus.textContent = 'Teste…';
     try {
-      const res = await api('/setup/test-database', { databaseUrl: url });
+      const res = await api('POST', '/setup/test-database', { databaseUrl: url });
       dbStatus.textContent = res.ok ? '✅ Verbindung OK' : `❌ Fehler: ${res.error}`;
     } catch (err) {
       dbStatus.textContent = `❌ Fehler: ${err.message}`;
@@ -108,11 +126,13 @@
     };
 
     try {
-      const result = await api('/setup', payload);
+      const result = await api('POST', '/setup', payload);
       showMessage(`${result.message} Du wirst in 5 Sekunden zum Login weitergeleitet. Wenn das nicht klappt, starte den Server neu.`);
       setTimeout(() => { location.href = '/login'; }, 5000);
     } catch (err) {
       showMessage(err.message, true);
     }
   });
+
+  loadExistingConfig();
 })();
