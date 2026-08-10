@@ -227,9 +227,10 @@
         const previousId = this.currentTrack ? this.trackId(this.currentTrack) : null;
         const newId = this.trackId(newTrack);
         const sameTrack = previousId && previousId === newId;
-        this.currentTrack = newTrack;
+        // Server-Zeit übernehmen, damit Pausieren/Stoppen synchron bleibt
         this.localPosition = newTrack.position || 0;
         this.lastTickAt = performance.now();
+        this.currentTrack = newTrack;
         this.renderTrack(this.currentTrack, newTrack.paused === true ? 'paused' : 'playing');
         if (previousId && !sameTrack) {
           console.log('[navidrome] neuer Track erkannt, aktualisiere Anzeige');
@@ -243,11 +244,11 @@
 
     updateProgress() {
       if (!this.currentTrack) return;
+      const now = performance.now();
       if (!this.currentTrack.paused) {
-        const now = performance.now();
         this.localPosition += (now - this.lastTickAt) / 1000;
-        this.lastTickAt = now;
       }
+      this.lastTickAt = now;
       const duration = this.currentTrack.duration || 0;
       if (duration > 0) this.localPosition = Math.min(this.localPosition, duration);
       this.renderExtra(this.currentTrack, this.localPosition);
@@ -291,9 +292,15 @@
     renderIdle() {
       this.setState('idle');
       const wrap = $('#navidrome-player');
-      if (wrap) wrap.hidden = true;
+      if (wrap) {
+        wrap.hidden = false;
+      }
       setText('.np-title', 'Momentan laeuft nichts', wrap);
       setText('.np-artist', 'Starte Musik in Navidrome, dann erscheint sie hier', wrap);
+      const albumEl = wrap?.querySelector('.np-album');
+      if (albumEl) { albumEl.textContent = ''; albumEl.hidden = true; }
+      const extraEl = wrap?.querySelector('.np-extra');
+      if (extraEl) { extraEl.innerHTML = ''; extraEl.hidden = true; }
       const cover = wrap?.querySelector('.np-cover');
       if (cover) {
         cover.replaceChildren(document.createTextNode('🎵'));
