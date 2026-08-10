@@ -43,8 +43,6 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
-app.use(express.static(path.join(__dirname, 'public')));
-
 // =========================================================
 // App je nach Setup-Status finalisieren
 // =========================================================
@@ -61,6 +59,7 @@ async function finalizeApp() {
     console.log('[server] Initial-Setup-Modus aktiv. Rufe /setup.html auf, um die Anwendung zu konfigurieren.');
     const setupRoutes = require('./routes/setup');
     app.use('/api/setup', setupRoutes);
+    app.use(express.static(path.join(__dirname, 'public')));
 
     app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
     app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
@@ -102,6 +101,7 @@ async function finalizeApp() {
     app.use('/api/navidrome', navidromeRoutes);
 
     app.get('/setup.html', (req, res) => res.redirect('/login'));
+    app.use(express.static(path.join(__dirname, 'public')));
     app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
     app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
     app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
