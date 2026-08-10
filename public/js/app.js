@@ -309,7 +309,7 @@
       if (wrap) {
         wrap.hidden = false;
       }
-      setText('.np-title', 'Momentan laeuft nichts', wrap);
+      setText('.np-title', 'Momentan läuft nichts', wrap);
       setText('.np-artist', 'Starte Musik in Navidrome, dann erscheint sie hier', wrap);
       const albumEl = wrap?.querySelector('.np-album');
       if (albumEl) { albumEl.textContent = ''; albumEl.hidden = true; }
