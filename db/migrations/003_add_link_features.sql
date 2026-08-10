@@ -42,4 +42,10 @@ CREATE INDEX IF NOT EXISTS idx_link_clicks_clicked_at ON link_clicks(clicked_at)
 -- Profil-Erweiterungen
 ALTER TABLE profile
   ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT true,
-  ADD COLUMN IF NOT EXISTS allow_visitor_theme BOOLEAN NOT NULL DEFAULT true;
+  ADD COLUMN IF NOT EXISTS allow_visitor_theme BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS custom_css TEXT NULL;
+
+-- Weitere Link-Erweiterungen
+ALTER TABLE links
+  ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NULL,
+  ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NULL;

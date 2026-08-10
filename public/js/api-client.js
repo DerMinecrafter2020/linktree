@@ -46,6 +46,7 @@
     getLinks: () => get('/links'),
     getLinkCategories: () => get('/link-categories'),
     trackLinkClick: (id) => post(`/links/${id}/click`, {}),
+    unlockLink: (id, password) => post(`/links/${id}/unlock`, { password }),
 
     // Auth
     login: (email, password) => post('/login', { email, password }),

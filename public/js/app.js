@@ -192,6 +192,40 @@
     } catch { /* noop */ }
   }
 
+  async function unlockAndOpen(link, event) {
+    event.preventDefault();
+    const dlg = $('#link-password-dialog');
+    const input = $('#link-password-input');
+    const error = $('#link-password-error');
+    const cancel = $('#link-password-cancel');
+    const form = dlg?.querySelector('form');
+    if (!dlg || !input || !form) return;
+
+    input.value = '';
+    error.hidden = true;
+    if (typeof dlg.showModal === 'function') dlg.showModal();
+    else dlg.setAttribute('open', '');
+    input.focus();
+
+    const close = () => { if (typeof dlg.close === 'function') dlg.close(); else dlg.removeAttribute('open'); };
+    cancel?.addEventListener('click', close, { once: true });
+
+    const onSubmit = async (e) => {
+      e.preventDefault();
+      try {
+        const res = await window.api.unlockLink(link.id, input.value);
+        close();
+        window.open(res.url, link.open_new !== false ? '_blank' : '_self');
+        trackClick(link);
+      } catch (err) {
+        error.hidden = false;
+        input.value = '';
+        input.focus();
+      }
+    };
+    form.addEventListener('submit', onSubmit, { once: true });
+  }
+
   function buildLinkRow(link) {
     const href = safeUrl(link.url);
     const a = el('a', 'link');
@@ -200,8 +234,12 @@
       a.target = '_blank';
       a.rel = 'noopener noreferrer nofollow';
     }
-    // Klicks tracken
-    a.addEventListener('click', () => trackClick(link));
+    if (link.is_password_protected) {
+      a.addEventListener('click', (e) => unlockAndOpen(link, e));
+    } else {
+      // Klicks tracken
+      a.addEventListener('click', () => trackClick(link));
+    }
 
     const top = el('span', 'link-top');
     const text = el('span', 'link-text');

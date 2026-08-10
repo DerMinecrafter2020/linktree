@@ -170,6 +170,12 @@ async function finalizeApp() {
         }
 
         let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+
+        // Custom CSS injizieren, auch wenn kein Track läuft
+        if (profile.custom_css) {
+          html = html.replace(/(<\/head>)/i, `\n<style>${profile.custom_css}</style>\n$1`);
+        }
+
         const track = await getNowPlaying();
 
         if (track && track.playing) {
@@ -180,6 +186,10 @@ async function finalizeApp() {
             ? (publicDomain.startsWith('http') ? publicDomain : `${req.protocol}://${publicDomain}`)
             : `${req.protocol}://${req.get('host')}`;
           const image = track.coverUrl ? `${absUrl}${track.coverUrl}` : '';
+
+          // Custom CSS injizieren
+          const profileCss = profile.custom_css ? `\n<style>${profile.custom_css}</style>\n` : '';
+          html = html.replace(/(<\/head>)/i, `${profileCss}$1`);
 
           html = html
             .replace(/<meta property="og:site_name" content="[^"]*"\s*\/?>/, `<meta property="og:site_name" content="${escapeHtml(profile.name || profile.handle || 'OpenWeb')}">`)

@@ -36,6 +36,23 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+  <!-- Passwort-Dialog für geschützte Links -->
+  <dialog id="link-password-dialog" class="dialog password-dialog">
+    <form method="dialog" class="form">
+      <h3>🔒 Geschützter Link</h3>
+      <p class="hint">Dieser Link ist passwortgeschützt. Bitte gib das Passwort ein.</p>
+      <label>
+        <span>Passwort</span>
+        <input id="link-password-input" type="password" />
+      </label>
+      <p id="link-password-error" class="hint error" hidden>Falsches Passwort.</p>
+      <div class="form-actions">
+        <button type="button" id="link-password-cancel" class="btn ghost">Abbrechen</button>
+        <button type="submit" class="btn primary">Öffnen</button>
+      </div>
+    </form>
+  </dialog>
+
   <div class="aurora" aria-hidden="true">
     <span class="blob blob-1"></span>
     <span class="blob blob-2"></span>

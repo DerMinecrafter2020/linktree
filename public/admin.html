@@ -123,6 +123,10 @@
             <input name="allow_visitor_theme" type="checkbox" checked />
             <span>Besucher dürfen Theme wechseln</span>
           </label>
+          <label>
+            <span>Custom CSS (optional, max. 5000 Zeichen)</span>
+            <textarea name="custom_css" rows="6" placeholder="/* z. B. .card { border-radius: 40px; } */"></textarea>
+          </label>
 
           <div class="form-actions">
             <button type="submit" class="btn primary">Speichern</button>
@@ -348,6 +352,15 @@
           <option value="6">Sa</option>
           <option value="0">So</option>
         </select>
+      </label>
+      <label>
+        <span>Ablaufdatum (Link wird danach automatisch inaktiv)</span>
+        <input name="expires_at" type="datetime-local" />
+      </label>
+      <label>
+        <span>Passwortschutz (optional)</span>
+        <input name="password" type="password" placeholder="Leer lassen = kein Schutz" />
+        <small class="hint">Nur beim Speichern setzen/ändern. Bereits gesetzt = bleibt erhalten, wenn Feld leer bleibt.</small>
       </label>
       <label class="row">
         <input name="is_active" type="checkbox" checked />

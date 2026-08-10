@@ -8,6 +8,7 @@ const db = require('../lib/db');
 const { encrypt, decrypt } = require('../lib/crypto');
 const v = require('../lib/validators');
 const { hashPassword, verifyPassword, findUserByEmail, requireAdminSession } = require('../lib/auth');
+const bcrypt = require('bcrypt');
 
 const router = express.Router();
 
@@ -53,21 +54,32 @@ router.post('/profile', async (req, res, next) => {
     const theme = v.validateTheme(req.body.theme);
     const isPublic = req.body.is_public !== false;
     const allowVisitorTheme = req.body.allow_visitor_theme !== false;
+    const customCss = req.body.custom_css !== undefined ? String(req.body.custom_css || '').slice(0, 5000) : undefined;
+
+    const updates = [
+      'name = EXCLUDED.name',
+      'handle = EXCLUDED.handle',
+      'bio = EXCLUDED.bio',
+      'avatar = EXCLUDED.avatar',
+      'avatar_url = EXCLUDED.avatar_url',
+      'theme = EXCLUDED.theme',
+      'is_public = EXCLUDED.is_public',
+      'allow_visitor_theme = EXCLUDED.allow_visitor_theme',
+      'updated_at = NOW()',
+    ];
+    const values = [name, handle, bio, avatar, avatarUrl, theme, isPublic, allowVisitorTheme];
+    let idx = 9;
+    if (customCss !== undefined) {
+      updates.splice(-1, 0, `custom_css = EXCLUDED.custom_css`);
+      values.push(customCss);
+      idx++;
+    }
 
     await db.query(`
-      INSERT INTO profile (id, name, handle, bio, avatar, avatar_url, theme, is_public, allow_visitor_theme)
-      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8)
-      ON CONFLICT (id) DO UPDATE SET
-        name = EXCLUDED.name,
-        handle = EXCLUDED.handle,
-        bio = EXCLUDED.bio,
-        avatar = EXCLUDED.avatar,
-        avatar_url = EXCLUDED.avatar_url,
-        theme = EXCLUDED.theme,
-        is_public = EXCLUDED.is_public,
-        allow_visitor_theme = EXCLUDED.allow_visitor_theme,
-        updated_at = NOW()
-    `, [name, handle, bio, avatar, avatarUrl, theme, isPublic, allowVisitorTheme]);
+      INSERT INTO profile (id, name, handle, bio, avatar, avatar_url, theme, is_public, allow_visitor_theme${customCss !== undefined ? ', custom_css' : ''})
+      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8${customCss !== undefined ? ', $' + idx : ''})
+      ON CONFLICT (id) DO UPDATE SET ${updates.join(', ')}
+    `, values);
 
     const { rows } = await db.query('SELECT * FROM profile WHERE id = 1 LIMIT 1');
     res.json({ ok: true, data: rows[0] });
@@ -81,12 +93,14 @@ router.get('/links', async (req, res, next) => {
   try {
     const { rows } = await db.query(`
       SELECT l.*, c.name AS category_name,
-        (SELECT COUNT(*)::int FROM link_clicks WHERE link_id = l.id) AS click_count
+        (SELECT COUNT(*)::int FROM link_clicks WHERE link_id = l.id) AS click_count,
+        l.password_hash IS NOT NULL AS is_password_protected
       FROM links l
       LEFT JOIN link_categories c ON c.id = l.category_id
       ORDER BY c.position ASC NULLS FIRST, c.name ASC, l.position ASC, l.created_at ASC
     `);
-    res.json({ ok: true, data: rows });
+    const safe = rows.map(r => ({ ...r, password_hash: undefined }));
+    res.json({ ok: true, data: safe });
   } catch (err) {
     next(err);
   }
@@ -228,6 +242,8 @@ router.post('/links', async (req, res, next) => {
     const visibleFrom = v.safeDate(req.body.visible_from);
     const visibleUntil = v.safeDate(req.body.visible_until);
     const visibleWeekdays = v.safeWeekdays(req.body.visible_weekdays);
+    const expiresAt = v.safeDate(req.body.expires_at);
+    const linkPassword = req.body.password ? await bcrypt.hash(String(req.body.password), 10) : null;
 
     if (!title || !url) {
       return res.status(400).json({ ok: false, error: 'Titel und URL sind Pflicht' });
@@ -240,11 +256,12 @@ router.post('/links', async (req, res, next) => {
       INSERT INTO links (
         title, subtitle, url, display_url, icon, position, is_active, open_new,
         meta_description, admin_note, slug, category_id,
-        visible_from, visible_until, visible_weekdays
+        visible_from, visible_until, visible_weekdays,
+        password_hash, expires_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING *
-    `, [title, subtitle, url, displayUrl, icon, position, isActive, openNew, metaDescription, adminNote, slug, categoryId, visibleFrom, visibleUntil, visibleWeekdays]);
+    `, [title, subtitle, url, displayUrl, icon, position, isActive, openNew, metaDescription, adminNote, slug, categoryId, visibleFrom, visibleUntil, visibleWeekdays, linkPassword, expiresAt]);
 
     res.json({ ok: true, data: rows[0] });
   } catch (err) {
@@ -319,6 +336,15 @@ router.patch('/links/:id', async (req, res, next) => {
     if (req.body.visible_weekdays !== undefined) {
       updates.push(`visible_weekdays = $${idx++}`);
       values.push(v.safeWeekdays(req.body.visible_weekdays));
+    }
+    if (req.body.expires_at !== undefined) {
+      updates.push(`expires_at = $${idx++}`);
+      values.push(v.safeDate(req.body.expires_at));
+    }
+    if (req.body.password !== undefined) {
+      const pwd = req.body.password ? String(req.body.password) : '';
+      updates.push(`password_hash = $${idx++}`);
+      values.push(pwd ? await bcrypt.hash(pwd, 10) : null);
     }
 
     if (updates.length === 0) {

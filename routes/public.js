@@ -75,6 +75,10 @@ function getNowInBerlin() {
 
 function isLinkVisible(link, nowBerlin) {
   if (!link.is_active) return false;
+  if (link.expires_at) {
+    const expires = new Date(link.expires_at);
+    if (expires < nowBerlin) return false;
+  }
   if (link.visible_from) {
     const from = new Date(link.visible_from);
     if (from > nowBerlin) return false;
@@ -96,7 +100,8 @@ router.get('/links', async (req, res, next) => {
       SELECT l.id, l.title, l.subtitle, l.url, l.display_url, l.icon, l.position,
              l.is_active, l.open_new, l.meta_description, l.slug,
              l.visible_from, l.visible_until, l.visible_weekdays,
-             l.category_id, c.name AS category_name, c.position AS category_position
+             l.category_id, c.name AS category_name, c.position AS category_position,
+             l.password_hash IS NOT NULL AS is_password_protected
       FROM links l
       LEFT JOIN link_categories c ON c.id = l.category_id
       WHERE l.is_active = true
@@ -104,7 +109,25 @@ router.get('/links', async (req, res, next) => {
     `);
     const nowBerlin = getNowInBerlin();
     const visible = rows.filter(l => isLinkVisible(l, nowBerlin));
-    res.json({ ok: true, data: visible });
+    // Passwort-Hashes nie an Client senden
+    const safe = visible.map(l => ({ ...l, password_hash: undefined }));
+    res.json({ ok: true, data: safe });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/links/:id/unlock', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await db.query('SELECT id, url, password_hash FROM links WHERE id = $1 AND is_active = true LIMIT 1', [id]);
+    if (!rows.length) return res.status(404).json({ ok: false, error: 'Link nicht gefunden' });
+    const link = rows[0];
+    if (!link.password_hash) return res.json({ ok: true, data: { url: link.url } });
+    const password = String(req.body.password || '');
+    const valid = await require('bcrypt').compare(password, link.password_hash);
+    if (!valid) return res.status(401).json({ ok: false, error: 'Falsches Passwort' });
+    res.json({ ok: true, data: { url: link.url } });
   } catch (err) {
     next(err);
   }
