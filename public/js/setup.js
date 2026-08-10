@@ -39,6 +39,9 @@
     const text = await r.text();
     let json;
     try { json = JSON.parse(text); } catch { json = { ok: false, error: text }; }
+    if (r.status === 404) {
+      throw new Error('Setup-API nicht erreichbar. Das Setup wurde bereits abgeschlossen oder der Server ist noch am Starten.');
+    }
     if (!r.ok || !json.ok) throw new Error(json.error || 'HTTP ' + r.status);
     return json.data;
   }
@@ -58,6 +61,10 @@
       }
     } catch (err) {
       console.warn('Konnte vorhandene Config nicht laden:', err.message);
+      if (String(err.message).includes('Setup-API nicht erreichbar')) {
+        showMessage('Das Setup ist bereits abgeschlossen. Du wirst zur Login-Seite weitergeleitet…', true);
+        setTimeout(() => { location.href = '/login'; }, 3000);
+      }
     }
   }
 
@@ -71,6 +78,9 @@
       dbStatus.textContent = res.ok ? '✅ Verbindung OK' : '❌ Fehler: ' + res.error;
     } catch (err) {
       dbStatus.textContent = '❌ Fehler: ' + err.message;
+      if (String(err.message).includes('Setup-API nicht erreichbar')) {
+        setTimeout(() => { location.href = '/login'; }, 2500);
+      }
     } finally {
       testDbBtn.disabled = false;
     }
