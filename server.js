@@ -101,6 +101,8 @@ async function finalizeApp() {
     app.use('/api', publicRoutes);
     app.use('/api/admin', adminRoutes);
     app.use('/api/navidrome', navidromeRoutes);
+    const debugRoutes = require('./routes/debug');
+    app.use('/api/debug', debugRoutes);
 
     app.get('/setup.html', (req, res) => res.redirect('/login'));
     app.use(express.static(path.join(__dirname, 'public')));
