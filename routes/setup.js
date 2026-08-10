@@ -34,20 +34,32 @@ router.get('/status', async (req, res) => {
   }
 });
 
+function maskDatabaseUrl(rawUrl) {
+  if (!rawUrl) return '';
+  try {
+    const url = new URL(rawUrl);
+    if (url.password) url.password = '***';
+    return url.toString();
+  } catch {
+    return '';
+  }
+}
+
 router.get('/config', async (req, res) => {
   try {
     const envExists = setup.envFileExists();
     const env = envExists ? setup.parseEnv(setup.readEnvFile()) : {};
 
-    let databaseUrl = env.DATABASE_URL || '';
-    if (!databaseUrl && env.DB_HOST) {
+    let databaseUrl = '';
+    if (env.DATABASE_URL) {
+      databaseUrl = maskDatabaseUrl(env.DATABASE_URL);
+    } else if (env.DB_HOST) {
       const user = env.DB_USER || '';
-      const pass = env.DB_PASSWORD || '';
       const host = env.DB_HOST || '';
       const port = env.DB_PORT || '5432';
       const db = env.DB_NAME || '';
       if (user && host && db) {
-        databaseUrl = `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}:${port}/${encodeURIComponent(db)}`;
+        databaseUrl = `postgresql://${encodeURIComponent(user)}@***@${host}:${port}/${encodeURIComponent(db)}`;
       }
     }
 
