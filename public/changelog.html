@@ -46,6 +46,8 @@
         <li>Robots.txt-Endpunkt mit Sitemap-Verweis und Crawler-Ausschluss für Admin, Login und API.</li>
         <li>Benutzerdefinierte 404-Seite für unbekannte Kurzlinks und alle nicht existierenden Routen.</li>
         <li>Robots-Meta-Tags: Admin, Login und 404 mit noindex; Startseite mit index, follow.</li>
+        <li>Tägliche Wartung um 03:00 Uhr: automatisches Löschen abgelaufener Sessions und Klickdaten älter als DATA_RETENTION_DAYS.</li>
+        <li>Server-Info-Endpoint /api/admin/server-info mit Uptime, Version, Link-/Klickzahlen und Datenbankgröße; angezeigt im Settings-Tab.</li>
       </ul>
     </div>
 

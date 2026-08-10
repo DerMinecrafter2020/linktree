@@ -145,6 +145,32 @@ async function finalizeApp() {
       res.send(`User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /login\nDisallow: /api/\nSitemap: ${req.protocol}://${publicDomain || req.get('host')}/sitemap.xml\n`);
     });
 
+    // Server-Info (nur fuer authentifizierte Admins)
+    app.get('/api/admin/server-info', async (req, res, next) => {
+      try {
+        if (!req.session?.userId) return res.status(401).json({ ok: false, error: 'Nicht authentifiziert' });
+        const pkg = require('./package.json');
+        const dbRes = await db.query(`
+          SELECT
+            (SELECT COUNT(*) FROM links) AS links,
+            (SELECT COUNT(*) FROM link_clicks) AS clicks,
+            (SELECT COUNT(*) FROM link_categories) AS categories,
+            (SELECT COUNT(*) FROM api_keys) AS api_keys,
+            (SELECT COUNT(*) FROM user_sessions) AS sessions,
+            (SELECT pg_size_pretty(pg_database_size(current_database()))) AS db_size
+        `);
+        res.json({
+          ok: true,
+          data: {
+            version: pkg.version,
+            nodeEnv: NODE_ENV,
+            uptime: process.uptime(),
+            ...dbRes.rows[0],
+          },
+        });
+      } catch (err) { next(err); }
+    });
+
     // Sitemap-Generierung
     app.get('/sitemap.xml', async (req, res, next) => {
       try {
@@ -260,6 +286,8 @@ async function finalizeApp() {
 
   if (!setupRequired) {
     const backup = require('./lib/backup');
+    const maintenance = require('./lib/maintenance');
+
     const runBackup = async () => {
       try {
         const file = await backup.createBackup();
@@ -268,13 +296,25 @@ async function finalizeApp() {
         console.error('[backup] Fehler beim automatischen Backup:', err.message);
       }
     };
+
+    const runCleanup = async () => {
+      try {
+        const result = await maintenance.runMaintenance();
+        console.log('[maintenance] Aufraeumen abgeschlossen:', result);
+      } catch (err) {
+        console.error('[maintenance] Fehler beim Aufräumen:', err.message);
+      }
+    };
+
     // Einmalig beim Start und dann täglich um 03:00 Uhr
     runBackup();
+    runCleanup();
     const now = new Date();
     const next3am = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (now.getHours() >= 3 ? 1 : 0), 3, 0, 0);
     setTimeout(() => {
       runBackup();
-      setInterval(runBackup, 24 * 60 * 60 * 1000);
+      runCleanup();
+      setInterval(() => { runBackup(); runCleanup(); }, 24 * 60 * 60 * 1000);
     }, next3am - now);
   }
 }
