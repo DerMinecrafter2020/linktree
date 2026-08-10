@@ -92,6 +92,26 @@ router.get('/links', async (req, res, next) => {
   }
 });
 
+// ---------- QR-Codes ----------
+router.get('/qr-code', async (req, res, next) => {
+  try {
+    const text = req.query.text;
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ ok: false, error: 'text Parameter fehlt' });
+    }
+    const safeText = text.slice(0, 1000);
+    const dataUrl = await require('qrcode').toDataURL(safeText, {
+      width: 400,
+      margin: 2,
+      color: { dark: '#11111f', light: '#ffffff' },
+      errorCorrectionLevel: 'M',
+    });
+    res.json({ ok: true, data: { dataUrl } });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/link-categories', async (req, res, next) => {
   try {
     const { rows } = await db.query('SELECT * FROM link_categories ORDER BY position ASC, name ASC');
