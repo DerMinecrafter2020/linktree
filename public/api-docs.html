@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Öffentliche API-Dokumentation für cornyriegel.de" />
+  <meta name="theme-color" content="#0a0a14" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;" />
+  <title>API-Dokumentation · OpenWeb</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .api-docs { max-width: 840px; }
+    .api-docs h1 { font-size: clamp(24px, 6vw, 32px); margin-bottom: 8px; }
+    .api-docs .subtitle { color: var(--text-dim); margin-bottom: 28px; font-size: 14px; }
+    .endpoint { border: 1px solid var(--border); border-radius: 16px; padding: 18px; margin-bottom: 18px; background: var(--bg-1); }
+    .endpoint h2 { font-size: 16px; margin-bottom: 10px; color: var(--neon-cyan); }
+    .method { display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; margin-right: 8px; }
+    .method span { padding: 2px 6px; border-radius: 4px; background: rgba(0, 240, 255, 0.15); color: var(--neon-cyan); }
+    .url { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text-dim); }
+    .endpoint p { margin: 10px 0; font-size: 14px; color: var(--text-dim); line-height: 1.5; }
+    .endpoint h3 { font-size: 13px; color: var(--text); margin: 14px 0 6px; }
+    pre { background: var(--bg-2); padding: 12px; border-radius: 10px; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 32px; color: var(--neon-cyan); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="aurora" aria-hidden="true">
+    <span class="blob blob-1"></span>
+    <span class="blob blob-2"></span>
+    <span class="blob blob-3"></span>
+  </div>
+
+  <main class="card api-docs">
+    <h1>API-Dokumentation</h1>
+    <p class="subtitle">Öffentliche Endpunkte der OpenWeb Link-in-Bio Seite. Lesender Zugriff erfolgt mit einem API-Key aus dem Admin-Panel.</p>
+
+    <div class="endpoint">
+      <h2>Profil abrufen</h2>
+      <div class="method"><span>GET</span> <span class="url">/api/public/profile</span></div>
+      <p>Gibt Name, Handle, Bio, Avatar, Theme und Sichtbarkeit des Profils zurück.</p>
+      <h3>Header</h3>
+      <pre>X-Api-Key: dein-api-key</pre>
+      <h3>Beispiel-Antwort</h3>
+      <pre>{
+  "ok": true,
+  "data": {
+    "name": "@corneliusahner",
+    "handle": "Cornelius Ahner",
+    "bio": "Azubi, 21 Jahre alt",
+    "avatar": "CA",
+    "avatar_url": null,
+    "theme": "dark",
+    "is_public": true,
+    "allow_visitor_theme": true
+  }
+}</pre>
+    </div>
+
+    <div class="endpoint">
+      <h2>Links abrufen</h2>
+      <div class="method"><span>GET</span> <span class="url">/api/public/links</span></div>
+      <p>Gibt alle aktiven, aktuell sichtbaren Links inklusive Kategorie und Zeitsteuerung zurück.</p>
+      <h3>Header</h3>
+      <pre>X-Api-Key: dein-api-key</pre>
+      <h3>Beispiel-Antwort</h3>
+      <pre>{
+  "ok": true,
+  "data": [
+    {
+      "id": 1,
+      "title": "GitHub",
+      "subtitle": "Code und Projekte",
+      "url": "https://github.com/corneliusahner",
+      "display_url": "github.com/corneliusahner",
+      "icon": "simpleicon:github",
+      "position": 0,
+      "is_active": true,
+      "open_new": true,
+      "meta_description": null,
+      "slug": null,
+      "visible_from": null,
+      "visible_until": null,
+      "visible_weekdays": [],
+      "category_id": 2,
+      "category_name": "Social"
+    }
+  ]
+}</pre>
+    </div>
+
+    <div class="endpoint">
+      <h2>Klick tracken</h2>
+      <div class="method"><span>POST</span> <span class="url">/api/links/:id/click</span></div>
+      <p>Speichert einen Klick für einen Link. Optional können UTM-Parameter mitgegeben werden.</p>
+      <h3>Body</h3>
+      <pre>{
+  "utm": {
+    "source": "instagram",
+    "medium": "bio",
+    "campaign": "summer"
+  }
+}</pre>
+      <h3>Antwort</h3>
+      <pre>{ "ok": true }</pre>
+    </div>
+
+    <div class="endpoint">
+      <h2>Passwortgeschützten Link entsperren</h2>
+      <div class="method"><span>POST</span> <span class="url">/api/links/:id/unlock</span></div>
+      <p>Gibt die Ziel-URL eines passwortgeschützten Links zurück, wenn das Passwort korrekt ist.</p>
+      <h3>Body</h3>
+      <pre>{ "password": "geheim" }</pre>
+      <h3>Antwort</h3>
+      <pre>{ "ok": true, "data": { "url": "https://example.com" } }</pre>
+    </div>
+
+    <a href="/" class="back-link">← Zurück zur Startseite</a>
+  </main>
+</body>
+</html>

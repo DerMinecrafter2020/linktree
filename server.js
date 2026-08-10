@@ -138,6 +138,36 @@ async function finalizeApp() {
     app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
     app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
     app.get('/changelog', (req, res) => res.sendFile(path.join(__dirname, 'public', 'changelog.html')));
+    app.get('/api-docs', (req, res) => res.sendFile(path.join(__dirname, 'public', 'api-docs.html')));
+
+    // Sitemap-Generierung
+    app.get('/sitemap.xml', async (req, res, next) => {
+      try {
+        const publicDomain = process.env.PUBLIC_DOMAIN
+          ? (process.env.PUBLIC_DOMAIN.startsWith('http') ? process.env.PUBLIC_DOMAIN : `${req.protocol}://${process.env.PUBLIC_DOMAIN}`)
+          : `${req.protocol}://${req.get('host')}`;
+        const { rows: slugs } = await db.query('SELECT slug FROM links WHERE is_active = true AND slug IS NOT NULL');
+        const now = new Date().toISOString().slice(0, 10);
+        const urls = [
+          { loc: publicDomain, changefreq: 'daily', priority: '1.0' },
+          { loc: `${publicDomain}/changelog`, changefreq: 'monthly', priority: '0.5' },
+          { loc: `${publicDomain}/api-docs`, changefreq: 'monthly', priority: '0.5' },
+          ...slugs.map(s => ({ loc: `${publicDomain}/go/${encodeURIComponent(s.slug)}`, changefreq: 'weekly', priority: '0.8' })),
+        ];
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>\n` +
+          `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+          urls.map(u =>
+            `  <url>\n` +
+            `    <loc>${escapeHtml(u.loc)}</loc>\n` +
+            `    <lastmod>${now}</lastmod>\n` +
+            `    <changefreq>${u.changefreq}</changefreq>\n` +
+            `    <priority>${u.priority}</priority>\n` +
+            `  </url>\n`).join('') +
+          `</urlset>`;
+        res.set('Content-Type', 'application/xml');
+        res.send(xml);
+      } catch (err) { next(err); }
+    });
 
     // Kurzlink-Weiterleitungen
     app.get('/go/:slug', async (req, res, next) => {
