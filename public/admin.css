@@ -764,21 +764,23 @@ body.admin-locked #admin-status-block * {
   border-color: rgba(255, 196, 0, 0.4);
 }
 
+.admin-np-title,
+.admin-np-meta {
+  position: relative;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .admin-np-title {
   font-size: clamp(16px, 2.5vw, 18px);
   font-weight: 600;
   color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .admin-np-meta {
   font-size: 13px;
   color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .admin-np-meta .admin-np-bitrate {
@@ -795,6 +797,22 @@ body.admin-locked #admin-status-block * {
 @media (max-width: 540px) {
   .admin-np-player { gap: 12px; padding: 12px; }
   .admin-np-cover { width: 72px; height: 72px; font-size: 28px; }
+}
+
+/* Shared Marquee styles */
+.marquee-content {
+  display: inline-block;
+  min-width: 100%;
+  padding-right: 16px;
+}
+.marquee-scroll {
+  animation: marquee 12s ease-in-out infinite;
+}
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  75%  { transform: translateX(var(--marquee-offset, 0)); }
+  85%  { transform: translateX(var(--marquee-offset, 0)); }
+  100% { transform: translateX(0); }
 }
 
 /* ---------- Toast ---------- */

@@ -9,7 +9,16 @@
 
   function setText(sel, text, root = document) {
     const el = $(sel, root);
-    if (el) el.textContent = String(text ?? '');
+    if (!el) return null;
+    const content = el.querySelector('.marquee-content') || el;
+    content.textContent = String(text ?? '');
+    content.classList.remove('marquee-scroll');
+    content.style.removeProperty('--marquee-offset');
+    if (content.scrollWidth > el.clientWidth + 2) {
+      content.classList.add('marquee-content');
+      content.style.setProperty('--marquee-offset', -(content.scrollWidth - el.clientWidth) + 'px');
+      content.classList.add('marquee-scroll');
+    }
     return el;
   }
 

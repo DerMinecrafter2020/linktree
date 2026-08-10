@@ -231,6 +231,30 @@ router.post('/settings', async (req, res, next) => {
   }
 });
 
+// ---------- Datenbank-Status ----------
+router.get('/db-info', async (req, res, next) => {
+  try {
+    const versionRes = await db.query('SELECT version() AS version');
+    const tablesRes = await db.query(`
+      SELECT COUNT(*)::int AS count
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+    `);
+    const dbNameRes = await db.query('SELECT current_database() AS name');
+    res.json({
+      ok: true,
+      data: {
+        connected: true,
+        name: dbNameRes.rows[0].name,
+        version: versionRes.rows[0].version.split(' ')[0],
+        tables: tablesRes.rows[0].count,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ---------- Navidrome-Settings (Admin) ----------
 router.get('/navidrome', async (req, res, next) => {
   try {

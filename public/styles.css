@@ -275,24 +275,44 @@ body {
   min-width: 0;
 }
 
+.np-title,
+.np-artist {
+  position: relative;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .np-title {
   font-size: clamp(14px, 4vw, 16px);
   font-weight: 600;
   color: var(--text);
   letter-spacing: -0.3px;
   margin-bottom: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .np-artist {
   font-size: clamp(11px, 3.5vw, 13px);
   color: var(--text-dim);
   letter-spacing: 0.2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+/* Marquee fuer lange Titel/Artisten */
+.marquee-content {
+  display: inline-block;
+  min-width: 100%;
+  padding-right: 16px;
+}
+
+.marquee-scroll {
+  animation: marquee 12s ease-in-out infinite;
+}
+
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  75%  { transform: translateX(var(--marquee-offset, 0)); }
+  85%  { transform: translateX(var(--marquee-offset, 0)); }
+  100% { transform: translateX(0); }
 }
 
 /* ---------- Links ---------- */

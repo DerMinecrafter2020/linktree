@@ -51,6 +51,7 @@
     me: () => get('/admin/me'),
 
     // Admin
+    getDbInfo: () => get('/admin/db-info'),
     getAdminLinks: () => get('/admin/links'),
     createLink: (link) => post('/admin/links', link),
     updateLink: (id, patchObj) => patch(`/admin/links/${id}`, patchObj),
