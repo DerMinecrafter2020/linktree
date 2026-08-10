@@ -230,39 +230,56 @@ async function finalizeApp() {
           return res.status(403).sendFile(path.join(__dirname, 'public', 'login.html'));
         }
 
+        const publicDomain = process.env.PUBLIC_DOMAIN;
+        const absUrl = publicDomain
+          ? (publicDomain.startsWith('http') ? publicDomain : `${req.protocol}://${publicDomain}`)
+          : `${req.protocol}://${req.get('host')}`;
+
         let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
         html = html.replace(/(<meta name="robots"[^>]*?>)?/i, '<meta name="robots" content="index, follow" />');
 
-        // Custom CSS injizieren, auch wenn kein Track läuft
+        // Custom CSS injizieren
         if (profile.custom_css) {
           html = html.replace(/(<\/head>)/i, `\n<style>${profile.custom_css}</style>\n$1`);
         }
 
         const track = await getNowPlaying();
+        const isPlaying = track && track.playing;
+        const pageTitle = isPlaying
+          ? `🎵 ${track.artist ? track.artist + ' — ' : ''}${track.title}`
+          : `${escapeHtml(profile.handle || profile.name || 'OpenWeb')}`;
+        const pageDescription = isPlaying
+          ? (track.paused ? 'Momentan pausiert' : `Aktuell läuft: ${track.title}${track.artist ? ' von ' + track.artist : ''}${track.album ? ' (' + track.album + ')' : ''}`)
+          : escapeHtml(profile.bio || 'Alle wichtigen Links auf einen Blick.');
+        const image = isPlaying && track.coverUrl ? `${absUrl}${track.coverUrl}` : `${absUrl}/icons/icon.svg`;
 
-        if (track && track.playing) {
-          const title = `🎵 ${track.artist ? track.artist + ' — ' : ''}${track.title}`;
-          const description = track.paused ? 'Momentan pausiert' : `Aktuell läuft: ${track.title}${track.artist ? ' von ' + track.artist : ''}${track.album ? ' (' + track.album + ')' : ''}`;
-          const publicDomain = process.env.PUBLIC_DOMAIN;
-          const absUrl = publicDomain
-            ? (publicDomain.startsWith('http') ? publicDomain : `${req.protocol}://${publicDomain}`)
-            : `${req.protocol}://${req.get('host')}`;
-          const image = track.coverUrl ? `${absUrl}${track.coverUrl}` : '';
+        html = html
+          .replace(/<meta property="og:site_name" content="[^"]*"\s*\/?>/, `<meta property="og:site_name" content="${escapeHtml(profile.name || profile.handle || 'OpenWeb')}">`)
+          .replace(/<meta property="og:title" content="[^"]*"\s*\/?>/, `<meta property="og:title" content="${escapeHtml(pageTitle)}">`)
+          .replace(/<meta property="og:description" content="[^"]*"\s*\/?>/, `<meta property="og:description" content="${escapeHtml(pageDescription)}">`)
+          .replace(/<meta property="og:image" content="[^"]*"\s*\/?>/, `<meta property="og:image" content="${escapeHtml(image)}">`)
+          .replace(/<meta property="og:url" content="[^"]*"\s*\/?>/, `<meta property="og:url" content="${escapeHtml(absUrl)}">`)
+          .replace(/<meta name="twitter:title" content="[^"]*"\s*\/?>/, `<meta name="twitter:title" content="${escapeHtml(pageTitle)}">`)
+          .replace(/<meta name="twitter:description" content="[^"]*"\s*\/?>/, `<meta name="twitter:description" content="${escapeHtml(pageDescription)}">`)
+          .replace(/<meta name="twitter:image" content="[^"]*"\s*\/?>/, `<meta name="twitter:image" content="${escapeHtml(image)}">`)
+          .replace(/<title>[^]*?<\/title>/, `<title>${escapeHtml(pageTitle)}</title>`);
 
-          // Custom CSS injizieren
-          const profileCss = profile.custom_css ? `\n<style>${profile.custom_css}</style>\n` : '';
-          html = html.replace(/(<\/head>)/i, `${profileCss}$1`);
-
-          html = html
-            .replace(/<meta property="og:site_name" content="[^"]*"\s*\/?>/, `<meta property="og:site_name" content="${escapeHtml(profile.name || profile.handle || 'OpenWeb')}">`)
-            .replace(/<meta property="og:title" content="[^"]*"\s*\/?>/, `<meta property="og:title" content="${escapeHtml(title)}">`)
-            .replace(/<meta property="og:description" content="[^"]*"\s*\/?>/, `<meta property="og:description" content="${escapeHtml(description)}">`)
-            .replace(/<meta property="og:image" content="[^"]*"\s*\/?>/, `<meta property="og:image" content="${escapeHtml(image)}">`)
-            .replace(/<meta name="twitter:title" content="[^"]*"\s*\/?>/, `<meta name="twitter:title" content="${escapeHtml(title)}">`)
-            .replace(/<meta name="twitter:description" content="[^"]*"\s*\/?>/, `<meta name="twitter:description" content="${escapeHtml(description)}">`)
-            .replace(/<meta name="twitter:image" content="[^"]*"\s*\/?>/, `<meta name="twitter:image" content="${escapeHtml(image)}">`)
-            .replace(/<title>[^]*?<\/title>/, `<title>${escapeHtml(title)}</title>`);
-        }
+        // JSON-LD strukturierte Daten
+        const jsonLd = {
+          '@context': 'https://schema.org',
+          '@type': 'ProfilePage',
+          mainEntity: {
+            '@type': 'Person',
+            name: profile.handle || profile.name || 'OpenWeb',
+            alternateName: profile.name || null,
+            description: profile.bio || null,
+            url: absUrl,
+            image: profile.avatar_url || `${absUrl}/icons/icon.svg`,
+            sameAs: [],
+          },
+        };
+        const ldScript = `\n<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`;
+        html = html.replace(/(<\/head>)/i, `${ldScript}\n$1`);
 
         res.send(html);
       } catch (err) {
