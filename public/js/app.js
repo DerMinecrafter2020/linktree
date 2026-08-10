@@ -163,7 +163,7 @@
     text.appendChild(main);
     text.appendChild(arrow);
 
-    const urlEl = el('span', 'link-url', prettyUrl(link.url));
+    const urlEl = el('span', 'link-url', link.display_url || prettyUrl(link.url));
     urlEl.setAttribute('aria-hidden', 'true');
 
     top.appendChild(text);

@@ -82,6 +82,7 @@ router.post('/links', async (req, res, next) => {
     const title = v.safeText(req.body.title, 80);
     const subtitle = v.safeText(req.body.subtitle, 120);
     const url = v.safeUrl(req.body.url);
+    const displayUrl = v.safeText(req.body.display_url, 120);
     const icon = v.sanitizeIconField(req.body.icon);
     const isActive = req.body.is_active !== false;
     const openNew = req.body.open_new !== false;
@@ -94,10 +95,10 @@ router.post('/links', async (req, res, next) => {
     const position = countRes.rows[0].count;
 
     const { rows } = await db.query(`
-      INSERT INTO links (title, subtitle, url, icon, position, is_active, open_new)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO links (title, subtitle, url, display_url, icon, position, is_active, open_new)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
-    `, [title, subtitle, url, icon, position, isActive, openNew]);
+    `, [title, subtitle, url, displayUrl, icon, position, isActive, openNew]);
 
     res.json({ ok: true, data: rows[0] });
   } catch (err) {
@@ -127,6 +128,10 @@ router.patch('/links/:id', async (req, res, next) => {
       if (!url) return res.status(400).json({ ok: false, error: 'Ungueltige URL' });
       updates.push(`url = $${idx++}`);
       values.push(url);
+    }
+    if (req.body.display_url !== undefined) {
+      updates.push(`display_url = $${idx++}`);
+      values.push(v.safeText(req.body.display_url, 120));
     }
     if (req.body.icon !== undefined) {
       updates.push(`icon = $${idx++}`);
@@ -415,12 +420,13 @@ router.post('/import', async (req, res, next) => {
           const url = v.safeUrl(l.url);
           if (!url) continue;
           await client.query(`
-            INSERT INTO links (title, subtitle, url, icon, position, is_active, open_new)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO links (title, subtitle, url, display_url, icon, position, is_active, open_new)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           `, [
             v.safeText(l.title, 80),
             v.safeText(l.subtitle, 120),
             url,
+            v.safeText(l.display_url, 120),
             v.sanitizeIconField(l.icon),
             i,
             l.is_active !== false,

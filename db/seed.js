@@ -70,12 +70,13 @@ async function seed(overrides = {}) {
 
     for (const link of defaults) {
       await db.query(`
-        INSERT INTO links (title, subtitle, url, icon, position, is_active, open_new)
-        VALUES ($1, $2, $3, $4, $5, true, true)
+        INSERT INTO links (title, subtitle, url, display_url, icon, position, is_active, open_new)
+        VALUES ($1, $2, $3, $4, $5, $6, true, true)
       `, [
         String(link.title || '').slice(0, 80),
         String(link.subtitle || '').slice(0, 120),
         String(link.url || '').slice(0, 500),
+        String(link.display_url || '').slice(0, 120),
         String(link.icon || '🔗').slice(0, 500),
         parseInt(link.position || 0, 10),
       ]);
