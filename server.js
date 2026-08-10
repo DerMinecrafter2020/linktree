@@ -129,13 +129,28 @@ async function finalizeApp() {
     });
     app.use('/api', publicLimiter);
 
+    // Admin-Rate-Limiting (strenger Brute-Force-Schutz)
+    const adminLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 60,
+      standardHeaders: true,
+      legacyHeaders: false,
+      keyGenerator: (req) => req.session?.userId || (req.ip || req.connection.remoteAddress || 'unknown'),
+      handler: (req, res) => res.status(429).json({ ok: false, error: 'Zu viele Admin-Anfragen. Bitte warte einen Moment.' }),
+    });
+    app.use('/api/admin', adminLimiter);
+
     app.use('/api', publicRoutes);
     app.use('/api/admin', adminRoutes);
     app.use('/api/navidrome', navidromeRoutes);
 
     app.get('/setup.html', (req, res) => res.redirect('/login'));
     app.use(express.static(path.join(__dirname, 'public'), { index: false }));
-    app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+    app.get('/admin', (req, res, next) => {
+      const { isIpAllowed } = require('./lib/auth');
+      if (!isIpAllowed(req)) return res.status(403).send('Admin-Zugang von dieser IP nicht erlaubt');
+      res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+    });
     app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
     app.get('/changelog', (req, res) => res.sendFile(path.join(__dirname, 'public', 'changelog.html')));
     app.get('/api-docs', (req, res) => res.sendFile(path.join(__dirname, 'public', 'api-docs.html')));
