@@ -129,13 +129,14 @@ async function finalizeApp() {
           const image = track.coverUrl ? `${absUrl}${track.coverUrl}` : '';
 
           html = html
+            .replace(/<meta property="og:site_name" content="[^"]*"\s*\/?>/, `<meta property="og:site_name" content="${escapeHtml(profile.name || profile.handle || 'OpenWeb')}">`)
             .replace(/<meta property="og:title" content="[^"]*"\s*\/?>/, `<meta property="og:title" content="${escapeHtml(title)}">`)
             .replace(/<meta property="og:description" content="[^"]*"\s*\/?>/, `<meta property="og:description" content="${escapeHtml(description)}">`)
             .replace(/<meta property="og:image" content="[^"]*"\s*\/?>/, `<meta property="og:image" content="${escapeHtml(image)}">`)
             .replace(/<meta name="twitter:title" content="[^"]*"\s*\/?>/, `<meta name="twitter:title" content="${escapeHtml(title)}">`)
             .replace(/<meta name="twitter:description" content="[^"]*"\s*\/?>/, `<meta name="twitter:description" content="${escapeHtml(description)}">`)
             .replace(/<meta name="twitter:image" content="[^"]*"\s*\/?>/, `<meta name="twitter:image" content="${escapeHtml(image)}">`)
-            .replace(/<title>[^]*?<\/title>/, `<title>${escapeHtml(title)} · ${escapeHtml(profile.handle || 'OpenWeb')}</title>`);
+            .replace(/<title>[^]*?<\/title>/, `<title>${escapeHtml(title)}</title>`);
         }
 
         res.send(html);

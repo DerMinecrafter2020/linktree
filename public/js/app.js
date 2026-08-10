@@ -118,7 +118,7 @@
     setText('.name', profile.name);
     setText('.handle', profile.handle);
     setText('.bio', profile.bio);
-    document.title = `${profile.handle || 'Links'} · Links`;
+    // document.title wird vom Navidrome-Player überschrieben, sobald ein Track läuft
   }
 
   function buildLinkRow(link) {
@@ -246,6 +246,7 @@
         cover.replaceChildren(document.createTextNode('🎵'));
         cover.classList.add('placeholder');
       }
+      document.title = 'OpenWeb · Links';
     },
 
     renderTrack(data, state = 'playing') {
@@ -269,7 +270,10 @@
       else if (state === 'paused') artist = 'Pausiert';
       setText('.np-title', data.title || 'Unbekannt', wrap);
       setText('.np-artist', artist, wrap);
+      document.title = data.artist ? `${data.artist} — ${data.title}` : data.title;
+      if (state === 'paused') document.title += ' (pausiert)';
     },
+
   };
 
   function init() {
