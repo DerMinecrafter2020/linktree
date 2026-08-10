@@ -35,6 +35,7 @@
       <nav class="side-nav">
         <button class="side-btn active" data-tab="links">🔗 Links</button>
         <button class="side-btn" data-tab="stats">📊 Statistik</button>
+        <button class="side-btn" data-tab="apikeys">🔑 API</button>
         <button class="side-btn" data-tab="profile">👤 Profil</button>
         <button class="side-btn" data-tab="music">🎵 Musik</button>
         <button class="side-btn" data-tab="data">💾 Daten</button>
@@ -59,9 +60,13 @@
         <div class="toolbar">
           <button id="add-link-btn" class="btn primary">+ Neuer Link</button>
           <input id="link-search" type="search" placeholder="Links suchen…" class="search-input" />
-          <small class="hint">Tipp: Pfeile oder Drag & Drop zum Sortieren</small>
+          <button id="archive-toggle-btn" class="btn ghost">🗑 Archiv</button>
         </div>
         <ul id="links-list" class="links-list"></ul>
+        <div id="archive-panel" class="archive-panel" hidden>
+          <h3>🗑 Inaktive Links (Archiv)</h3>
+          <ul id="archive-list" class="links-list"></ul>
+        </div>
       </section>
 
       <!-- TAB: STATISTIK -->
@@ -191,6 +196,20 @@
         </div>
       </section>
 
+      <!-- TAB: API KEYS -->
+      <section class="tab" data-tab="apikeys" hidden>
+        <div class="card-block">
+          <h3>🔑 API-Keys</h3>
+          <p class="hint">API-Keys erlauben externen Lesezugriff auf /api/public/profile und /api/public/links (Header: X-API-Key).</p>
+          <ul id="api-key-list" class="api-key-list"></ul>
+          <label class="row">
+            <input id="api-key-name" type="text" placeholder="Name für neuen Key…" />
+            <button type="button" id="api-key-add-btn" class="btn primary">Erstellen</button>
+          </label>
+          <div id="api-key-result" class="hint" hidden></div>
+        </div>
+      </section>
+
       <!-- TAB: SETTINGS -->
       <section class="tab" data-tab="settings" hidden>
         <div class="card-block" id="admin-status-block">
@@ -273,6 +292,12 @@
           <p>Spielt eine zuvor exportierte JSON-Datei wieder ein.</p>
           <input type="file" id="import-input" accept="application/json" hidden />
           <button id="import-btn" class="btn">JSON importieren</button>
+        </div>
+        <div class="card-block">
+          <h3>📤 Linktree-CSV Import</h3>
+          <p class="hint">Importiert Links aus einer Linktree-CSV (Spalten: title, url, optional subtitle).</p>
+          <input type="file" id="linktree-import-input" accept=".csv,text/csv" hidden />
+          <button id="linktree-import-btn" class="btn">CSV auswählen</button>
         </div>
         <div class="card-block danger">
           <h3>🗑️ Zurücksetzen</h3>

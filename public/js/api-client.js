@@ -77,6 +77,9 @@
     testDiscordWebhook: () => post('/admin/settings/discord/test'),
     getBackups: () => get('/admin/backups'),
     createBackup: () => post('/admin/backups', {}),
+    getApiKeys: () => get('/admin/api-keys'),
+    createApiKey: (name) => post('/admin/api-keys', { name }),
+    deleteApiKey: (id) => del(`/admin/api-keys/${id}`),
 
     getNavidromeSettings: () => get('/admin/navidrome'),
     saveNavidromeSettings: (settings) => post('/admin/navidrome', settings),
@@ -84,6 +87,7 @@
 
     exportData: () => get('/admin/export'),
     importData: (data) => post('/admin/import', data),
+    importLinktreeCSV: (rows) => post('/admin/import/linktree-csv', { rows }),
 
     changePassword: (currentPassword, newPassword) => post('/admin/change-password', { currentPassword, newPassword }),
 

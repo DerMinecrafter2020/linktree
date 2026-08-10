@@ -13,6 +13,10 @@ const { hashPassword, verifyPassword, findUserByEmail, requireAdminSession } = r
 const bcrypt = require('bcrypt');
 const backup = require('../lib/backup');
 
+function generateApiKey() {
+  return require('crypto').randomBytes(32).toString('hex');
+}
+
 const router = express.Router();
 
 router.use(requireAdminSession);
@@ -735,6 +739,33 @@ router.post('/import', async (req, res, next) => {
 });
 
 // ---------- Admin-Passwort aendern (selbst) ----------
+// ---------- API-Keys ----------
+router.get('/api-keys', async (req, res, next) => {
+  try {
+    const { rows } = await db.query('SELECT id, name, last_used_at, created_at FROM api_keys ORDER BY created_at DESC');
+    res.json({ ok: true, data: rows });
+  } catch (err) { next(err); }
+});
+
+router.post('/api-keys', async (req, res, next) => {
+  try {
+    const name = v.safeText(req.body.name, 80);
+    if (!name) return res.status(400).json({ ok: false, error: 'Name ist Pflicht' });
+    const plain = generateApiKey();
+    const hash = await bcrypt.hash(plain, 10);
+    const { rows } = await db.query('INSERT INTO api_keys (name, key_hash) VALUES ($1, $2) RETURNING id, name, created_at', [name, hash]);
+    res.json({ ok: true, data: { ...rows[0], key: plain } });
+  } catch (err) { next(err); }
+});
+
+router.delete('/api-keys/:id', async (req, res, next) => {
+  try {
+    const result = await db.query('DELETE FROM api_keys WHERE id = $1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ ok: false, error: 'Key nicht gefunden' });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 // ---------- Backups ----------
 router.get('/backups', async (req, res, next) => {
   try {
@@ -762,6 +793,38 @@ router.get('/backups/download/:name', async (req, res, next) => {
     res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
     res.setHeader('Content-Type', 'application/json');
     fs.createReadStream(file).pipe(res);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/import/linktree-csv', async (req, res, next) => {
+  try {
+    const rows = req.body.rows;
+    if (!Array.isArray(rows)) return res.status(400).json({ ok: false, error: 'rows muss ein Array sein' });
+    const countRes = await db.query('SELECT COUNT(*)::int AS count FROM links');
+    let position = countRes.rows[0].count;
+    let imported = 0;
+    await db.transaction(async (client) => {
+      for (const row of rows) {
+        const url = v.safeUrl(row.url);
+        if (!url || !row.title) continue;
+        await client.query(`
+          INSERT INTO links (title, subtitle, url, icon, position, is_active, open_new)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `, [
+          v.safeText(row.title, 80),
+          v.safeText(row.subtitle, 120),
+          url,
+          '🔗',
+          position++,
+          true,
+          true,
+        ]);
+        imported++;
+      }
+    });
+    res.json({ ok: true, data: { imported } });
   } catch (err) {
     next(err);
   }

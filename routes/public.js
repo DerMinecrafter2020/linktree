@@ -9,6 +9,19 @@ const v = require('../lib/validators');
 
 const router = express.Router();
 
+async function requireApiKey(req, res, next) {
+  const key = req.headers['x-api-key'];
+  if (!key) return res.status(401).json({ ok: false, error: 'API-Key erforderlich' });
+  const { rows } = await db.query('SELECT id, key_hash FROM api_keys');
+  let match = null;
+  for (const r of rows) {
+    if (await require('bcrypt').compare(key, r.key_hash)) { match = r; break; }
+  }
+  if (!match) return res.status(401).json({ ok: false, error: 'Ungueltiger API-Key' });
+  await db.query('UPDATE api_keys SET last_used_at = NOW() WHERE id = $1', [match.id]);
+  next();
+}
+
 // Einfacher In-Memory Rate-Limiter fuer /api/login (Brute-Force-Schutz)
 const loginAttempts = new Map();
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 Minuten
@@ -181,6 +194,31 @@ router.post('/links/:id/click', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+router.get('/public/profile', requireApiKey, async (req, res, next) => {
+  try {
+    const { rows } = await db.query('SELECT name, handle, bio, avatar, avatar_url, theme, is_public, allow_visitor_theme FROM profile WHERE id = 1 LIMIT 1');
+    res.json({ ok: true, data: rows[0] || null });
+  } catch (err) { next(err); }
+});
+
+router.get('/public/links', requireApiKey, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT l.id, l.title, l.subtitle, l.url, l.display_url, l.icon, l.position,
+             l.is_active, l.open_new, l.meta_description, l.slug,
+             l.visible_from, l.visible_until, l.visible_weekdays,
+             l.category_id, c.name AS category_name
+      FROM links l
+      LEFT JOIN link_categories c ON c.id = l.category_id
+      WHERE l.is_active = true
+      ORDER BY c.position ASC NULLS FIRST, c.name ASC, l.position ASC, l.created_at ASC
+    `);
+    const nowBerlin = getNowInBerlin();
+    const visible = rows.filter(l => isLinkVisible(l, nowBerlin));
+    res.json({ ok: true, data: visible });
+  } catch (err) { next(err); }
 });
 
 router.post('/login', rateLimitLogin, async (req, res, next) => {
