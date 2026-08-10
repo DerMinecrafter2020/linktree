@@ -3,7 +3,14 @@ const express = require('express');
 const router = express.Router();
 
 router.get('/session', (req, res) => {
-  res.json({ ok: true, hasSession: !!req.session });
+  res.json({
+    ok: true,
+    hasSession: !!req.session,
+    secure: req.secure,
+    protocol: req.protocol,
+    forwardedProto: req.get('x-forwarded-proto') || null,
+    trustProxy: req.app.get('trust proxy'),
+  });
 });
 
 router.post('/session', (req, res) => {
