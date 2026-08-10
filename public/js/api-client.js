@@ -60,7 +60,7 @@
     deleteLink: (id) => del(`/admin/links/${id}`),
     reorderLinks: (orderedIds) => post('/admin/links/reorder', { orderedIds }),
     checkLink: (id) => get(`/admin/links/${id}/check`),
-    getLinkStats: () => get('/admin/stats/links'),
+    getLinkStats: (days = 30) => get(`/admin/stats/links?days=${encodeURIComponent(days)}`),
 
     getLinkCategories: () => get('/admin/link-categories'),
     getQRCode: (text) => get(`/admin/qr-code?text=${encodeURIComponent(text)}`),
@@ -73,6 +73,7 @@
 
     getAdminSettings: () => get('/admin/settings'),
     saveAdminSettings: (settings) => post('/admin/settings', settings),
+    testDiscordWebhook: () => post('/admin/settings/discord/test'),
 
     getNavidromeSettings: () => get('/admin/navidrome'),
     saveNavidromeSettings: (settings) => post('/admin/navidrome', settings),

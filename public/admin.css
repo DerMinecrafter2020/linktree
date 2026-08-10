@@ -740,6 +740,25 @@ body.admin-locked #admin-status-block * {
 .stat-clicks { font-size: 14px; color: var(--neon-cyan); font-weight: 600; }
 .stat-unique { font-size: 11px; color: var(--text-faint); font-family: 'JetBrains Mono', monospace; }
 
+.search-input {
+  padding: 10px 14px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  min-width: 200px;
+  flex: 1;
+}
+.search-input:focus { outline: none; border-color: var(--neon-cyan); }
+
+.btn-group { display: flex; gap: 0; }
+.btn-group .btn { border-radius: 0; border-right-width: 0; }
+.btn-group .btn:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+.btn-group .btn:last-child { border-radius: 0 var(--radius) var(--radius) 0; border-right-width: 1px; }
+.btn-group .btn.primary { border-right-width: 1px; }
+
 /* ---------- Admin Navidrome Player Preview ---------- */
 .admin-np-player {
   display: flex;

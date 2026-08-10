@@ -57,6 +57,7 @@
       <section class="tab" data-tab="links">
         <div class="toolbar">
           <button id="add-link-btn" class="btn primary">+ Neuer Link</button>
+          <input id="link-search" type="search" placeholder="Links suchen…" class="search-input" />
           <small class="hint">Tipp: Pfeile oder Drag & Drop zum Sortieren</small>
         </div>
         <ul id="links-list" class="links-list"></ul>
@@ -66,7 +67,14 @@
       <section class="tab" data-tab="stats" hidden>
         <div class="card-block">
           <h3>📊 Klick-Statistik</h3>
-          <p class="hint">Gesamtklicks und Aufrufe pro Link der letzten 30 Tage.</p>
+          <p class="hint">Gesamtklicks und Aufrufe pro Link.</p>
+          <div class="toolbar">
+            <div class="btn-group" id="stats-range">
+              <button type="button" class="btn" data-days="7">7 Tage</button>
+              <button type="button" class="btn primary" data-days="30">30 Tage</button>
+              <button type="button" class="btn" data-days="90">90 Tage</button>
+            </div>
+          </div>
           <div id="stats-summary" class="stats-summary"></div>
           <canvas id="stats-chart" width="600" height="240"></canvas>
           <ul id="stats-list" class="stats-list"></ul>
@@ -188,6 +196,27 @@
           <h3>🔌 Datenbank</h3>
           <p id="db-info-status">Status wird geladen…</p>
           <ul id="db-info-list" class="hint steps"></ul>
+        </div>
+        <div class="card-block">
+          <h3>🔔 Discord-Benachrichtigungen</h3>
+          <form id="discord-form" class="form">
+            <label class="row">
+              <input name="discord_webhook_enabled" type="checkbox" />
+              <span>Webhook bei neuem Klick aktivieren</span>
+            </label>
+            <label>
+              <span>Discord Webhook-URL</span>
+              <input name="discord_webhook_url" type="url" placeholder="https://discord.com/api/webhooks/..." />
+            </label>
+            <label>
+              <span>Nachrichten-Template (Platzhalter: {{title}}, {{url}}, {{timestamp}})</span>
+              <input name="discord_webhook_template" type="text" placeholder="Neuer Klick auf **{{title}}**" />
+            </label>
+            <div class="form-actions">
+              <button type="button" id="discord-test-btn" class="btn ghost">Test senden</button>
+              <button type="submit" class="btn primary">Speichern</button>
+            </div>
+          </form>
         </div>
         <div class="card-block">
           <h3>🔑 Passwort ändern</h3>

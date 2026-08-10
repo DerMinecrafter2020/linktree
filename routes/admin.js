@@ -379,7 +379,7 @@ router.post('/links/reorder', async (req, res, next) => {
 // ---------- Admin-Settings ----------
 router.get('/settings', async (req, res, next) => {
   try {
-    const { rows } = await db.query('SELECT * FROM admin_settings WHERE id = 1 LIMIT 1');
+    const { rows } = await db.query('SELECT id, admin_enabled, discord_webhook_enabled, discord_webhook_url, discord_webhook_template FROM admin_settings WHERE id = 1 LIMIT 1');
     res.json({ ok: true, data: rows[0] || { id: 1, admin_enabled: true } });
   } catch (err) {
     next(err);
@@ -404,8 +404,35 @@ router.post('/settings', async (req, res, next) => {
         updated_at = NOW()
     `, [adminEnabled, discordEnabled, discordUrl, discordTemplate]);
 
-    const { rows } = await db.query('SELECT * FROM admin_settings WHERE id = 1 LIMIT 1');
+    const { rows } = await db.query('SELECT id, admin_enabled, discord_webhook_enabled, discord_webhook_url, discord_webhook_template FROM admin_settings WHERE id = 1 LIMIT 1');
     res.json({ ok: true, data: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/settings/discord/test', async (req, res, next) => {
+  try {
+    const { rows } = await db.query('SELECT discord_webhook_enabled, discord_webhook_url, discord_webhook_template FROM admin_settings WHERE id = 1 LIMIT 1');
+    const cfg = rows[0] || {};
+    if (!cfg.discord_webhook_url) {
+      return res.status(400).json({ ok: false, error: 'Keine Discord-Webhook-URL hinterlegt' });
+    }
+    const template = cfg.discord_webhook_template || 'Testbenachrichtigung von OpenWeb: **{{title}}**';
+    const text = template
+      .replace(/\{\{title\}\}/g, 'Test-Link')
+      .replace(/\{\{url\}\}/g, 'https://example.com')
+      .replace(/\{\{timestamp\}\}/g, new Date().toISOString());
+    const response = await fetch(cfg.discord_webhook_url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: text.slice(0, 2000) }),
+    });
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      return res.status(502).json({ ok: false, error: `Discord-Fehler: ${response.status} ${body.slice(0, 200)}` });
+    }
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

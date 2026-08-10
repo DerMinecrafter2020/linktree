@@ -110,6 +110,27 @@ router.get('/links', async (req, res, next) => {
   }
 });
 
+async function sendDiscordWebhook(payload) {
+  try {
+    const { rows } = await db.query('SELECT discord_webhook_enabled, discord_webhook_url, discord_webhook_template FROM admin_settings WHERE id = 1 LIMIT 1');
+    const cfg = rows[0] || {};
+    if (!cfg.discord_webhook_enabled || !cfg.discord_webhook_url) return;
+    const url = cfg.discord_webhook_url;
+    const template = cfg.discord_webhook_template || 'Neuer Klick auf **{{title}}** ({{url}})';
+    const text = template
+      .replace(/\{\{title\}\}/g, payload.title || 'Unbekannt')
+      .replace(/\{\{url\}\}/g, payload.url || '')
+      .replace(/\{\{timestamp\}\}/g, new Date().toISOString());
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: text.slice(0, 2000) }),
+    });
+  } catch (err) {
+    console.warn('[discord webhook] send failed:', err.message);
+  }
+}
+
 router.post('/links/:id/click', async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -119,6 +140,11 @@ router.post('/links/:id/click', async (req, res, next) => {
       INSERT INTO link_clicks (link_id, ip_hash, user_agent, referrer)
       VALUES ($1, $2, $3, $4)
     `, [id, ipHash, req.headers['user-agent']?.slice(0, 500) || null, req.headers.referer?.slice(0, 500) || null]);
+    // Asynchroner Discord-Webhook ohne Antwort zu blockieren
+    const linkRes = await db.query('SELECT title, url FROM links WHERE id = $1 LIMIT 1', [id]);
+    if (linkRes.rows[0]) {
+      sendDiscordWebhook(linkRes.rows[0]).catch(() => {});
+    }
     res.json({ ok: true });
   } catch (err) {
     next(err);
