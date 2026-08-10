@@ -197,6 +197,7 @@
     currentTrack: null,
     localPosition: 0,
     lastTickAt: 0,
+    defaultFavicon: '/favicon.svg',
 
     start() {
       const wrap = $('#navidrome-player');
@@ -299,6 +300,17 @@
         cover.classList.add('placeholder');
       }
       document.title = 'OpenWeb · Links';
+      this.updateFavicon(null);
+    },
+
+    updateFavicon(coverUrl) {
+      let link = document.querySelector('link[rel~="icon"]');
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = coverUrl || this.defaultFavicon;
     },
 
     renderTrack(data, state = 'playing') {
@@ -322,6 +334,7 @@
       else if (state === 'paused') artist = 'Pausiert';
       setText('.np-title', data.title || 'Unbekannt', wrap);
       setText('.np-artist', artist, wrap);
+      this.updateFavicon(data.coverUrl);
       const albumEl = wrap?.querySelector('.np-album');
       if (albumEl) {
         albumEl.textContent = data.album || '';
