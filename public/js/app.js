@@ -193,18 +193,26 @@
   // Navidrome Player
   const np = {
     pollTimer: null,
+    progressTimer: null,
     currentTrack: null,
+    localPosition: 0,
+    lastTickAt: 0,
 
     start() {
       const wrap = $('#navidrome-player');
       if (!wrap) return;
       this.tick();
+      if (this.pollTimer) clearInterval(this.pollTimer);
       this.pollTimer = setInterval(() => this.tick(), 30_000);
+      if (this.progressTimer) clearInterval(this.progressTimer);
+      this.progressTimer = setInterval(() => this.updateProgress(), 1000);
     },
 
     stop() {
       if (this.pollTimer) clearInterval(this.pollTimer);
       this.pollTimer = null;
+      if (this.progressTimer) clearInterval(this.progressTimer);
+      this.progressTimer = null;
     },
 
     async tick() {
@@ -217,9 +225,12 @@
         }
         const previousId = this.currentTrack ? this.trackId(this.currentTrack) : null;
         const newId = this.trackId(newTrack);
+        const sameTrack = previousId && previousId === newId;
         this.currentTrack = newTrack;
+        this.localPosition = newTrack.position || 0;
+        this.lastTickAt = performance.now();
         this.renderTrack(this.currentTrack, newTrack.paused === true ? 'paused' : 'playing');
-        if (previousId && previousId !== newId) {
+        if (previousId && !sameTrack) {
           console.log('[navidrome] neuer Track erkannt, aktualisiere Anzeige');
         }
       } catch (err) {
@@ -227,6 +238,18 @@
         this.currentTrack = null;
         this.renderIdle();
       }
+    },
+
+    updateProgress() {
+      if (!this.currentTrack) return;
+      if (!this.currentTrack.paused) {
+        const now = performance.now();
+        this.localPosition += (now - this.lastTickAt) / 1000;
+        this.lastTickAt = now;
+      }
+      const duration = this.currentTrack.duration || 0;
+      if (duration > 0) this.localPosition = Math.min(this.localPosition, duration);
+      this.renderExtra(this.currentTrack, this.localPosition);
     },
 
     trackId(t) {
@@ -250,6 +273,18 @@
       const m = Math.floor(s / 60);
       const r = s % 60;
       return `${m}:${String(r).padStart(2, '0')}`;
+    },
+
+    renderExtra(data, position) {
+      const wrap = $('#navidrome-player');
+      const extraEl = wrap?.querySelector('.np-extra');
+      if (!extraEl) return;
+      const bitrateHtml = data.bitrate ? `<div class="np-bitrate">${escapeHtml(`${data.bitrate} kbps`)}</div>` : '';
+      const timeHtml = data.duration
+        ? `<div class="np-time">${escapeHtml(`${this.formatDuration(position)} / ${this.formatDuration(data.duration)}`)}</div>`
+        : '';
+      extraEl.innerHTML = bitrateHtml + timeHtml;
+      extraEl.hidden = !data.bitrate && !data.duration;
     },
 
     renderIdle() {
@@ -292,14 +327,7 @@
         albumEl.textContent = data.album || '';
         albumEl.hidden = !data.album;
       }
-      const extraEl = wrap?.querySelector('.np-extra');
-      if (extraEl) {
-        const parts = [];
-        if (data.bitrate) parts.push(`${data.bitrate} kbps`);
-        if (data.duration) parts.push(`${this.formatDuration(data.position || 0)} / ${this.formatDuration(data.duration)}`);
-        extraEl.innerHTML = parts.map(p => `<span>${escapeHtml(p)}</span>`).join(' · ');
-        extraEl.hidden = !parts.length;
-      }
+      this.renderExtra(data, data.position || 0);
       document.title = data.artist ? `${data.artist} — ${data.title}` : data.title;
       if (state === 'paused') document.title += ' (pausiert)';
     },

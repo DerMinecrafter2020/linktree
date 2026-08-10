@@ -369,7 +369,8 @@ body {
 
 .np-extra {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 2px;
   max-height: 0;
   opacity: 0;
   margin-top: 0;
@@ -384,13 +385,16 @@ body {
   pointer-events: none;
 }
 
+.np-bitrate { color: var(--neon-cyan); }
+.np-time { color: var(--text-faint); }
+
 .np-player:hover .np-album,
 .np-player:active .np-album,
 .np-player.expanded .np-album,
 .np-player:hover .np-extra,
 .np-player:active .np-extra,
 .np-player.expanded .np-extra {
-  max-height: 22px;
+  max-height: 44px;
   opacity: 1;
   margin-top: 4px;
 }
@@ -401,7 +405,7 @@ body {
   .np-player:active .np-album,
   .np-player.expanded .np-album,
   .np-player:active .np-extra,
-  .np-player.expanded .np-extra { max-height: 22px; opacity: 1; margin-top: 4px; }
+  .np-player.expanded .np-extra { max-height: 44px; opacity: 1; margin-top: 4px; }
 }
 
 /* Marquee fuer lange Titel/Artisten */
