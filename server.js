@@ -126,7 +126,10 @@ async function finalizeApp() {
         if (track && track.playing) {
           const title = `🎵 ${track.artist ? track.artist + ' — ' : ''}${track.title}`;
           const description = track.paused ? 'Momentan pausiert' : `Aktuell läuft: ${track.title}${track.artist ? ' von ' + track.artist : ''}${track.album ? ' (' + track.album + ')' : ''}`;
-          const absUrl = `${req.protocol}://${req.get('host')}`;
+          const publicDomain = process.env.PUBLIC_DOMAIN;
+          const absUrl = publicDomain
+            ? (publicDomain.startsWith('http') ? publicDomain : `${req.protocol}://${publicDomain}`)
+            : `${req.protocol}://${req.get('host')}`;
           const image = track.coverUrl ? `${absUrl}${track.coverUrl}` : '';
 
           html = html
