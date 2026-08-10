@@ -17,11 +17,15 @@ router.post('/session', (req, res) => {
     req.session.testValue = Date.now();
     req.session.testEmail = req.body.email || 'debug@example.com';
   }
+  const oldJson = res.json.bind(res);
+  res.json = function(body) {
+    console.log('[debug] sessionId:', req.sessionID, 'modified:', req.session ? req.session.isModified : 'n/a');
+    return oldJson(body);
+  };
   res.json({
     ok: true,
     hasSession: !!req.session,
-    sessionId: req.sessionID,
-    sessionData: req.session ? { ...req.session } : null,
+    cookieSet: !!res.get('Set-Cookie'),
   });
 });
 
