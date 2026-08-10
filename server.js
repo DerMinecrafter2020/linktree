@@ -13,6 +13,8 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
+app.set('trust proxy', 1);
+
 // =========================================================
 // Express-App konfigurieren
 // =========================================================
@@ -91,7 +93,7 @@ async function finalizeApp() {
       cookie: {
         maxAge: parseInt(process.env.SESSION_MAX_AGE_MS || '86400000', 10),
         httpOnly: true,
-        secure: NODE_ENV === 'production',
+        secure: true,
         sameSite: 'lax',
       },
     }));
