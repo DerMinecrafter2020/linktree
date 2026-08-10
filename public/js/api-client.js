@@ -1,7 +1,7 @@
 // =========================================================
 // OpenWeb API-Client
 // =========================================================
-// Ersatz fuer supabase-client.js
+// Ersatz für supabase-client.js
 
 (() => {
   'use strict';
@@ -41,7 +41,7 @@
   const del = (path) => api('DELETE', path);
 
   window.api = {
-    // Oeffentlich
+    // Öffentlich
     getProfile: () => get('/profile'),
     getLinks: () => get('/links'),
 
@@ -73,7 +73,7 @@
 
     changePassword: (currentPassword, newPassword) => post('/admin/change-password', { currentPassword, newPassword }),
 
-    // Navidrome (oeffentlicher Proxy)
+    // Navidrome (öffentlicher Proxy)
     navidromeNowPlaying: () => get('/navidrome/now-playing'),
     navidromeControl: (action) => post('/navidrome/control', { action }),
   };

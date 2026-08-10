@@ -408,7 +408,7 @@ body {
   .np-player.expanded .np-extra { max-height: 44px; opacity: 1; margin-top: 4px; }
 }
 
-/* Marquee fuer lange Titel/Artisten */
+/* Marquee für lange Titel/Artisten */
 .marquee-inner {
   display: inline-block;
   min-width: 100%;

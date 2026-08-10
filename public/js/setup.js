@@ -92,7 +92,7 @@
 
     const adminPassword = form.adminPassword.value;
     if (adminPassword !== form.adminPasswordConfirm.value) {
-      showMessage('Passwoerter stimmen nicht ueberein.', true);
+      showMessage('Passwörter stimmen nicht überein.', true);
       return;
     }
     if (adminPassword.length < 8) {
