@@ -211,7 +211,7 @@
       if (!wrap) return;
       this.tick();
       if (this.pollTimer) clearInterval(this.pollTimer);
-      this.pollTimer = setInterval(() => this.tick(), 30_000);
+      this.pollTimer = setInterval(() => this.tick(), 10_000);
       if (this.progressTimer) clearInterval(this.progressTimer);
       this.progressTimer = setInterval(() => this.updateProgress(), 1000);
     },
@@ -238,7 +238,13 @@
         this.localPosition = newTrack.position || 0;
         this.lastTickAt = performance.now();
         this.currentTrack = newTrack;
-        this.renderTrack(this.currentTrack, newTrack.paused === true ? 'paused' : 'playing');
+        const state = newTrack.paused === true ? 'paused' : 'playing';
+        this.renderTrack(this.currentTrack, state);
+        // Wenn der Track am Ende ist, sofort wieder synchronisieren
+        const duration = this.currentTrack.duration || 0;
+        if (state === 'playing' && duration > 0 && this.localPosition >= duration - 1) {
+          setTimeout(() => this.tick(), 1500);
+        }
         if (previousId && !sameTrack) {
           console.log('[navidrome] neuer Track erkannt, aktualisiere Anzeige');
         }
@@ -251,8 +257,9 @@
 
     updateProgress() {
       if (!this.currentTrack) return;
+      const state = this.currentTrack.paused === true ? 'paused' : 'playing';
       const now = performance.now();
-      if (!this.currentTrack.paused) {
+      if (state === 'playing') {
         this.localPosition += (now - this.lastTickAt) / 1000;
       }
       this.lastTickAt = now;
