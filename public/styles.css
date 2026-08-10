@@ -367,10 +367,41 @@ body {
   margin-top: 4px;
 }
 
+.np-extra {
+  display: flex;
+  gap: 8px;
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  font-size: clamp(10px, 3.2vw, 12px);
+  color: var(--neon-cyan);
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: max-height 0.3s ease, opacity 0.25s ease, margin-top 0.3s ease;
+  pointer-events: none;
+}
+
+.np-player:hover .np-album,
+.np-player:active .np-album,
+.np-player.expanded .np-album,
+.np-player:hover .np-extra,
+.np-player:active .np-extra,
+.np-player.expanded .np-extra {
+  max-height: 22px;
+  opacity: 1;
+  margin-top: 4px;
+}
+
 @media (hover: none) and (pointer: coarse) {
-  .np-player:hover .np-album { max-height: 0; opacity: 0; margin-top: 0; }
+  .np-player:hover .np-album,
+  .np-player:hover .np-extra { max-height: 0; opacity: 0; margin-top: 0; }
   .np-player:active .np-album,
-  .np-player.expanded .np-album { max-height: 22px; opacity: 1; margin-top: 4px; }
+  .np-player.expanded .np-album,
+  .np-player:active .np-extra,
+  .np-player.expanded .np-extra { max-height: 22px; opacity: 1; margin-top: 4px; }
 }
 
 /* Marquee fuer lange Titel/Artisten */

@@ -238,11 +238,18 @@
       if (!wrap) return;
       wrap.classList.remove('idle', 'playing', 'paused');
       wrap.classList.add(state);
-      // Touch-Geräte: Klick auf Player toggelt Album-Anzeige
+      // Touch-Geräte: Klick auf Player toggelt Extra-Anzeige
       if (!wrap._npClickBound) {
         wrap.addEventListener('click', () => wrap.classList.toggle('expanded'));
         wrap._npClickBound = true;
       }
+    },
+
+    formatDuration(seconds) {
+      const s = parseInt(seconds || 0, 10);
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return `${m}:${String(r).padStart(2, '0')}`;
     },
 
     renderIdle() {
@@ -284,6 +291,14 @@
       if (albumEl) {
         albumEl.textContent = data.album || '';
         albumEl.hidden = !data.album;
+      }
+      const extraEl = wrap?.querySelector('.np-extra');
+      if (extraEl) {
+        const parts = [];
+        if (data.bitrate) parts.push(`${data.bitrate} kbps`);
+        if (data.duration) parts.push(`${this.formatDuration(data.position || 0)} / ${this.formatDuration(data.duration)}`);
+        extraEl.innerHTML = parts.map(p => `<span>${escapeHtml(p)}</span>`).join(' · ');
+        extraEl.hidden = !parts.length;
       }
       document.title = data.artist ? `${data.artist} — ${data.title}` : data.title;
       if (state === 'paused') document.title += ' (pausiert)';
