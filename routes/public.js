@@ -29,7 +29,7 @@ router.get('/profile', async (req, res, next) => {
 router.get('/links', async (req, res, next) => {
   try {
     const { rows } = await db.query(`
-      SELECT id, title, subtitle, url, icon, position, is_active, open_new
+      SELECT id, title, subtitle, url, display_url, icon, position, is_active, open_new
       FROM links
       WHERE is_active = true
       ORDER BY position ASC, created_at ASC
