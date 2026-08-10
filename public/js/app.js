@@ -306,7 +306,7 @@
         cover.replaceChildren(document.createTextNode('🎵'));
         cover.classList.add('placeholder');
       }
-      document.title = 'OpenWeb · Links';
+      document.title = 'Cornelius Ahner · Links';
       this.updateFavicon(null);
     },
 
