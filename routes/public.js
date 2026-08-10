@@ -159,10 +159,19 @@ router.post('/links/:id/click', async (req, res, next) => {
     const { id } = req.params;
     const ip = req.ip || req.connection.remoteAddress || null;
     const ipHash = ip ? require('crypto').createHash('sha256').update(ip).digest('hex') : null;
+    const utm = req.body.utm || {};
     await db.query(`
-      INSERT INTO link_clicks (link_id, ip_hash, user_agent, referrer)
-      VALUES ($1, $2, $3, $4)
-    `, [id, ipHash, req.headers['user-agent']?.slice(0, 500) || null, req.headers.referer?.slice(0, 500) || null]);
+      INSERT INTO link_clicks (link_id, ip_hash, user_agent, referrer, utm_source, utm_medium, utm_campaign)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [
+      id,
+      ipHash,
+      req.headers['user-agent']?.slice(0, 500) || null,
+      req.headers.referer?.slice(0, 500) || null,
+      v.safeText(utm.source, 120),
+      v.safeText(utm.medium, 120),
+      v.safeText(utm.campaign, 120),
+    ]);
     // Asynchroner Discord-Webhook ohne Antwort zu blockieren
     const linkRes = await db.query('SELECT title, url FROM links WHERE id = $1 LIMIT 1', [id]);
     if (linkRes.rows[0]) {

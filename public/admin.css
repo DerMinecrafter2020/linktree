@@ -755,6 +755,17 @@ body.admin-locked #admin-status-block * {
 .stat-counts { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
 .stat-clicks { font-size: 14px; color: var(--neon-cyan); font-weight: 600; }
 .stat-unique { font-size: 11px; color: var(--text-faint); font-family: 'JetBrains Mono', monospace; }
+.stats-subtitle { font-size: 13px; color: var(--text-dim); margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 1px; }
+.utm-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+.utm-table th, .utm-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.utm-table th { color: var(--text-faint); font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+.utm-table td { color: var(--text-dim); }
+
+.backup-list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.backup-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius); }
+.backup-name { font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+.backup-meta { color: var(--text-faint); font-size: 12px; margin-left: auto; }
+.btn.small { padding: 6px 12px; font-size: 12px; min-height: 32px; }
 
 .search-input {
   padding: 10px 14px;

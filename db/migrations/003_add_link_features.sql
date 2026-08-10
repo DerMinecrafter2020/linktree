@@ -28,12 +28,15 @@ ALTER TABLE links
 
 -- Klickstatistik
 CREATE TABLE IF NOT EXISTS link_clicks (
-  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  link_id    UUID NOT NULL REFERENCES links(id) ON DELETE CASCADE,
-  clicked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  ip_hash    VARCHAR(64) NULL,
-  user_agent VARCHAR(500) NULL,
-  referrer   VARCHAR(500) NULL
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  link_id      UUID NOT NULL REFERENCES links(id) ON DELETE CASCADE,
+  clicked_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ip_hash      VARCHAR(64) NULL,
+  user_agent   VARCHAR(500) NULL,
+  referrer     VARCHAR(500) NULL,
+  utm_source   VARCHAR(120) NULL,
+  utm_medium   VARCHAR(120) NULL,
+  utm_campaign VARCHAR(120) NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_link_clicks_link_id ON link_clicks(link_id);

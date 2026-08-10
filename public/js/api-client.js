@@ -45,7 +45,7 @@
     getProfile: () => get('/profile'),
     getLinks: () => get('/links'),
     getLinkCategories: () => get('/link-categories'),
-    trackLinkClick: (id) => post(`/links/${id}/click`, {}),
+    trackLinkClick: (id, utm) => post(`/links/${id}/click`, { utm }),
     unlockLink: (id, password) => post(`/links/${id}/unlock`, { password }),
 
     // Auth
@@ -75,6 +75,8 @@
     getAdminSettings: () => get('/admin/settings'),
     saveAdminSettings: (settings) => post('/admin/settings', settings),
     testDiscordWebhook: () => post('/admin/settings/discord/test'),
+    getBackups: () => get('/admin/backups'),
+    createBackup: () => post('/admin/backups', {}),
 
     getNavidromeSettings: () => get('/admin/navidrome'),
     saveNavidromeSettings: (settings) => post('/admin/navidrome', settings),

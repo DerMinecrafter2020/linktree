@@ -4,11 +4,14 @@
 
 const express = require('express');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const db = require('../lib/db');
 const { encrypt, decrypt } = require('../lib/crypto');
 const v = require('../lib/validators');
 const { hashPassword, verifyPassword, findUserByEmail, requireAdminSession } = require('../lib/auth');
 const bcrypt = require('bcrypt');
+const backup = require('../lib/backup');
 
 const router = express.Router();
 
@@ -130,6 +133,16 @@ router.get('/stats/links', async (req, res, next) => {
       GROUP BY day
       ORDER BY day ASC
     `);
+    const utmRes = await db.query(`
+      SELECT COALESCE(utm_source, '(direkt)') AS source,
+             COALESCE(utm_medium, '(unbekannt)') AS medium,
+             COUNT(*)::int AS count
+      FROM link_clicks
+      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      GROUP BY utm_source, utm_medium
+      ORDER BY count DESC
+      LIMIT 20
+    `);
     res.json({
       ok: true,
       data: {
@@ -137,6 +150,7 @@ router.get('/stats/links', async (req, res, next) => {
         total: totalRes.rows[0].total,
         links: linksRes.rows,
         timeline: timelineRes.rows,
+        utm: utmRes.rows,
       },
     });
   } catch (err) {
@@ -721,6 +735,38 @@ router.post('/import', async (req, res, next) => {
 });
 
 // ---------- Admin-Passwort aendern (selbst) ----------
+// ---------- Backups ----------
+router.get('/backups', async (req, res, next) => {
+  try {
+    const backups = backup.listBackups();
+    res.json({ ok: true, data: backups });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/backups', async (req, res, next) => {
+  try {
+    const file = await backup.createBackup();
+    res.json({ ok: true, data: { file } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/backups/download/:name', async (req, res, next) => {
+  try {
+    const name = path.basename(req.params.name);
+    const file = path.join(backup.BACKUP_DIR || path.join(__dirname, '..', 'backups'), name);
+    if (!fs.existsSync(file)) return res.status(404).json({ ok: false, error: 'Backup nicht gefunden' });
+    res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+    res.setHeader('Content-Type', 'application/json');
+    fs.createReadStream(file).pipe(res);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/change-password', async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = req.body;

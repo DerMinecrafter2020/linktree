@@ -221,6 +221,26 @@ async function finalizeApp() {
     const mode = setupRequired ? 'SETUP-MODUS' : NODE_ENV;
     console.log(`[OpenWeb] Server laeuft auf http://localhost:${PORT} (env: ${mode})`);
   });
+
+  if (!setupRequired) {
+    const backup = require('./lib/backup');
+    const runBackup = async () => {
+      try {
+        const file = await backup.createBackup();
+        console.log('[backup] Automatisches Backup erstellt:', file);
+      } catch (err) {
+        console.error('[backup] Fehler beim automatischen Backup:', err.message);
+      }
+    };
+    // Einmalig beim Start und dann täglich um 03:00 Uhr
+    runBackup();
+    const now = new Date();
+    const next3am = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (now.getHours() >= 3 ? 1 : 0), 3, 0, 0);
+    setTimeout(() => {
+      runBackup();
+      setInterval(runBackup, 24 * 60 * 60 * 1000);
+    }, next3am - now);
+  }
 }
 
 finalizeApp().catch((err) => {

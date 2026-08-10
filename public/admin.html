@@ -78,6 +78,9 @@
           </div>
           <div id="stats-summary" class="stats-summary"></div>
           <canvas id="stats-chart" width="600" height="240"></canvas>
+          <h4 class="stats-subtitle">Top Quellen (UTM)</h4>
+          <div id="stats-utm"></div>
+          <h4 class="stats-subtitle">Links nach Klicks</h4>
           <ul id="stats-list" class="stats-list"></ul>
         </div>
       </section>
@@ -251,6 +254,14 @@
             <input id="category-input" type="text" placeholder="Neue Kategorie …" />
             <button type="button" id="category-add-btn" class="btn primary">Hinzufügen</button>
           </label>
+        </div>
+        <div class="card-block">
+          <h3>💾 Automatische Backups</h3>
+          <p class="hint">Täglich um 03:00 Uhr wird automatisch ein Backup erstellt.</p>
+          <ul id="backup-list" class="backup-list"></ul>
+          <div class="toolbar">
+            <button id="backup-now-btn" class="btn primary">Jetzt Backup erstellen</button>
+          </div>
         </div>
         <div class="card-block">
           <h3>📤 Export</h3>

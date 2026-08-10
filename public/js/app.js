@@ -185,10 +185,20 @@
     document.body.appendChild(select);
   }
 
+  function readUTM() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+      source: params.get('utm_source') || undefined,
+      medium: params.get('utm_medium') || undefined,
+      campaign: params.get('utm_campaign') || undefined,
+    };
+  }
+
   function trackClick(link) {
     if (!link.id) return;
     try {
-      window.api.trackLinkClick(link.id).catch(() => { /* störende Klick-Fehler ignorieren */ });
+      const utm = readUTM();
+      window.api.trackLinkClick(link.id, utm).catch(() => { /* störende Klick-Fehler ignorieren */ });
     } catch { /* noop */ }
   }
 
