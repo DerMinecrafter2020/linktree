@@ -87,8 +87,8 @@ async function finalizeApp() {
         createTableIfMissing: true,
       }),
       secret: sessionSecret,
-      resave: false,
-      saveUninitialized: false,
+      resave: true,
+      saveUninitialized: true,
       name: 'openweb.sid',
       cookie: {
         maxAge: parseInt(process.env.SESSION_MAX_AGE_MS || '86400000', 10),
