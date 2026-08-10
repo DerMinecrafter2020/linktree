@@ -3,8 +3,9 @@
 // =========================================================
 
 const express = require('express');
+const crypto = require('crypto');
 const db = require('../lib/db');
-const { encrypt } = require('../lib/crypto');
+const { encrypt, decrypt } = require('../lib/crypto');
 const v = require('../lib/validators');
 const { hashPassword, verifyPassword, findUserByEmail, requireAdminSession } = require('../lib/auth');
 
@@ -291,6 +292,40 @@ router.post('/navidrome', async (req, res, next) => {
     res.json({ ok: true, data: rows[0] });
   } catch (err) {
     next(err);
+  }
+});
+
+router.post('/navidrome/test', async (req, res, next) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM navidrome_settings WHERE id = 1 LIMIT 1');
+    const settings = rows[0];
+    if (!settings || !settings.enabled || !settings.url || !settings.username || !settings.password_encrypted) {
+      return res.json({ ok: true, data: { configured: false } });
+    }
+
+    const password = decrypt(settings.password_encrypted);
+    const salt = crypto.randomBytes(8).toString('hex');
+    const token = crypto.createHash('md5').update(password + salt).digest('hex');
+    const pingUrl = new URL('/rest/ping', settings.url);
+    pingUrl.searchParams.set('u', settings.username);
+    pingUrl.searchParams.set('t', token);
+    pingUrl.searchParams.set('s', salt);
+    pingUrl.searchParams.set('v', '1.13.0');
+    pingUrl.searchParams.set('c', 'openweb');
+    pingUrl.searchParams.set('f', 'json');
+
+    const response = await fetch(pingUrl.toString(), { headers: { Accept: 'application/json' } });
+    const text = await response.text();
+    let json;
+    try { json = JSON.parse(text); } catch { throw new Error('Ungueltige Navidrome-Antwort'); }
+    const status = json['subsonic-response'];
+    if (!status) throw new Error('Keine Subsonic-Antwort');
+    if (status.status === 'failed') throw new Error(status.error?.message || 'Navidrome-Fehler');
+
+    res.json({ ok: true, data: { configured: true, connected: status.status === 'ok' } });
+  } catch (err) {
+    console.error('[admin navidrome/test]', err.message);
+    res.json({ ok: true, data: { configured: false, error: err.message } });
   }
 });
 
