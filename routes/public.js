@@ -8,6 +8,7 @@ const auth = require('../lib/auth');
 const v = require('../lib/validators');
 const { parseUserAgent, parseCountryCode } = require('../lib/analytics');
 const audit = require('../lib/audit');
+const alert = require('../lib/alert');
 
 const router = express.Router();
 
@@ -258,6 +259,14 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
     req.session.touch();
 
     await audit.log(req, 'login', 'user', user.id);
+
+    alert.notify('login', 'Admin-Login erkannt', {
+      email: user.email,
+      ip: req.ip || req.connection.remoteAddress || '-',
+      userAgent: req.headers['user-agent'] || '-',
+      country: parseCountryCode(req) || '-',
+      time: new Date().toISOString(),
+    }).catch(() => {});
 
     res.json({ ok: true, data: { id: user.id, email: user.email } });
   } catch (err) {

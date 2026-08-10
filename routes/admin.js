@@ -13,6 +13,7 @@ const { hashPassword, verifyPassword, findUserByEmail, requireAdminSession } = r
 const bcrypt = require('bcrypt');
 const backup = require('../lib/backup');
 const audit = require('../lib/audit');
+const alert = require('../lib/alert');
 
 function generateApiKey() {
   return require('crypto').randomBytes(32).toString('hex');
@@ -492,6 +493,70 @@ router.post('/settings', async (req, res, next) => {
   }
 });
 
+router.get('/alert-settings', async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT id, email_enabled, email_to, smtp_host, smtp_port, smtp_user, smtp_secure,
+             webhook_url, notify_login, notify_backup_fail, notify_password
+      FROM alert_settings WHERE id = 1 LIMIT 1
+    `);
+    res.json({ ok: true, data: rows[0] || { id: 1 } });
+  } catch (err) { next(err); }
+});
+
+router.post('/alert-settings', async (req, res, next) => {
+  try {
+    const s = req.body;
+    const values = [
+      !!s.email_enabled,
+      s.email_to || null,
+      s.smtp_host || null,
+      parseInt(s.smtp_port, 10) || 587,
+      s.smtp_user || null,
+      s.smtp_password || null,
+      s.smtp_secure !== false,
+      s.webhook_url ? v.safeUrl(s.webhook_url) : null,
+      s.notify_login !== false,
+      s.notify_backup_fail !== false,
+      s.notify_password !== false,
+    ];
+    await db.query(`
+      INSERT INTO alert_settings (
+        id, email_enabled, email_to, smtp_host, smtp_port, smtp_user, smtp_password,
+        smtp_secure, webhook_url, notify_login, notify_backup_fail, notify_password
+      )
+      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ON CONFLICT (id) DO UPDATE SET
+        email_enabled = EXCLUDED.email_enabled,
+        email_to = EXCLUDED.email_to,
+        smtp_host = EXCLUDED.smtp_host,
+        smtp_port = EXCLUDED.smtp_port,
+        smtp_user = EXCLUDED.smtp_user,
+        smtp_password = EXCLUDED.smtp_password,
+        smtp_secure = EXCLUDED.smtp_secure,
+        webhook_url = EXCLUDED.webhook_url,
+        notify_login = EXCLUDED.notify_login,
+        notify_backup_fail = EXCLUDED.notify_backup_fail,
+        notify_password = EXCLUDED.notify_password,
+        updated_at = NOW()
+    `, values);
+
+    const { rows } = await db.query(`
+      SELECT id, email_enabled, email_to, smtp_host, smtp_port, smtp_user, smtp_secure,
+             webhook_url, notify_login, notify_backup_fail, notify_password
+      FROM alert_settings WHERE id = 1 LIMIT 1
+    `);
+    res.json({ ok: true, data: rows[0] });
+  } catch (err) { next(err); }
+});
+
+router.post('/alert-settings/test', async (req, res, next) => {
+  try {
+    const result = await alert.notify('test', 'Dies ist eine Testbenachrichtigung von OpenWeb.', { time: new Date().toISOString() });
+    res.json({ ok: result.sent, results: result.results });
+  } catch (err) { next(err); }
+});
+
 router.post('/settings/discord/test', async (req, res, next) => {
   try {
     const { rows } = await db.query('SELECT discord_webhook_enabled, discord_webhook_url, discord_webhook_template FROM admin_settings WHERE id = 1 LIMIT 1');
@@ -902,6 +967,11 @@ router.post('/change-password', async (req, res, next) => {
     await db.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, user.id]);
 
     await audit.log(req, 'change_password', 'user', user.id);
+    alert.notify('password', 'Admin-Passwort wurde geändert', {
+      email: user.email,
+      ip: req.ip || req.connection.remoteAddress || '-',
+      time: new Date().toISOString(),
+    }).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
     next(err);

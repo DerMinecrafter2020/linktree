@@ -300,6 +300,61 @@
             </div>
           </form>
         </div>
+        <div class="card-block">
+          <h3>🚨 Alert-Einstellungen</h3>
+          <p class="hint">Benachrichtigungen bei kritischen Ereignissen per E-Mail (SMTP) oder generischem Webhook.</p>
+          <form id="alert-form" class="form">
+            <label class="row">
+              <input name="email_enabled" type="checkbox" />
+              <span>E-Mail-Benachrichtigungen aktivieren</span>
+            </label>
+            <label>
+              <span>Empfänger-E-Mail</span>
+              <input name="email_to" type="email" placeholder="admin@example.com" />
+            </label>
+            <label>
+              <span>SMTP-Host</span>
+              <input name="smtp_host" type="text" placeholder="smtp.example.com" />
+            </label>
+            <label>
+              <span>SMTP-Port</span>
+              <input name="smtp_port" type="number" value="587" />
+            </label>
+            <label>
+              <span>SMTP-Benutzer</span>
+              <input name="smtp_user" type="text" />
+            </label>
+            <label>
+              <span>SMTP-Passwort</span>
+              <input name="smtp_password" type="password" />
+            </label>
+            <label class="row">
+              <input name="smtp_secure" type="checkbox" checked />
+              <span>Sichere Verbindung (TLS)</span>
+            </label>
+            <label>
+              <span>Webhook-URL (Discord-kompatibel)</span>
+              <input name="webhook_url" type="url" placeholder="https://discord.com/api/webhooks/..." />
+            </label>
+            <div class="hint">Benachrichtigen bei:</div>
+            <label class="row">
+              <input name="notify_login" type="checkbox" checked />
+              <span>Login</span>
+            </label>
+            <label class="row">
+              <input name="notify_backup_fail" type="checkbox" checked />
+              <span>Backup-Fehler</span>
+            </label>
+            <label class="row">
+              <input name="notify_password" type="checkbox" checked />
+              <span>Passwortwechsel</span>
+            </label>
+            <div class="form-actions">
+              <button type="button" id="alert-test-btn" class="btn ghost">Test senden</button>
+              <button type="submit" class="btn primary">Speichern</button>
+            </div>
+          </form>
+        </div>
       </section>
 
       <!-- TAB: DATEN -->

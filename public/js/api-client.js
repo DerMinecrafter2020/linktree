@@ -77,6 +77,10 @@
     getAdminSettings: () => get('/admin/settings'),
     saveAdminSettings: (settings) => post('/admin/settings', settings),
     testDiscordWebhook: () => post('/admin/settings/discord/test'),
+
+    getAlertSettings: () => get('/admin/alert-settings'),
+    saveAlertSettings: (settings) => post('/admin/alert-settings', settings),
+    testAlertSettings: () => post('/admin/alert-settings/test'),
     getBackups: () => get('/admin/backups'),
     createBackup: () => post('/admin/backups', {}),
     getApiKeys: () => get('/admin/api-keys'),

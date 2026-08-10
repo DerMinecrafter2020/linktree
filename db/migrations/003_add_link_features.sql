@@ -57,6 +57,27 @@ ALTER TABLE links
   ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NULL,
   ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NULL;
 
+-- Alert-Einstellungen (E-Mail/Webhook fuer kritische Ereignisse)
+CREATE TABLE IF NOT EXISTS alert_settings (
+  id                 INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  email_enabled      BOOLEAN NOT NULL DEFAULT false,
+  email_to           VARCHAR(254) NULL,
+  smtp_host          VARCHAR(255) NULL,
+  smtp_port          INTEGER NOT NULL DEFAULT 587,
+  smtp_user          VARCHAR(255) NULL,
+  smtp_password      VARCHAR(255) NULL,
+  smtp_secure        BOOLEAN NOT NULL DEFAULT true,
+  webhook_url        VARCHAR(500) NULL,
+  notify_login       BOOLEAN NOT NULL DEFAULT true,
+  notify_backup_fail BOOLEAN NOT NULL DEFAULT true,
+  notify_password    BOOLEAN NOT NULL DEFAULT true,
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TRIGGER trg_alert_settings_updated_at
+BEFORE UPDATE ON alert_settings
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 -- API-Keys für externe Lesezugriffe
 CREATE TABLE IF NOT EXISTS api_keys (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

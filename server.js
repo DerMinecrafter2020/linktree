@@ -304,6 +304,7 @@ async function finalizeApp() {
   if (!setupRequired) {
     const backup = require('./lib/backup');
     const maintenance = require('./lib/maintenance');
+    const alert = require('./lib/alert');
 
     const runBackup = async () => {
       try {
@@ -311,6 +312,7 @@ async function finalizeApp() {
         console.log('[backup] Automatisches Backup erstellt:', file);
       } catch (err) {
         console.error('[backup] Fehler beim automatischen Backup:', err.message);
+        alert.notify('backup_fail', 'Automatisches Backup fehlgeschlagen', { error: err.message }).catch(() => {});
       }
     };
 
