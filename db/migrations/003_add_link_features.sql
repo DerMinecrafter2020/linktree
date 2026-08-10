@@ -36,7 +36,11 @@ CREATE TABLE IF NOT EXISTS link_clicks (
   referrer     VARCHAR(500) NULL,
   utm_source   VARCHAR(120) NULL,
   utm_medium   VARCHAR(120) NULL,
-  utm_campaign VARCHAR(120) NULL
+  utm_campaign VARCHAR(120) NULL,
+  country_code CHAR(2) NULL,
+  device_type  VARCHAR(20) NULL,
+  browser      VARCHAR(40) NULL,
+  os           VARCHAR(40) NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_link_clicks_link_id ON link_clicks(link_id);

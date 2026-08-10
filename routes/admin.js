@@ -147,6 +147,34 @@ router.get('/stats/links', async (req, res, next) => {
       ORDER BY count DESC
       LIMIT 20
     `);
+    const devicesRes = await db.query(`
+      SELECT COALESCE(device_type, 'unbekannt') AS device_type, COUNT(*)::int AS count
+      FROM link_clicks
+      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      GROUP BY device_type
+      ORDER BY count DESC
+    `);
+    const browsersRes = await db.query(`
+      SELECT COALESCE(browser, 'unbekannt') AS browser, COUNT(*)::int AS count
+      FROM link_clicks
+      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      GROUP BY browser
+      ORDER BY count DESC
+    `);
+    const osRes = await db.query(`
+      SELECT COALESCE(os, 'unbekannt') AS os, COUNT(*)::int AS count
+      FROM link_clicks
+      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      GROUP BY os
+      ORDER BY count DESC
+    `);
+    const countriesRes = await db.query(`
+      SELECT COALESCE(country_code, 'unbekannt') AS country_code, COUNT(*)::int AS count
+      FROM link_clicks
+      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      GROUP BY country_code
+      ORDER BY count DESC
+    `);
     res.json({
       ok: true,
       data: {
@@ -155,6 +183,10 @@ router.get('/stats/links', async (req, res, next) => {
         links: linksRes.rows,
         timeline: timelineRes.rows,
         utm: utmRes.rows,
+        devices: devicesRes.rows,
+        browsers: browsersRes.rows,
+        os: osRes.rows,
+        countries: countriesRes.rows,
       },
     });
   } catch (err) {

@@ -6,6 +6,7 @@ const express = require('express');
 const db = require('../lib/db');
 const auth = require('../lib/auth');
 const v = require('../lib/validators');
+const { parseUserAgent, parseCountryCode } = require('../lib/analytics');
 
 const router = express.Router();
 
@@ -173,17 +174,24 @@ router.post('/links/:id/click', async (req, res, next) => {
     const ip = req.ip || req.connection.remoteAddress || null;
     const ipHash = ip ? require('crypto').createHash('sha256').update(ip).digest('hex') : null;
     const utm = req.body.utm || {};
+    const ua = req.headers['user-agent'] || '';
+    const { browser, os, deviceType } = parseUserAgent(ua);
+    const country = parseCountryCode(req);
     await db.query(`
-      INSERT INTO link_clicks (link_id, ip_hash, user_agent, referrer, utm_source, utm_medium, utm_campaign)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO link_clicks (link_id, ip_hash, user_agent, referrer, utm_source, utm_medium, utm_campaign, country_code, device_type, browser, os)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     `, [
       id,
       ipHash,
-      req.headers['user-agent']?.slice(0, 500) || null,
+      ua.slice(0, 500) || null,
       req.headers.referer?.slice(0, 500) || null,
       v.safeText(utm.source, 120),
       v.safeText(utm.medium, 120),
       v.safeText(utm.campaign, 120),
+      country,
+      deviceType,
+      browser,
+      os,
     ]);
     // Asynchroner Discord-Webhook ohne Antwort zu blockieren
     const linkRes = await db.query('SELECT title, url FROM links WHERE id = $1 LIMIT 1', [id]);
