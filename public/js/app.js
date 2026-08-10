@@ -7,17 +7,22 @@
 
   const $ = (s, r = document) => r.querySelector(s);
 
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
   function setText(sel, text, root = document) {
     const el = $(sel, root);
     if (!el) return null;
-    const content = el.querySelector('.marquee-content') || el;
-    content.textContent = String(text ?? '');
-    content.classList.remove('marquee-scroll');
-    content.style.removeProperty('--marquee-offset');
-    if (content.scrollWidth > el.clientWidth + 2) {
-      content.classList.add('marquee-content');
-      content.style.setProperty('--marquee-offset', -(content.scrollWidth - el.clientWidth) + 'px');
-      content.classList.add('marquee-scroll');
+    el.classList.remove('marquee-content', 'marquee-scroll');
+    el.style.removeProperty('--marquee-offset');
+    el.innerHTML = `<span class="marquee-inner">${escapeHtml(String(text ?? ''))}</span>`;
+    const inner = el.querySelector('.marquee-inner');
+    if (inner && inner.scrollWidth > el.clientWidth + 2) {
+      const offset = -(inner.scrollWidth - el.clientWidth);
+      inner.classList.add('marquee-content');
+      inner.style.setProperty('--marquee-offset', offset + 'px');
+      requestAnimationFrame(() => inner.classList.add('marquee-scroll'));
     }
     return el;
   }

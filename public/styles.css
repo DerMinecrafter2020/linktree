@@ -344,6 +344,12 @@ body {
 }
 
 /* Marquee fuer lange Titel/Artisten */
+.marquee-inner {
+  display: inline-block;
+  min-width: 100%;
+  white-space: nowrap;
+}
+
 .marquee-content {
   display: inline-block;
   min-width: 100%;
