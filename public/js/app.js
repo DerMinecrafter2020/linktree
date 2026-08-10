@@ -27,12 +27,16 @@
     return el;
   }
 
-  function prettyUrl(url) {
+  function prettyUrl(url, max = 42) {
     if (!url) return '';
-    return String(url)
+    let s = String(url)
       .replace(/^https?:\/\//, '')
       .replace(/^www\./, '')
       .replace(/\/$/, '');
+    if (s.length <= max) return s;
+    const head = Math.floor(max * 0.55);
+    const tail = max - head - 1;
+    return s.slice(0, head) + '…' + s.slice(-tail);
   }
 
   function safeUrl(raw) {
@@ -40,8 +44,12 @@
     if (!u) return '#';
     if (/^(javascript|data|vbscript|file|about):/i.test(u)) return '#';
     if (/^mailto:/i.test(u)) return u;
+    let urlStr = u;
+    if (!/^https?:\/\//i.test(urlStr)) {
+      urlStr = 'https://' + urlStr;
+    }
     try {
-      const url = new URL(u);
+      const url = new URL(urlStr);
       return ['http:', 'https:'].includes(url.protocol) ? url.toString() : '#';
     } catch { return '#'; }
   }
@@ -135,7 +143,6 @@
       a.target = '_blank';
       a.rel = 'noopener noreferrer nofollow';
     }
-    a.dataset.url = prettyUrl(link.url);
 
     const top = el('span', 'link-top');
     const text = el('span', 'link-text');
