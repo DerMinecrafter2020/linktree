@@ -101,6 +101,7 @@ async function finalizeApp() {
     app.use('/api/admin', adminRoutes);
     app.use('/api/navidrome', navidromeRoutes);
 
+    app.get('/setup.html', (req, res) => res.redirect('/login'));
     app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
     app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
     app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
