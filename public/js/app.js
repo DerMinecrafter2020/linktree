@@ -205,8 +205,13 @@
           return;
         }
         const previousId = this.currentTrack ? this.trackId(this.currentTrack) : null;
+        const newId = this.trackId(newTrack);
         this.currentTrack = newTrack;
         this.renderTrack(this.currentTrack, newTrack.paused === true ? 'paused' : 'playing');
+        if (previousId && previousId !== newId) {
+          console.log('[navidrome] neuer Track erkannt, lade Seite neu');
+          setTimeout(() => location.reload(), 1500);
+        }
       } catch (err) {
         console.warn('[navidrome] poll failed:', err.message);
         this.currentTrack = null;
