@@ -60,6 +60,7 @@
     deleteLink: (id) => del(`/admin/links/${id}`),
     reorderLinks: (orderedIds) => post('/admin/links/reorder', { orderedIds }),
     checkLink: (id) => get(`/admin/links/${id}/check`),
+    getLinkStats: () => get('/admin/stats/links'),
 
     getLinkCategories: () => get('/admin/link-categories'),
     getQRCode: (text) => get(`/admin/qr-code?text=${encodeURIComponent(text)}`),

@@ -699,6 +699,47 @@ body.admin-locked #admin-status-block * {
 }
 .qr-container .error { color: var(--neon-red); }
 
+/* ---------- Statistik ---------- */
+.stats-summary { display: flex; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.stat-card {
+  flex: 1;
+  min-width: 120px;
+  padding: 16px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stat-card strong { font-size: 24px; color: var(--neon-cyan); }
+.stat-card span { font-size: 12px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 1px; }
+
+#stats-chart {
+  width: 100%;
+  height: 240px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 18px;
+}
+
+.stats-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.stat-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  gap: 12px;
+}
+.stat-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stat-title { font-weight: 600; font-size: 14px; }
+.stat-url { font-size: 11px; color: var(--text-faint); font-family: 'JetBrains Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-counts { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+.stat-clicks { font-size: 14px; color: var(--neon-cyan); font-weight: 600; }
+.stat-unique { font-size: 11px; color: var(--text-faint); font-family: 'JetBrains Mono', monospace; }
+
 /* ---------- Admin Navidrome Player Preview ---------- */
 .admin-np-player {
   display: flex;

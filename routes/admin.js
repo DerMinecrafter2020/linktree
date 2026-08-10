@@ -93,6 +93,43 @@ router.get('/links', async (req, res, next) => {
 });
 
 // ---------- QR-Codes ----------
+// ---------- Statistik ----------
+router.get('/stats/links', async (req, res, next) => {
+  try {
+    const days = Math.min(90, Math.max(1, parseInt(req.query.days, 10) || 30));
+    const totalRes = await db.query(`
+      SELECT COUNT(*)::int AS total FROM link_clicks WHERE clicked_at > NOW() - INTERVAL '${days} days'
+    `);
+    const linksRes = await db.query(`
+      SELECT l.id, l.title, l.url, l.slug,
+        COUNT(lc.id)::int AS clicks,
+        COUNT(DISTINCT lc.ip_hash) AS unique_visitors
+      FROM links l
+      LEFT JOIN link_clicks lc ON lc.link_id = l.id AND lc.clicked_at > NOW() - INTERVAL '${days} days'
+      GROUP BY l.id
+      ORDER BY clicks DESC, l.position ASC
+    `);
+    const timelineRes = await db.query(`
+      SELECT DATE(clicked_at) AS day, COUNT(*)::int AS count
+      FROM link_clicks
+      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      GROUP BY day
+      ORDER BY day ASC
+    `);
+    res.json({
+      ok: true,
+      data: {
+        days,
+        total: totalRes.rows[0].total,
+        links: linksRes.rows,
+        timeline: timelineRes.rows,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/qr-code', async (req, res, next) => {
   try {
     const text = req.query.text;

@@ -34,6 +34,7 @@
       </div>
       <nav class="side-nav">
         <button class="side-btn active" data-tab="links">🔗 Links</button>
+        <button class="side-btn" data-tab="stats">📊 Statistik</button>
         <button class="side-btn" data-tab="profile">👤 Profil</button>
         <button class="side-btn" data-tab="music">🎵 Musik</button>
         <button class="side-btn" data-tab="data">💾 Daten</button>
@@ -59,6 +60,17 @@
           <small class="hint">Tipp: Pfeile oder Drag & Drop zum Sortieren</small>
         </div>
         <ul id="links-list" class="links-list"></ul>
+      </section>
+
+      <!-- TAB: STATISTIK -->
+      <section class="tab" data-tab="stats" hidden>
+        <div class="card-block">
+          <h3>📊 Klick-Statistik</h3>
+          <p class="hint">Gesamtklicks und Aufrufe pro Link der letzten 30 Tage.</p>
+          <div id="stats-summary" class="stats-summary"></div>
+          <canvas id="stats-chart" width="600" height="240"></canvas>
+          <ul id="stats-list" class="stats-list"></ul>
+        </div>
       </section>
 
       <!-- TAB: PROFIL -->
@@ -332,6 +344,7 @@
       <div id="qr-container" class="qr-container"></div>
       <p class="hint">Scanne den Code, um direkt zu cornyriegel.de zu gelangen.</p>
       <div class="form-actions">
+        <button type="button" id="qr-download" class="btn primary">⬇ Herunterladen</button>
         <button type="button" id="qr-close" class="btn ghost">Schließen</button>
       </div>
     </form>
