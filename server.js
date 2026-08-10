@@ -139,6 +139,11 @@ async function finalizeApp() {
     app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
     app.get('/changelog', (req, res) => res.sendFile(path.join(__dirname, 'public', 'changelog.html')));
     app.get('/api-docs', (req, res) => res.sendFile(path.join(__dirname, 'public', 'api-docs.html')));
+    app.get('/robots.txt', (req, res) => {
+      const publicDomain = process.env.PUBLIC_DOMAIN || '';
+      res.set('Content-Type', 'text/plain');
+      res.send(`User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /login\nDisallow: /api/\nSitemap: ${req.protocol}://${publicDomain || req.get('host')}/sitemap.xml\n`);
+    });
 
     // Sitemap-Generierung
     app.get('/sitemap.xml', async (req, res, next) => {
@@ -173,11 +178,11 @@ async function finalizeApp() {
     app.get('/go/:slug', async (req, res, next) => {
       try {
         const slug = v.safeSlug(req.params.slug);
-        if (!slug) return res.status(404).send('Kurzlink nicht gefunden');
+        if (!slug) return res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
         const { rows } = await db.query(`
           SELECT id, url FROM links WHERE slug = $1 AND is_active = true LIMIT 1
         `, [slug]);
-        if (!rows.length) return res.status(404).send('Kurzlink nicht gefunden');
+        if (!rows.length) return res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
         await db.query(`
           INSERT INTO link_clicks (link_id, ip_hash, user_agent, referrer)
           VALUES ($1, $2, $3, $4)
@@ -200,6 +205,7 @@ async function finalizeApp() {
         }
 
         let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+        html = html.replace(/(<meta name="robots"[^>]*?>)?/i, '<meta name="robots" content="index, follow" />');
 
         // Custom CSS injizieren, auch wenn kein Track läuft
         if (profile.custom_css) {
@@ -238,7 +244,7 @@ async function finalizeApp() {
       }
     });
 
-    app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+    app.get('*', (req, res) => res.status(404).sendFile(path.join(__dirname, 'public', '404.html')));
   }
 
   // Globaler Error-Handler
