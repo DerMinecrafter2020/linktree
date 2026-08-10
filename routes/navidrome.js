@@ -74,6 +74,7 @@ router.get('/now-playing', async (req, res, next) => {
       artist: entry.artist || entry.album || '',
       album: entry.album || '',
       duration: entry.duration || 0,
+      bitrate: entry.bitRate || entry.bitrate || null,
       coverUrl: null,
       paused: entry.playerState === 'paused' || false,
       url: settings.url,
