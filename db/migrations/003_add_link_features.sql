@@ -70,3 +70,19 @@ CREATE TABLE IF NOT EXISTS api_keys (
 CREATE TRIGGER trg_api_keys_updated_at
 BEFORE UPDATE ON api_keys
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Audit-Log für Admin-Aktionen
+CREATE TABLE IF NOT EXISTS audit_log (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID NULL,
+  action     VARCHAR(40) NOT NULL,
+  entity     VARCHAR(40) NULL,
+  entity_id  VARCHAR(80) NULL,
+  ip_address INET NULL,
+  user_agent VARCHAR(500) NULL,
+  details    JSONB NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);

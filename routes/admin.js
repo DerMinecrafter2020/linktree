@@ -12,6 +12,7 @@ const v = require('../lib/validators');
 const { hashPassword, verifyPassword, findUserByEmail, requireAdminSession } = require('../lib/auth');
 const bcrypt = require('bcrypt');
 const backup = require('../lib/backup');
+const audit = require('../lib/audit');
 
 function generateApiKey() {
   return require('crypto').randomBytes(32).toString('hex');
@@ -22,7 +23,8 @@ const router = express.Router();
 router.use(requireAdminSession);
 
 // ---------- Auth (nur Logout/Me; Login ist oeffentlich unter /api/login) ----------
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
+  await audit.log(req, 'logout', 'user', req.session?.userId);
   req.session.destroy(() => {
     res.clearCookie('openweb.sid');
     res.json({ ok: true });
@@ -313,6 +315,7 @@ router.post('/links', async (req, res, next) => {
       RETURNING *
     `, [title, subtitle, url, displayUrl, icon, position, isActive, openNew, metaDescription, adminNote, slug, categoryId, visibleFrom, visibleUntil, visibleWeekdays, linkPassword, expiresAt]);
 
+    await audit.log(req, 'create', 'link', rows[0].id, { title });
     res.json({ ok: true, data: rows[0] });
   } catch (err) {
     next(err);
@@ -411,6 +414,7 @@ router.patch('/links/:id', async (req, res, next) => {
       return res.status(404).json({ ok: false, error: 'Link nicht gefunden' });
     }
 
+    await audit.log(req, 'update', 'link', id, { changed: Object.keys(req.body) });
     res.json({ ok: true, data: rows[0] });
   } catch (err) {
     next(err);
@@ -424,6 +428,7 @@ router.delete('/links/:id', async (req, res, next) => {
     if (result.rowCount === 0) {
       return res.status(404).json({ ok: false, error: 'Link nicht gefunden' });
     }
+    await audit.log(req, 'delete', 'link', id);
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -764,6 +769,7 @@ router.post('/import', async (req, res, next) => {
       }
     });
 
+    await audit.log(req, 'import', 'links', null, { imported: data.links?.length, categories: data.link_categories?.length });
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -786,6 +792,7 @@ router.post('/api-keys', async (req, res, next) => {
     const plain = generateApiKey();
     const hash = await bcrypt.hash(plain, 10);
     const { rows } = await db.query('INSERT INTO api_keys (name, key_hash) VALUES ($1, $2) RETURNING id, name, created_at', [name, hash]);
+    await audit.log(req, 'create', 'api_key', rows[0].id, { name });
     res.json({ ok: true, data: { ...rows[0], key: plain } });
   } catch (err) { next(err); }
 });
@@ -794,6 +801,7 @@ router.delete('/api-keys/:id', async (req, res, next) => {
   try {
     const result = await db.query('DELETE FROM api_keys WHERE id = $1', [req.params.id]);
     if (result.rowCount === 0) return res.status(404).json({ ok: false, error: 'Key nicht gefunden' });
+    await audit.log(req, 'delete', 'api_key', req.params.id);
     res.json({ ok: true });
   } catch (err) { next(err); }
 });
@@ -811,6 +819,7 @@ router.get('/backups', async (req, res, next) => {
 router.post('/backups', async (req, res, next) => {
   try {
     const file = await backup.createBackup();
+    await audit.log(req, 'backup', null, null, { file });
     res.json({ ok: true, data: { file } });
   } catch (err) {
     next(err);
@@ -856,10 +865,20 @@ router.post('/import/linktree-csv', async (req, res, next) => {
         imported++;
       }
     });
+    await audit.log(req, 'import', 'linktree-csv', null, { imported });
     res.json({ ok: true, data: { imported } });
   } catch (err) {
     next(err);
   }
+});
+
+router.get('/audit-log', async (req, res, next) => {
+  try {
+    const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 200));
+    const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+    const rows = await audit.list(limit, offset);
+    res.json({ ok: true, data: rows });
+  } catch (err) { next(err); }
 });
 
 router.post('/change-password', async (req, res, next) => {
@@ -882,6 +901,7 @@ router.post('/change-password', async (req, res, next) => {
     const newHash = await hashPassword(newPassword);
     await db.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, user.id]);
 
+    await audit.log(req, 'change_password', 'user', user.id);
     res.json({ ok: true });
   } catch (err) {
     next(err);

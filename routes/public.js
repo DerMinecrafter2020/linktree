@@ -7,6 +7,7 @@ const db = require('../lib/db');
 const auth = require('../lib/auth');
 const v = require('../lib/validators');
 const { parseUserAgent, parseCountryCode } = require('../lib/analytics');
+const audit = require('../lib/audit');
 
 const router = express.Router();
 
@@ -255,6 +256,8 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
     req.session.userId = user.id;
     req.session.email = user.email;
     req.session.touch();
+
+    await audit.log(req, 'login', 'user', user.id);
 
     res.json({ ok: true, data: { id: user.id, email: user.email } });
   } catch (err) {

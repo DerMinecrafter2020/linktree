@@ -56,6 +56,7 @@
     // Admin
     getDbInfo: () => get('/admin/db-info'),
     getServerInfo: () => get('/admin/server-info'),
+    getAuditLog: () => get('/admin/audit-log'),
     getAdminLinks: () => get('/admin/links'),
     createLink: (link) => post('/admin/links', link),
     updateLink: (id, patchObj) => patch(`/admin/links/${id}`, patchObj),

@@ -43,6 +43,7 @@
         <button class="side-btn" data-tab="music">🎵 Musik</button>
         <button class="side-btn" data-tab="data">💾 Daten</button>
         <button class="side-btn" data-tab="settings">⚙️ Einstellungen</button>
+        <button class="side-btn" data-tab="audit">📝 Audit-Log</button>
       </nav>
       <div class="side-footer">
         <a href="/" target="_blank" class="side-link">↗ Seite öffnen</a>
@@ -231,6 +232,15 @@
             <button type="button" id="api-key-add-btn" class="btn primary">Erstellen</button>
           </label>
           <div id="api-key-result" class="hint" hidden></div>
+        </div>
+      </section>
+
+      <!-- TAB: AUDIT-LOG -->
+      <section class="tab" data-tab="audit" hidden>
+        <div class="card-block">
+          <h3>📝 Audit-Log</h3>
+          <p class="hint">Protokoll wichtiger Admin-Aktionen: Login, Logout, Link-Änderungen, Imports, Backups, API-Keys, Passwortwechsel.</p>
+          <div id="audit-log-table" class="audit-log-table"></div>
         </div>
       </section>
 
