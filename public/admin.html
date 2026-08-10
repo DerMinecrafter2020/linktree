@@ -42,6 +42,7 @@
       </nav>
       <div class="side-footer">
         <a href="/" target="_blank" class="side-link">↗ Seite öffnen</a>
+        <span class="side-link" id="preview-toggle" style="cursor:pointer;">👁 Vorschau</span>
         <span class="side-link" id="qr-toggle" style="cursor:pointer;">📱 QR-Code</span>
         <button id="logout-btn" class="side-link">↩ Abmelden</button>
       </div>
@@ -375,6 +376,20 @@
       <div class="form-actions">
         <button type="button" id="qr-download" class="btn primary">⬇ Herunterladen</button>
         <button type="button" id="qr-close" class="btn ghost">Schließen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Vorschau Dialog -->
+  <dialog id="preview-dialog" class="dialog preview-dialog">
+    <form method="dialog" class="form">
+      <h3>👁 Live-Vorschau</h3>
+      <div class="preview-frame-wrap">
+        <iframe id="preview-frame" src="/" sandbox="allow-scripts allow-same-origin"></iframe>
+      </div>
+      <div class="form-actions">
+        <button type="button" id="preview-refresh" class="btn ghost">🔄 Aktualisieren</button>
+        <button type="button" id="preview-close" class="btn ghost">Schließen</button>
       </div>
     </form>
   </dialog>

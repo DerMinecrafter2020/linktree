@@ -14,6 +14,17 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
+// Health-Check vor Setup, damit Load-Balancer / Uptime-Checker funktionieren
+app.get('/health', async (req, res) => {
+  try {
+    const db = require('./lib/db');
+    await db.query('SELECT 1');
+    res.json({ ok: true, status: 'healthy', database: 'connected' });
+  } catch (err) {
+    res.status(503).json({ ok: false, status: 'unhealthy', database: 'disconnected', error: err.message });
+  }
+});
+
 function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -105,6 +116,18 @@ async function finalizeApp() {
         sameSite: 'lax',
       },
     }));
+
+    // Öffentliches Rate-Limiting (ausgenommen Login, das eigenen Limiter hat)
+    const rateLimit = require('express-rate-limit');
+    const publicLimiter = rateLimit({
+      windowMs: 60 * 1000,
+      max: 120,
+      standardHeaders: true,
+      legacyHeaders: false,
+      keyGenerator: (req) => req.ip || req.connection.remoteAddress || 'unknown',
+      handler: (req, res) => res.status(429).json({ ok: false, error: 'Zu viele Anfragen. Bitte warte einen Moment.' }),
+    });
+    app.use('/api', publicLimiter);
 
     app.use('/api', publicRoutes);
     app.use('/api/admin', adminRoutes);
