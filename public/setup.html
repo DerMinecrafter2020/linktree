@@ -22,6 +22,11 @@
     input, textarea { width: 100%; background: #05050b; border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px; color: var(--text); font-family: inherit; font-size: 14px; outline: none; }
     input:focus, textarea:focus { border-color: var(--cyan); }
     .hint { color: var(--muted); font-size: 12px; margin-top: 5px; }
+    .password-strength { height: 4px; background: var(--border); border-radius: 2px; margin: 8px 0 10px; overflow: hidden; }
+    .password-strength span { display: block; height: 100%; width: 0%; background: var(--pink); transition: width 0.2s, background 0.2s; }
+    .password-hint { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 4px 12px; font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+    .password-hint li::before { content: '○'; margin-right: 5px; }
+    .password-hint li.met::before { content: '✓'; color: var(--cyan); }
     .link-row { display: grid; grid-template-columns: 1fr 1fr 90px; gap: 8px; margin-bottom: 8px; }
     .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #181828; border: 1px solid var(--border); border-radius: 10px; color: var(--text); cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; padding: 10px 16px; }
     .btn.primary { background: linear-gradient(90deg, var(--pink), var(--violet)); border-color: transparent; color: #fff; }
@@ -66,6 +71,14 @@
         <span>Admin Passwort</span>
         <input name="adminPassword" type="password" minlength="8" required />
       </label>
+      <div class="password-strength" id="password-strength"><span></span></div>
+      <ul class="password-hint" id="password-hint">
+        <li data-rule="length">Mindestens 8 Zeichen</li>
+        <li data-rule="upper">Großbuchstabe</li>
+        <li data-rule="lower">Kleinbuchstabe</li>
+        <li data-rule="digit">Zahl</li>
+        <li data-rule="special">Sonderzeichen</li>
+      </ul>
       <label>
         <span>Passwort wiederholen</span>
         <input name="adminPasswordConfirm" type="password" required />

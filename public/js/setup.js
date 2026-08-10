@@ -5,6 +5,9 @@
   const testDbBtn = document.getElementById('test-db-btn');
   const dbStatus = document.getElementById('db-status');
   const messageEl = document.getElementById('message');
+  const passwordInput = form?.adminPassword;
+  const strengthBar = document.getElementById('password-strength')?.querySelector('span');
+  const passwordHints = document.querySelectorAll('#password-hint li');
 
   function showMessage(text, isError = false) {
     messageEl.className = isError ? 'error' : 'success';
@@ -14,6 +17,33 @@
   function safeText(s, max = 200) {
     return typeof s === 'string' ? s.replace(/[\x00-\x1f\x7f]/g, '').slice(0, max) : '';
   }
+
+  function checkPasswordStrength(pw) {
+    const rules = {
+      length: pw.length >= 8,
+      upper: /[A-Z]/.test(pw),
+      lower: /[a-z]/.test(pw),
+      digit: /\d/.test(pw),
+      special: /[^A-Za-z0-9]/.test(pw),
+    };
+    const score = Object.values(rules).filter(Boolean).length;
+    return { score, rules };
+  }
+
+  function updatePasswordStrength() {
+    const pw = passwordInput?.value || '';
+    const { score, rules } = checkPasswordStrength(pw);
+    passwordHints?.forEach(li => {
+      li.classList.toggle('met', rules[li.dataset.rule]);
+    });
+    if (strengthBar) {
+      const pct = (score / 5) * 100;
+      strengthBar.style.width = pct + '%';
+      strengthBar.style.background =
+        score <= 2 ? '#ff4d6d' : score === 3 ? '#ffcc00' : score === 4 ? '#00f0ff' : '#00ff88';
+    }
+  }
+  passwordInput?.addEventListener('input', updatePasswordStrength);
 
   function safeUrl(u) {
     if (typeof u !== 'string') return null;
@@ -95,8 +125,9 @@
       showMessage('Passwörter stimmen nicht überein.', true);
       return;
     }
-    if (adminPassword.length < 8) {
-      showMessage('Admin-Passwort muss mindestens 8 Zeichen haben.', true);
+    const { score } = checkPasswordStrength(adminPassword);
+    if (score < 3) {
+      showMessage('Admin-Passwort ist zu schwach. Bitte erfülle mindestens 3 der 5 Kriterien.', true);
       return;
     }
 
