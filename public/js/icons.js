@@ -106,6 +106,13 @@ window.icons = {
     return `https://cdn.jsdelivr.net/npm/simple-icons@11/icons/${id}.svg`;
   },
 
+  dashboardUrl(name, format = 'png', variant = '') {
+    const base = name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
+    if (!base) return '';
+    const suffix = variant ? `-${variant}` : '';
+    return `https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/${format}/${base}${suffix}.${format}`;
+  },
+
   getInfo(id) {
     return window.ICON_LIBRARY[id] || null;
   },
@@ -142,6 +149,15 @@ window.icons = {
       return {
         type: 'simpleicon', value: iconValue, url: this.url(id),
         label: info?.title || id
+      };
+    }
+    if (iconValue.startsWith('dashboardicon:')) {
+      const raw = iconValue.slice('dashboardicon:'.length);
+      const [name, format = 'png', variant = ''] = raw.split(':');
+      return {
+        type: 'dashboardicon', value: iconValue,
+        url: this.dashboardUrl(name, format || 'png', variant || ''),
+        label: name
       };
     }
     return { type: 'emoji', value: iconValue, url: '', label: iconValue };

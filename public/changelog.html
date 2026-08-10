@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Changelog der OpenWeb Link-in-Bio Seite." />
+  <meta name="theme-color" content="#0a0a14" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;" />
+  <title>Changelog · OpenWeb</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .changelog { max-width: 720px; }
+    .changelog h1 { font-size: clamp(24px, 6vw, 32px); margin-bottom: 8px; }
+    .changelog .subtitle { color: var(--text-dim); margin-bottom: 28px; font-size: 14px; }
+    .changelog-entry { margin-bottom: 24px; }
+    .changelog-entry h2 { font-size: 16px; color: var(--neon-cyan); margin-bottom: 6px; }
+    .changelog-entry ul { list-style: none; padding-left: 0; }
+    .changelog-entry li { position: relative; padding-left: 18px; margin-bottom: 6px; color: var(--text-dim); font-size: 14px; line-height: 1.5; }
+    .changelog-entry li::before { content: '•'; position: absolute; left: 0; color: var(--neon-pink); }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 32px; color: var(--neon-cyan); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="aurora" aria-hidden="true">
+    <span class="blob blob-1"></span>
+    <span class="blob blob-2"></span>
+    <span class="blob blob-3"></span>
+  </div>
+
+  <main class="card changelog">
+    <h1>Changelog</h1>
+    <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
+
+    <div class="changelog-entry">
+      <h2>2026-08-10</h2>
+      <ul>
+        <li>Share-Embed zeigt aktuell gespielten Song (Open Graph / Twitter Card).</li>
+        <li>Seitentitel wird dynamisch zum aktuellen Track.</li>
+        <li>Admin-Player zeigt Live-Abspielposition in Echtzeit.</li>
+        <li>Album wird auf der Startseite unter dem Künstlernamen angezeigt (Hover / Klick).</li>
+        <li>Bei Trackwechsel wird nur der Player aktualisiert, nicht die ganze Seite neu geladen.</li>
+        <li>Changelog-Unterseite hinzugefügt.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <h2>2026-08-09</h2>
+      <ul>
+        <li>Navidrome-Integration mit Vinyl-Style-Cover und Marquee-Scrolling.</li>
+        <li>Admin-Panel mit Datenbank-Info und Navidrome-Testverbindung.</li>
+        <li>Login-Session und Trust-Proxy-Konfiguration für HTTPS hinter nginx stabilisiert.</li>
+      </ul>
+    </div>
+
+    <a href="/" class="back-link">← Zurück zur Startseite</a>
+  </main>
+</body>
+</html>

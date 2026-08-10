@@ -111,6 +111,7 @@ async function finalizeApp() {
     app.use(express.static(path.join(__dirname, 'public')));
     app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
     app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+    app.get('/changelog', (req, res) => res.sendFile(path.join(__dirname, 'public', 'changelog.html')));
 
     // Startseite mit dynamischen Open-Graph-Tags fuer aktuellen Track
     app.get('/', async (req, res, next) => {

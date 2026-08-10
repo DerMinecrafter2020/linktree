@@ -73,6 +73,12 @@
       return createIconImg(window.icons.url(id));
     }
 
+    if (icon.startsWith('dashboardicon:') && window.icons) {
+      const parsed = window.icons.parse(icon);
+      if (!parsed.url) return '🔗';
+      return createIconImg(parsed.url);
+    }
+
     if (/^https?:\/\//i.test(icon)) {
       try {
         const u = new URL(icon);
@@ -214,8 +220,7 @@
         this.currentTrack = newTrack;
         this.renderTrack(this.currentTrack, newTrack.paused === true ? 'paused' : 'playing');
         if (previousId && previousId !== newId) {
-          console.log('[navidrome] neuer Track erkannt, lade Seite neu');
-          setTimeout(() => location.reload(), 1500);
+          console.log('[navidrome] neuer Track erkannt, aktualisiere Anzeige');
         }
       } catch (err) {
         console.warn('[navidrome] poll failed:', err.message);
@@ -233,6 +238,11 @@
       if (!wrap) return;
       wrap.classList.remove('idle', 'playing', 'paused');
       wrap.classList.add(state);
+      // Touch-Geräte: Klick auf Player toggelt Album-Anzeige
+      if (!wrap._npClickBound) {
+        wrap.addEventListener('click', () => wrap.classList.toggle('expanded'));
+        wrap._npClickBound = true;
+      }
     },
 
     renderIdle() {
@@ -270,6 +280,11 @@
       else if (state === 'paused') artist = 'Pausiert';
       setText('.np-title', data.title || 'Unbekannt', wrap);
       setText('.np-artist', artist, wrap);
+      const albumEl = wrap?.querySelector('.np-album');
+      if (albumEl) {
+        albumEl.textContent = data.album || '';
+        albumEl.hidden = !data.album;
+      }
       document.title = data.artist ? `${data.artist} — ${data.title}` : data.title;
       if (state === 'paused') document.title += ' (pausiert)';
     },
