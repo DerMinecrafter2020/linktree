@@ -4,40 +4,48 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0a0a14" />
-  <meta http-equiv="Content-Security-Policy" content="
-    default-src 'self';
-    script-src 'self' 'unsafe-inline';
-    style-src 'self' 'unsafe-inline';
-    img-src 'self' data:;
-    connect-src 'self';
-    base-uri 'self';
-    form-action 'self';
-    object-src 'none';
-  " />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none;" />
   <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
   <title>Initial Setup · OpenWeb</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/css/setup.css?v=4" />
+  <style>
+    :root { --bg:#0a0a14; --card:#12121f; --text:#f4f4ff; --dim:#a5a5c0; --muted:#6c6c85; --cyan:#00f0ff; --pink:#ff2bd6; --violet:#8a5cff; --border:rgba(255,255,255,0.1); }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100%; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--text); background: radial-gradient(120% 80% at 50% 0%, #11122a 0%, var(--bg) 40%, #05050b 100%); -webkit-font-smoothing: antialiased; }
+    body { display: grid; place-items: center; padding: clamp(16px, 4vw, 40px); }
+    .card { width: min(760px, 100%); background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: clamp(24px, 5vw, 38px); box-shadow: 0 30px 100px rgba(0,0,0,0.55); }
+    h1 { font-size: clamp(22px, 5vw, 28px); margin-bottom: 8px; color: var(--cyan); }
+    .lead { color: var(--dim); font-size: 14px; line-height: 1.5; margin-bottom: 24px; }
+    h2 { font-size: 16px; margin: 26px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: var(--text); }
+    label { display: block; margin-bottom: 14px; color: var(--dim); font-size: 13px; }
+    label span, label small { display: block; margin-bottom: 5px; }
+    input, textarea { width: 100%; background: #05050b; border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px; color: var(--text); font-family: inherit; font-size: 14px; outline: none; }
+    input:focus, textarea:focus { border-color: var(--cyan); }
+    .hint { color: var(--muted); font-size: 12px; margin-top: 5px; }
+    .link-row { display: grid; grid-template-columns: 1fr 1fr 90px; gap: 8px; margin-bottom: 8px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #181828; border: 1px solid var(--border); border-radius: 10px; color: var(--text); cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; padding: 10px 16px; }
+    .btn.primary { background: linear-gradient(90deg, var(--pink), var(--violet)); border-color: transparent; color: #fff; }
+    .actions { display: flex; gap: 10px; margin-top: 24px; }
+    #message { margin: 14px 0; padding: 12px 14px; border-radius: 10px; font-size: 13px; display: none; }
+    #message.success { background: rgba(0,255,136,0.08); border: 1px solid rgba(0,255,136,0.25); color: #00ff88; display: block; }
+    #message.error { background: rgba(255,43,214,0.08); border: 1px solid rgba(255,43,214,0.25); color: #ff2bd6; display: block; }
+    #db-status { min-height: 18px; font-size: 13px; margin-top: 6px; }
+    @media (max-width: 560px) { .link-row { grid-template-columns: 1fr; } .actions { flex-direction: column; } }
+  </style>
 </head>
-<body class="login-page">
-  <div class="setup-card">
+<body>
+  <div class="card">
     <h1>🚀 OpenWeb Initial Setup</h1>
-    <p class="lead">
-      Richte deine OpenWeb-Instanz einmalig ein. Alle Angaben werden in die lokale <code>.env</code>
-      und in die PostgreSQL-Datenbank geschrieben.
-    </p>
+    <p class="lead">Richte deine OpenWeb-Instanz einmalig ein. Alle Angaben werden in die lokale <code>.env</code> und in die PostgreSQL-Datenbank geschrieben.</p>
 
-    <form id="setup-form" class="form">
-      <h2>🔌 Datenbank & Server</h2>
+    <form id="setup-form">
+      <h2>🔌 Datenbank &amp; Server</h2>
       <label>
         <span>PostgreSQL URL</span>
         <input name="databaseUrl" type="text" placeholder="postgresql://openweb:pass@localhost:5432/openweb" required />
         <small class="hint">Der Server braucht diese Verbindung, um Daten zu speichern.</small>
       </label>
-      <button type="button" id="test-db-btn" class="btn ghost">Verbindung testen</button>
+      <button type="button" id="test-db-btn" class="btn">Verbindung testen</button>
       <p id="db-status" class="hint"></p>
 
       <label>
@@ -47,18 +55,16 @@
       <label>
         <span>App URL</span>
         <input name="appUrl" type="url" placeholder="https://deine-domain.de" />
-        <small class="hint">Optional. Standard ist http://localhost:PORT</small>
       </label>
 
       <h2>🔐 Admin-Account</h2>
       <label>
         <span>Admin E-Mail</span>
-        <input name="adminEmail" type="email" placeholder="admin@example.com" required />
+        <input name="adminEmail" type="email" required />
       </label>
       <label>
         <span>Admin Passwort</span>
         <input name="adminPassword" type="password" minlength="8" required />
-        <small class="hint">Mindestens 8 Zeichen.</small>
       </label>
       <label>
         <span>Passwort wiederholen</span>
@@ -67,7 +73,7 @@
 
       <h2>👤 Profil</h2>
       <label>
-        <span>Name / Handle (z. B. @corneliusahner)</span>
+        <span>Name / Handle</span>
         <input name="profileName" type="text" value="@corneliusahner" />
       </label>
       <label>
@@ -124,6 +130,6 @@
     </form>
   </div>
 
-  <script src="/js/setup.js?v=4"></script>
+  <script src="/js/setup.js?v=5"></script>
 </body>
 </html>

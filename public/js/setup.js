@@ -1,7 +1,3 @@
-// =========================================================
-// OpenWeb Initial-Setup
-// =========================================================
-
 (() => {
   'use strict';
 
@@ -13,7 +9,6 @@
   function showMessage(text, isError = false) {
     messageEl.className = isError ? 'error' : 'success';
     messageEl.textContent = text;
-    messageEl.hidden = false;
   }
 
   function safeText(s, max = 200) {
@@ -40,11 +35,11 @@
       credentials: 'same-origin',
     };
     if (body !== null) opts.body = JSON.stringify(body);
-    const r = await fetch(`/api${path}`, opts);
+    const r = await fetch('/api' + path, opts);
     const text = await r.text();
     let json;
     try { json = JSON.parse(text); } catch { json = { ok: false, error: text }; }
-    if (!r.ok || !json.ok) throw new Error(json.error || `HTTP ${r.status}`);
+    if (!r.ok || !json.ok) throw new Error(json.error || 'HTTP ' + r.status);
     return json.data;
   }
 
@@ -59,7 +54,7 @@
       if (cfg.navidromeUrl) form.navidromeUrl.value = cfg.navidromeUrl;
       if (cfg.navidromeUsername) form.navidromeUsername.value = cfg.navidromeUsername;
       if (cfg.databaseUrl) {
-        dbStatus.textContent = 'Vorhandene Datenbank-URL geladen. Du kannst sie testen oder ändern.';
+        dbStatus.textContent = 'Vorhandene Datenbank-URL geladen.';
       }
     } catch (err) {
       console.warn('Konnte vorhandene Config nicht laden:', err.message);
@@ -69,18 +64,21 @@
   testDbBtn.addEventListener('click', async () => {
     const url = form.databaseUrl.value.trim();
     if (!url) { dbStatus.textContent = 'Bitte eine URL eingeben.'; return; }
+    testDbBtn.disabled = true;
     dbStatus.textContent = 'Teste…';
     try {
       const res = await api('POST', '/setup/test-database', { databaseUrl: url });
-      dbStatus.textContent = res.ok ? '✅ Verbindung OK' : `❌ Fehler: ${res.error}`;
+      dbStatus.textContent = res.ok ? '✅ Verbindung OK' : '❌ Fehler: ' + res.error;
     } catch (err) {
-      dbStatus.textContent = `❌ Fehler: ${err.message}`;
+      dbStatus.textContent = '❌ Fehler: ' + err.message;
+    } finally {
+      testDbBtn.disabled = false;
     }
   });
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    messageEl.hidden = true;
+    showMessage('');
 
     const adminPassword = form.adminPassword.value;
     if (adminPassword !== form.adminPasswordConfirm.value) {
@@ -111,7 +109,7 @@
       adminEmail: form.adminEmail.value.trim().toLowerCase(),
       adminPassword,
       port: form.port.value || '3000',
-      appUrl: safeUrl(form.appUrl.value) || `http://localhost:${form.port.value || '3000'}`,
+      appUrl: safeUrl(form.appUrl.value) || 'http://localhost:' + (form.port.value || '3000'),
       profile: {
         name: safeText(form.profileName.value, 80),
         handle: safeText(form.profileHandle.value, 80),
@@ -127,8 +125,8 @@
 
     try {
       const result = await api('POST', '/setup', payload);
-      showMessage(`${result.message} Du wirst in 5 Sekunden zum Login weitergeleitet. Wenn das nicht klappt, starte den Server neu.`);
-      setTimeout(() => { location.href = '/login'; }, 5000);
+      showMessage(result.message + ' Server startet neu… Bitte warte 10 Sekunden, dann aktualisiere die Seite.');
+      setTimeout(() => { location.href = '/login'; }, 10000);
     } catch (err) {
       showMessage(err.message, true);
     }

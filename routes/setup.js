@@ -140,9 +140,15 @@ router.post('/', async (req, res) => {
       ok: true,
       data: {
         restartRequired: result.restartRequired,
-        message: 'Setup abgeschlossen. Bitte starte den Server neu, damit Sessions aktiv werden.',
+        message: 'Setup abgeschlossen. Server startet neu.',
       },
     });
+
+    // Prozess beenden, damit systemd den Dienst im Normalmodus neu startet
+    setTimeout(() => {
+      console.log('[setup] Setup abgeschlossen. Beende Prozess fuer Neustart.');
+      process.exit(0);
+    }, 500);
   } catch (err) {
     console.error('[setup] Fehler:', err);
     res.status(500).json({ ok: false, error: err.message });
