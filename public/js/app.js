@@ -512,6 +512,50 @@
   function init() {
     render();
     np.start();
+    bindPublicActions();
+  }
+
+  function bindPublicActions() {
+    const shareBtn = $('#share-btn');
+    const qrBtn = $('#qr-public-btn');
+    const qrDlg = $('#public-qr-dialog');
+    const qrImg = $('#public-qr-img');
+    const qrClose = $('#public-qr-close');
+    const qrDownload = $('#public-qr-download');
+
+    shareBtn?.addEventListener('click', async () => {
+      const url = location.href;
+      if (navigator.share) {
+        try { await navigator.share({ title: document.title, url }); return; } catch { /* fallback */ }
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        shareBtn.textContent = '✅';
+        setTimeout(() => shareBtn.textContent = '📤', 1500);
+      } catch { /* noop */ }
+    });
+
+    qrBtn?.addEventListener('click', async () => {
+      const url = location.href;
+      try {
+        const data = await window.api.getQRCode(url);
+        qrImg.src = data.dataUrl;
+        if (typeof qrDlg.showModal === 'function') qrDlg.showModal(); else qrDlg.setAttribute('open', '');
+      } catch (err) {
+        console.warn('[qr] failed:', err.message);
+      }
+    });
+
+    qrClose?.addEventListener('click', () => {
+      if (typeof qrDlg.close === 'function') qrDlg.close(); else qrDlg.removeAttribute('open');
+    });
+
+    qrDownload?.addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.href = qrImg.src;
+      a.download = `qr-${location.hostname}.png`;
+      a.click();
+    });
   }
 
   const yearEl = $('.year');

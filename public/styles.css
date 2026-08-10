@@ -203,6 +203,32 @@ body {
   line-height: 1.4;
 }
 
+.profile-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.profile-action {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03);
+  color: var(--text);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.15s;
+}
+
+.profile-action:hover {
+  background: rgba(255,255,255,0.08);
+  transform: translateY(-2px);
+}
+
 /* ---------- Navidrome Player ---------- */
 .np-player {
   display: flex;

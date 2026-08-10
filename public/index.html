@@ -72,6 +72,10 @@
       <h1 class="name">@corneliusahner</h1>
       <p class="handle">Cornelius Ahner</p>
       <p class="bio">Azubi, 21 Jahre alt</p>
+      <div class="profile-actions">
+        <button type="button" id="share-btn" class="profile-action" title="Seite teilen">📤</button>
+        <button type="button" id="qr-public-btn" class="profile-action" title="QR-Code anzeigen">📱</button>
+      </div>
     </header>
 
     <section id="navidrome-player" class="np-player idle" aria-label="Aktuell gespielter Track" hidden>
@@ -103,5 +107,17 @@
       navigator.serviceWorker.register('/sw.js').catch(console.error);
     }
   </script>
+
+  <!-- Öffentlicher QR-Code-Dialog -->
+  <dialog id="public-qr-dialog" class="dialog qr-dialog">
+    <form method="dialog" class="form">
+      <h3>📱 QR-Code</h3>
+      <img id="public-qr-img" alt="QR-Code dieser Seite" />
+      <div class="form-actions">
+        <button type="button" id="public-qr-download" class="btn primary">⬇ Herunterladen</button>
+        <button type="button" id="public-qr-close" class="btn ghost">Schließen</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>
