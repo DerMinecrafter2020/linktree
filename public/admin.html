@@ -19,6 +19,8 @@
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
   <meta http-equiv="Permissions-Policy" content="geolocation=(), microphone=(), camera=(), payment=()" />
   <title>Admin · OpenWeb</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/icon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
@@ -80,6 +82,7 @@
               <button type="button" class="btn primary" data-days="30">30 Tage</button>
               <button type="button" class="btn" data-days="90">90 Tage</button>
             </div>
+            <button type="button" id="stats-export-csv" class="btn ghost">📄 CSV-Export</button>
           </div>
           <div id="stats-summary" class="stats-summary"></div>
           <canvas id="stats-chart" width="600" height="240"></canvas>
@@ -450,5 +453,10 @@
   <script src="/js/icons.js"></script>
   <script src="/js/navidrome.js"></script>
   <script src="/js/admin.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(console.error);
+    }
+  </script>
 </body>
 </html>

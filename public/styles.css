@@ -616,6 +616,25 @@ body {
   cursor: pointer;
 }
 
+/* ---------- System-Theme ---------- */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bg-0: #f6f7fb;
+    --bg-1: #ffffff;
+    --bg-2: #eef0f6;
+    --text: #11111f;
+    --text-dim: #55556b;
+    --text-faint: #8a8aa3;
+    --neon-pink: #d91a7b;
+    --neon-cyan: #0078d4;
+    --neon-violet: #6e35e8;
+    --neon-lime: #2d8a2d;
+    --border: rgba(17, 17, 31, 0.10);
+    --glass: rgba(255, 255, 255, 0.70);
+    --glass-hover: rgba(255, 255, 255, 0.95);
+  }
+}
+
 /* ---------- Alternative Themes ---------- */
 [data-theme="light"] {
   --bg-0: #f6f7fb;
