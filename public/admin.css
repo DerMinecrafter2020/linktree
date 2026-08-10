@@ -295,6 +295,8 @@ body.admin-locked #admin-status-block * {
 .link-info .sub   { color: var(--text-faint); font-size: 12px;
   font-family: 'JetBrains Mono', monospace; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; }
+.link-info .meta  { color: var(--neon-cyan); font-size: 11px;
+  font-family: 'JetBrains Mono', monospace; margin-top: 4px; }
 
 .badge {
   font-size: 10px;
@@ -671,6 +673,27 @@ body.admin-locked #admin-status-block * {
 }
 .icon-suggested button:hover { border-color: var(--neon-cyan); color: var(--neon-cyan); }
 .icon-suggested button img { width: 14px; height: 14px; }
+
+/* ---------- Kategorien ---------- */
+.category-list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.category-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.category-row span { font-size: 14px; }
+
+/* ---------- QR-Code ---------- */
+.qr-container {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 16px; background: var(--bg-1); border-radius: var(--radius);
+}
+.qr-container canvas {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
 
 /* ---------- Admin Navidrome Player Preview ---------- */
 .admin-np-player {

@@ -116,12 +116,35 @@ async function finalizeApp() {
     app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
     app.get('/changelog', (req, res) => res.sendFile(path.join(__dirname, 'public', 'changelog.html')));
 
+    // Kurzlink-Weiterleitungen
+    app.get('/go/:slug', async (req, res, next) => {
+      try {
+        const slug = v.safeSlug(req.params.slug);
+        if (!slug) return res.status(404).send('Kurzlink nicht gefunden');
+        const { rows } = await db.query(`
+          SELECT id, url FROM links WHERE slug = $1 AND is_active = true LIMIT 1
+        `, [slug]);
+        if (!rows.length) return res.status(404).send('Kurzlink nicht gefunden');
+        await db.query(`
+          INSERT INTO link_clicks (link_id, ip_hash, user_agent, referrer)
+          VALUES ($1, $2, $3, $4)
+        `, [rows[0].id, null, req.headers['user-agent']?.slice(0, 500) || null, req.headers.referer?.slice(0, 500) || null]);
+        res.redirect(rows[0].url);
+      } catch (err) {
+        next(err);
+      }
+    });
+
     // Startseite mit dynamischen Open-Graph-Tags fuer aktuellen Track
     app.get('/', async (req, res, next) => {
       try {
         const { getNowPlaying } = require('./lib/navidrome');
-        const profileRes = await db.query('SELECT name, handle FROM profile WHERE id = 1 LIMIT 1');
-        const profile = profileRes.rows[0] || { name: '@corneliusahner', handle: 'Cornelius Ahner' };
+        const profileRes = await db.query('SELECT * FROM profile WHERE id = 1 LIMIT 1');
+        const profile = profileRes.rows[0] || { name: '@corneliusahner', handle: 'Cornelius Ahner', is_public: true };
+
+        if (profile.is_public === false) {
+          return res.status(403).sendFile(path.join(__dirname, 'public', 'login.html'));
+        }
 
         let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
         const track = await getNowPlaying();

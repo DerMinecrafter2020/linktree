@@ -41,6 +41,7 @@
       </nav>
       <div class="side-footer">
         <a href="/" target="_blank" class="side-link">↗ Seite öffnen</a>
+        <span class="side-link" id="qr-toggle" style="cursor:pointer;">📱 QR-Code</span>
         <button id="logout-btn" class="side-link">↩ Abmelden</button>
       </div>
     </aside>
@@ -92,6 +93,14 @@
           <label>
             <span>Bio</span>
             <textarea name="bio" rows="3" placeholder="Azubi, 21 Jahre alt"></textarea>
+          </label>
+          <label class="row">
+            <input name="is_public" type="checkbox" checked />
+            <span>Profil öffentlich sichtbar</span>
+          </label>
+          <label class="row">
+            <input name="allow_visitor_theme" type="checkbox" checked />
+            <span>Besucher dürfen Theme wechseln</span>
           </label>
 
           <div class="form-actions">
@@ -188,6 +197,15 @@
 
       <!-- TAB: DATEN -->
       <section class="tab" data-tab="data" hidden>
+        <div class="card-block" id="category-panel">
+          <h3>🏷️ Kategorien</h3>
+          <p class="hint">Kategorien gruppieren Links auf der Startseite.</p>
+          <ul id="category-list" class="category-list"></ul>
+          <label class="row">
+            <input id="category-input" type="text" placeholder="Neue Kategorie …" />
+            <button type="button" id="category-add-btn" class="btn primary">Hinzufügen</button>
+          </label>
+        </div>
         <div class="card-block">
           <h3>📤 Export</h3>
           <p>Lade alle Einstellungen und Links als JSON-Datei herunter.</p>
@@ -251,6 +269,44 @@
           </div>
         </div>
       </label>
+      <label>
+        <span>Kategorie</span>
+        <select name="category_id">
+          <option value="">— Keine —</option>
+        </select>
+      </label>
+      <label>
+        <span>Kurzlink-Slug (optional, z. B. spotify)</span>
+        <input name="slug" type="text" placeholder="spotify" />
+      </label>
+      <label>
+        <span>Meta-Beschreibung (optional, für SEO/Share)</span>
+        <input name="meta_description" type="text" placeholder="Beschreibungstext …" />
+      </label>
+      <label>
+        <span>Interne Notiz (nur im Admin sichtbar)</span>
+        <input name="admin_note" type="text" placeholder="Notiz …" />
+      </label>
+      <label>
+        <span>Sichtbar ab (optional)</span>
+        <input name="visible_from" type="datetime-local" />
+      </label>
+      <label>
+        <span>Sichtbar bis (optional)</span>
+        <input name="visible_until" type="datetime-local" />
+      </label>
+      <label>
+        <span>Wochentage (optional, Mehrfachauswahl mit Strg)</span>
+        <select name="visible_weekdays" multiple size="3">
+          <option value="1">Mo</option>
+          <option value="2">Di</option>
+          <option value="3">Mi</option>
+          <option value="4">Do</option>
+          <option value="5">Fr</option>
+          <option value="6">Sa</option>
+          <option value="0">So</option>
+        </select>
+      </label>
       <label class="row">
         <input name="is_active" type="checkbox" checked />
         <span>Aktiv (auf der Seite anzeigen)</span>
@@ -261,8 +317,21 @@
       </label>
 
       <div class="form-actions">
+        <button type="button" id="link-check" class="btn ghost">🔗 Erreichbarkeit prüfen</button>
         <button type="button" id="link-cancel" class="btn ghost">Abbrechen</button>
         <button type="submit" class="btn primary">Speichern</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- QR-Code Dialog -->
+  <dialog id="qr-dialog" class="dialog">
+    <form method="dialog" class="form">
+      <h3>QR-Code für deine Seite</h3>
+      <div id="qr-container" class="qr-container"></div>
+      <p class="hint">Scanne den Code, um direkt zu cornyriegel.de zu gelangen.</p>
+      <div class="form-actions">
+        <button type="button" id="qr-close" class="btn ghost">Schließen</button>
       </div>
     </form>
   </dialog>

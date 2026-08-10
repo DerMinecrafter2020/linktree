@@ -69,15 +69,57 @@ router.get('/profile', async (req, res, next) => {
   }
 });
 
+function getNowInBerlin() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
+}
+
+function isLinkVisible(link, nowBerlin) {
+  if (!link.is_active) return false;
+  if (link.visible_from) {
+    const from = new Date(link.visible_from);
+    if (from > nowBerlin) return false;
+  }
+  if (link.visible_until) {
+    const until = new Date(link.visible_until);
+    if (until < nowBerlin) return false;
+  }
+  if (Array.isArray(link.visible_weekdays) && link.visible_weekdays.length) {
+    const weekday = nowBerlin.getDay();
+    if (!link.visible_weekdays.includes(weekday)) return false;
+  }
+  return true;
+}
+
 router.get('/links', async (req, res, next) => {
   try {
     const { rows } = await db.query(`
-      SELECT id, title, subtitle, url, display_url, icon, position, is_active, open_new
-      FROM links
-      WHERE is_active = true
-      ORDER BY position ASC, created_at ASC
+      SELECT l.id, l.title, l.subtitle, l.url, l.display_url, l.icon, l.position,
+             l.is_active, l.open_new, l.meta_description, l.slug,
+             l.visible_from, l.visible_until, l.visible_weekdays,
+             l.category_id, c.name AS category_name, c.position AS category_position
+      FROM links l
+      LEFT JOIN link_categories c ON c.id = l.category_id
+      WHERE l.is_active = true
+      ORDER BY c.position ASC NULLS FIRST, c.name ASC, l.position ASC, l.created_at ASC
     `);
-    res.json({ ok: true, data: rows });
+    const nowBerlin = getNowInBerlin();
+    const visible = rows.filter(l => isLinkVisible(l, nowBerlin));
+    res.json({ ok: true, data: visible });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/links/:id/click', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const ip = req.ip || req.connection.remoteAddress || null;
+    const ipHash = ip ? require('crypto').createHash('sha256').update(ip).digest('hex') : null;
+    await db.query(`
+      INSERT INTO link_clicks (link_id, ip_hash, user_agent, referrer)
+      VALUES ($1, $2, $3, $4)
+    `, [id, ipHash, req.headers['user-agent']?.slice(0, 500) || null, req.headers.referer?.slice(0, 500) || null]);
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

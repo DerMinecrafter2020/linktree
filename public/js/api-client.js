@@ -44,6 +44,8 @@
     // Öffentlich
     getProfile: () => get('/profile'),
     getLinks: () => get('/links'),
+    getLinkCategories: () => get('/link-categories'),
+    trackLinkClick: (id) => post(`/links/${id}/click`, {}),
 
     // Auth
     login: (email, password) => post('/login', { email, password }),
@@ -57,6 +59,12 @@
     updateLink: (id, patchObj) => patch(`/admin/links/${id}`, patchObj),
     deleteLink: (id) => del(`/admin/links/${id}`),
     reorderLinks: (orderedIds) => post('/admin/links/reorder', { orderedIds }),
+    checkLink: (id) => get(`/admin/links/${id}/check`),
+
+    getLinkCategories: () => get('/admin/link-categories'),
+    createLinkCategory: (cat) => post('/admin/link-categories', cat),
+    updateLinkCategory: (id, cat) => patch(`/admin/link-categories/${id}`, cat),
+    deleteLinkCategory: (id) => del(`/admin/link-categories/${id}`),
 
     getAdminProfile: () => get('/admin/profile'),
     saveAdminProfile: (profile) => post('/admin/profile', profile),

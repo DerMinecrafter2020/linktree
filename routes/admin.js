@@ -32,7 +32,12 @@ router.get('/me', (req, res) => {
 router.get('/profile', async (req, res, next) => {
   try {
     const { rows } = await db.query('SELECT * FROM profile WHERE id = 1 LIMIT 1');
-    res.json({ ok: true, data: rows[0] || null });
+    const profile = rows[0] || null;
+    if (profile) {
+      delete profile.created_at;
+      delete profile.updated_at;
+    }
+    res.json({ ok: true, data: profile });
   } catch (err) {
     next(err);
   }
@@ -46,10 +51,12 @@ router.post('/profile', async (req, res, next) => {
     const avatar = v.safeText(req.body.avatar, 2).toUpperCase() || 'CA';
     const avatarUrl = v.validateAvatarUrl(req.body.avatar_url);
     const theme = v.validateTheme(req.body.theme);
+    const isPublic = req.body.is_public !== false;
+    const allowVisitorTheme = req.body.allow_visitor_theme !== false;
 
     await db.query(`
-      INSERT INTO profile (id, name, handle, bio, avatar, avatar_url, theme)
-      VALUES (1, $1, $2, $3, $4, $5, $6)
+      INSERT INTO profile (id, name, handle, bio, avatar, avatar_url, theme, is_public, allow_visitor_theme)
+      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8)
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
         handle = EXCLUDED.handle,
@@ -57,8 +64,10 @@ router.post('/profile', async (req, res, next) => {
         avatar = EXCLUDED.avatar,
         avatar_url = EXCLUDED.avatar_url,
         theme = EXCLUDED.theme,
+        is_public = EXCLUDED.is_public,
+        allow_visitor_theme = EXCLUDED.allow_visitor_theme,
         updated_at = NOW()
-    `, [name, handle, bio, avatar, avatarUrl, theme]);
+    `, [name, handle, bio, avatar, avatarUrl, theme, isPublic, allowVisitorTheme]);
 
     const { rows } = await db.query('SELECT * FROM profile WHERE id = 1 LIMIT 1');
     res.json({ ok: true, data: rows[0] });
@@ -70,8 +79,77 @@ router.post('/profile', async (req, res, next) => {
 // ---------- Links ----------
 router.get('/links', async (req, res, next) => {
   try {
-    const { rows } = await db.query('SELECT * FROM links ORDER BY position ASC, created_at ASC');
+    const { rows } = await db.query(`
+      SELECT l.*, c.name AS category_name,
+        (SELECT COUNT(*)::int FROM link_clicks WHERE link_id = l.id) AS click_count
+      FROM links l
+      LEFT JOIN link_categories c ON c.id = l.category_id
+      ORDER BY c.position ASC NULLS FIRST, c.name ASC, l.position ASC, l.created_at ASC
+    `);
     res.json({ ok: true, data: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/link-categories', async (req, res, next) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM link_categories ORDER BY position ASC, name ASC');
+    res.json({ ok: true, data: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/link-categories', async (req, res, next) => {
+  try {
+    const name = v.safeText(req.body.name, 80);
+    if (!name) return res.status(400).json({ ok: false, error: 'Name ist Pflicht' });
+    const countRes = await db.query('SELECT COUNT(*)::int AS count FROM link_categories');
+    const position = countRes.rows[0].count;
+    const { rows } = await db.query(`
+      INSERT INTO link_categories (name, position) VALUES ($1, $2) RETURNING *
+    `, [name, position]);
+    res.json({ ok: true, data: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/link-categories/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const updates = [];
+    const values = [];
+    let idx = 1;
+    if (req.body.name !== undefined) {
+      const name = v.safeText(req.body.name, 80);
+      if (!name) return res.status(400).json({ ok: false, error: 'Name ist Pflicht' });
+      updates.push(`name = $${idx++}`);
+      values.push(name);
+    }
+    if (req.body.position !== undefined) {
+      updates.push(`position = $${idx++}`);
+      values.push(parseInt(req.body.position, 10) || 0);
+    }
+    if (updates.length === 0) return res.status(400).json({ ok: false, error: 'Keine Felder' });
+    values.push(id);
+    const { rows } = await db.query(
+      `UPDATE link_categories SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`,
+      values
+    );
+    if (!rows.length) return res.status(404).json({ ok: false, error: 'Kategorie nicht gefunden' });
+    res.json({ ok: true, data: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/link-categories/:id', async (req, res, next) => {
+  try {
+    const result = await db.query('DELETE FROM link_categories WHERE id = $1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ ok: false, error: 'Kategorie nicht gefunden' });
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }
@@ -86,6 +164,13 @@ router.post('/links', async (req, res, next) => {
     const icon = v.sanitizeIconField(req.body.icon);
     const isActive = req.body.is_active !== false;
     const openNew = req.body.open_new !== false;
+    const metaDescription = v.safeText(req.body.meta_description, 280);
+    const adminNote = v.safeText(req.body.admin_note, 280);
+    const slug = v.safeSlug(req.body.slug);
+    const categoryId = req.body.category_id || null;
+    const visibleFrom = v.safeDate(req.body.visible_from);
+    const visibleUntil = v.safeDate(req.body.visible_until);
+    const visibleWeekdays = v.safeWeekdays(req.body.visible_weekdays);
 
     if (!title || !url) {
       return res.status(400).json({ ok: false, error: 'Titel und URL sind Pflicht' });
@@ -95,10 +180,14 @@ router.post('/links', async (req, res, next) => {
     const position = countRes.rows[0].count;
 
     const { rows } = await db.query(`
-      INSERT INTO links (title, subtitle, url, display_url, icon, position, is_active, open_new)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO links (
+        title, subtitle, url, display_url, icon, position, is_active, open_new,
+        meta_description, admin_note, slug, category_id,
+        visible_from, visible_until, visible_weekdays
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *
-    `, [title, subtitle, url, displayUrl, icon, position, isActive, openNew]);
+    `, [title, subtitle, url, displayUrl, icon, position, isActive, openNew, metaDescription, adminNote, slug, categoryId, visibleFrom, visibleUntil, visibleWeekdays]);
 
     res.json({ ok: true, data: rows[0] });
   } catch (err) {
@@ -144,6 +233,35 @@ router.patch('/links/:id', async (req, res, next) => {
     if (req.body.open_new !== undefined) {
       updates.push(`open_new = $${idx++}`);
       values.push(!!req.body.open_new);
+    }
+    if (req.body.meta_description !== undefined) {
+      updates.push(`meta_description = $${idx++}`);
+      values.push(v.safeText(req.body.meta_description, 280));
+    }
+    if (req.body.admin_note !== undefined) {
+      updates.push(`admin_note = $${idx++}`);
+      values.push(v.safeText(req.body.admin_note, 280));
+    }
+    if (req.body.slug !== undefined) {
+      const slug = v.safeSlug(req.body.slug);
+      updates.push(`slug = $${idx++}`);
+      values.push(slug);
+    }
+    if (req.body.category_id !== undefined) {
+      updates.push(`category_id = $${idx++}`);
+      values.push(req.body.category_id || null);
+    }
+    if (req.body.visible_from !== undefined) {
+      updates.push(`visible_from = $${idx++}`);
+      values.push(v.safeDate(req.body.visible_from));
+    }
+    if (req.body.visible_until !== undefined) {
+      updates.push(`visible_until = $${idx++}`);
+      values.push(v.safeDate(req.body.visible_until));
+    }
+    if (req.body.visible_weekdays !== undefined) {
+      updates.push(`visible_weekdays = $${idx++}`);
+      values.push(v.safeWeekdays(req.body.visible_weekdays));
     }
 
     if (updates.length === 0) {
@@ -358,22 +476,51 @@ router.post('/navidrome/test', async (req, res, next) => {
   }
 });
 
+router.get('/links/:id/check', async (req, res, next) => {
+  try {
+    const { rows } = await db.query('SELECT url FROM links WHERE id = $1 LIMIT 1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ ok: false, error: 'Link nicht gefunden' });
+    const url = rows[0].url;
+    const start = Date.now();
+    let status = 'unknown';
+    let statusCode = null;
+    try {
+      const r = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: AbortSignal.timeout(10000) });
+      statusCode = r.status;
+      status = r.ok ? 'ok' : 'error';
+    } catch {
+      try {
+        const r = await fetch(url, { method: 'GET', redirect: 'follow', signal: AbortSignal.timeout(10000) });
+        statusCode = r.status;
+        status = r.ok ? 'ok' : 'error';
+      } catch {
+        status = 'unreachable';
+      }
+    }
+    res.json({ ok: true, data: { url, status, statusCode, responseTimeMs: Date.now() - start } });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ---------- Export / Import ----------
 router.get('/export', async (req, res, next) => {
   try {
-    const [profileRes, linksRes, settingsRes] = await Promise.all([
+    const [profileRes, linksRes, categoriesRes, settingsRes] = await Promise.all([
       db.query('SELECT * FROM profile WHERE id = 1 LIMIT 1'),
       db.query('SELECT * FROM links ORDER BY position ASC'),
+      db.query('SELECT * FROM link_categories ORDER BY position ASC'),
       db.query('SELECT * FROM admin_settings WHERE id = 1 LIMIT 1'),
     ]);
 
     res.json({
       ok: true,
       data: {
-        version: 2,
+        version: 3,
         exportedAt: new Date().toISOString(),
         profile: profileRes.rows[0] || null,
         links: linksRes.rows,
+        link_categories: categoriesRes.rows,
         admin_settings: settingsRes.rows[0] || null,
       },
     });
@@ -413,6 +560,16 @@ router.post('/import', async (req, res, next) => {
         ]);
       }
 
+      if (Array.isArray(data.link_categories)) {
+        await client.query('DELETE FROM link_categories');
+        for (let i = 0; i < data.link_categories.length; i++) {
+          const c = data.link_categories[i];
+          await client.query(`
+            INSERT INTO link_categories (id, name, position) VALUES ($1, $2, $3)
+          `, [c.id, v.safeText(c.name, 80), i]);
+        }
+      }
+
       if (Array.isArray(data.links)) {
         await client.query('DELETE FROM links');
         for (let i = 0; i < data.links.length; i++) {
@@ -420,8 +577,12 @@ router.post('/import', async (req, res, next) => {
           const url = v.safeUrl(l.url);
           if (!url) continue;
           await client.query(`
-            INSERT INTO links (title, subtitle, url, display_url, icon, position, is_active, open_new)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO links (
+              title, subtitle, url, display_url, icon, position, is_active, open_new,
+              meta_description, admin_note, slug, category_id,
+              visible_from, visible_until, visible_weekdays
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
           `, [
             v.safeText(l.title, 80),
             v.safeText(l.subtitle, 120),
@@ -431,6 +592,13 @@ router.post('/import', async (req, res, next) => {
             i,
             l.is_active !== false,
             l.open_new !== false,
+            v.safeText(l.meta_description, 280),
+            v.safeText(l.admin_note, 280),
+            v.safeSlug(l.slug),
+            l.category_id || null,
+            v.safeDate(l.visible_from),
+            v.safeDate(l.visible_until),
+            v.safeWeekdays(l.visible_weekdays),
           ]);
         }
       }

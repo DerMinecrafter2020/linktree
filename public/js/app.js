@@ -115,6 +115,14 @@
   function renderProfile(profile) {
     if (!profile) return;
 
+    // OG-/Twitter-Meta an Profilbeschreibung anpassen
+    const metaDesc = profile.bio || 'Alle wichtigen Links auf einen Blick.';
+    document.querySelector('meta[name="description"]')?.setAttribute('content', metaDesc);
+    document.querySelector('meta[property="og:description"]')?.setAttribute('content', metaDesc);
+    document.querySelector('meta[name="twitter:description"]')?.setAttribute('content', metaDesc);
+    document.querySelector('meta[property="og:title"]')?.setAttribute('content', (profile.name || profile.handle || 'Profil') + ' · Links');
+    document.querySelector('meta[name="twitter:title"]')?.setAttribute('content', (profile.name || profile.handle || 'Profil') + ' · Links');
+
     const avatarEl = $('.avatar');
     if (avatarEl) {
       const av = profile.avatar_url;
@@ -135,6 +143,55 @@
     // document.title wird vom Navidrome-Player überschrieben, sobald ein Track läuft
   }
 
+  function renderPrivateNotice(profile) {
+    const nav = $('.links');
+    if (!nav) return;
+    nav.replaceChildren();
+    const wrap = el('div', 'private-notice');
+    wrap.appendChild(el('h2', null, '🔒 Privates Profil'));
+    wrap.appendChild(el('p', null, 'Dieses Profil ist derzeit nicht öffentlich sichtbar.'));
+    if (profile?.bio) wrap.appendChild(el('p', null, profile.bio));
+    nav.appendChild(wrap);
+  }
+
+  function buildThemeSwitcher(allowThemes) {
+    const existing = $('#theme-switcher');
+    if (existing) existing.remove();
+    if (!allowThemes) { document.body.removeAttribute('data-theme'); return; }
+    const select = document.createElement('select');
+    select.id = 'theme-switcher';
+    select.className = 'theme-switcher';
+    const stored = localStorage.getItem('openweb-theme');
+    const themes = [
+      { value: '', label: 'System' },
+      { value: 'dark', label: 'Dunkel' },
+      { value: 'light', label: 'Hell' },
+      { value: 'midnight', label: 'Midnight' },
+      { value: 'sunset', label: 'Sunset' },
+    ];
+    themes.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.value;
+      opt.textContent = t.label;
+      if (t.value === stored) opt.selected = true;
+      select.appendChild(opt);
+    });
+    select.addEventListener('change', () => {
+      const v = select.value;
+      if (v) { document.body.setAttribute('data-theme', v); localStorage.setItem('openweb-theme', v); }
+      else { document.body.removeAttribute('data-theme'); localStorage.removeItem('openweb-theme'); }
+    });
+    if (stored) document.body.setAttribute('data-theme', stored);
+    document.body.appendChild(select);
+  }
+
+  function trackClick(link) {
+    if (!link.id) return;
+    try {
+      window.api.trackLinkClick(link.id).catch(() => { /* störende Klick-Fehler ignorieren */ });
+    } catch { /* noop */ }
+  }
+
   function buildLinkRow(link) {
     const href = safeUrl(link.url);
     const a = el('a', 'link');
@@ -143,6 +200,8 @@
       a.target = '_blank';
       a.rel = 'noopener noreferrer nofollow';
     }
+    // Klicks tracken
+    a.addEventListener('click', () => trackClick(link));
 
     const top = el('span', 'link-top');
     const text = el('span', 'link-text');
@@ -183,10 +242,38 @@
       return;
     }
 
+    const categories = new Map();
+    const none = Symbol('none');
     for (const link of active) {
-      nav.appendChild(buildLinkRow(link));
+      const key = link.category_id || none;
+      if (!categories.has(key)) categories.set(key, []);
+      categories.get(key).push(link);
+    }
+
+    const ordered = state.categories || [];
+    const catById = new Map(ordered.map(c => [c.id, c]));
+    const sectionFor = (cat) => {
+      const section = el('div', 'link-group');
+      section.appendChild(el('h3', 'link-group-title', cat.name));
+      return section;
+    };
+
+    // Sortierte Kategorien zuerst, dann ohne Kategorie
+    ordered.forEach(cat => {
+      const group = categories.get(cat.id);
+      if (!group?.length) return;
+      const section = sectionFor(cat);
+      group.forEach(link => section.appendChild(buildLinkRow(link)));
+      nav.appendChild(section);
+    });
+    if (categories.has(none) && categories.get(none).length) {
+      const section = el('div', 'link-group no-category');
+      categories.get(none).forEach(link => section.appendChild(buildLinkRow(link)));
+      nav.appendChild(section);
     }
   }
+
+  const state = { categories: [] };
 
   async function render() {
     const [profile, links] = await Promise.all([
@@ -194,7 +281,13 @@
       window.api.getLinks(),
     ]);
     renderProfile(profile);
-    renderLinks(links);
+    buildThemeSwitcher(profile?.allow_visitor_theme !== false);
+    if (profile?.is_public === false) {
+      renderPrivateNotice(profile);
+    } else {
+      state.categories = await window.api.getLinkCategories();
+      renderLinks(links);
+    }
   }
 
   // Navidrome Player

@@ -598,6 +598,84 @@ body {
   border-radius: var(--radius-link);
 }
 
+/* ---------- Theme Switcher ---------- */
+.theme-switcher {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 50;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--glass);
+  color: var(--text);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 13px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  cursor: pointer;
+}
+
+/* ---------- Alternative Themes ---------- */
+[data-theme="light"] {
+  --bg-0: #f6f7fb;
+  --bg-1: #ffffff;
+  --bg-2: #eef0f6;
+  --text: #11111f;
+  --text-dim: #55556b;
+  --text-faint: #8a8aa3;
+  --neon-pink: #d91a7b;
+  --neon-cyan: #0078d4;
+  --neon-violet: #6e35e8;
+  --neon-lime: #2d8a2d;
+  --border: rgba(17, 17, 31, 0.10);
+  --glass: rgba(255, 255, 255, 0.70);
+  --glass-hover: rgba(255, 255, 255, 0.95);
+}
+
+[data-theme="midnight"] {
+  --bg-0: #02020a;
+  --bg-1: #050514;
+  --bg-2: #0a0a1c;
+  --neon-pink: #ff4da6;
+  --neon-cyan: #00d2ff;
+  --neon-violet: #9d7aff;
+  --neon-lime: #c4ff4d;
+}
+
+[data-theme="sunset"] {
+  --bg-0: #1a0b12;
+  --bg-1: #231019;
+  --bg-2: #2e1520;
+  --neon-pink: #ff6b6b;
+  --neon-cyan: #ffd166;
+  --neon-violet: #ef476f;
+  --neon-lime: #06d6a0;
+}
+
+/* ---------- Link Kategorien ---------- */
+.link-group { display: flex; flex-direction: column; gap: 12px; }
+.link-group-title {
+  margin: 8px 0 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-faint);
+  font-family: 'JetBrains Mono', monospace;
+}
+.link-group.no-category .link-group-title { display: none; }
+
+/* ---------- Private Notice ---------- */
+.private-notice {
+  text-align: center;
+  padding: 32px 16px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-link);
+  color: var(--text-dim);
+}
+.private-notice h2 { margin: 0 0 8px; font-size: 18px; color: var(--text); }
+.private-notice p { margin: 4px 0; font-size: 14px; }
+
 /* ---------- Footer ---------- */
 .footer {
   margin-top: clamp(22px, 5vw, 28px);
