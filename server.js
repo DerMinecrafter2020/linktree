@@ -6,12 +6,17 @@ require('dotenv').config();
 
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const helmet = require('helmet');
 const setup = require('./lib/setup');
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const NODE_ENV = process.env.NODE_ENV || 'development';
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 app.set('trust proxy', 1);
 
@@ -106,6 +111,39 @@ async function finalizeApp() {
     app.use(express.static(path.join(__dirname, 'public')));
     app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
     app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+
+    // Startseite mit dynamischen Open-Graph-Tags fuer aktuellen Track
+    app.get('/', async (req, res, next) => {
+      try {
+        const { getNowPlaying } = require('./lib/navidrome');
+        const profileRes = await db.query('SELECT name, handle FROM profile WHERE id = 1 LIMIT 1');
+        const profile = profileRes.rows[0] || { name: '@corneliusahner', handle: 'Cornelius Ahner' };
+
+        let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+        const track = await getNowPlaying();
+
+        if (track && track.playing) {
+          const title = `🎵 ${track.artist ? track.artist + ' — ' : ''}${track.title}`;
+          const description = track.paused ? 'Momentan pausiert' : `Aktuell läuft: ${track.title}${track.artist ? ' von ' + track.artist : ''}${track.album ? ' (' + track.album + ')' : ''}`;
+          const absUrl = `${req.protocol}://${req.get('host')}`;
+          const image = track.coverUrl ? `${absUrl}${track.coverUrl}` : '';
+
+          html = html
+            .replace(/<meta property="og:title" content="[^"]*">/, `<meta property="og:title" content="${escapeHtml(title)}">`)
+            .replace(/<meta property="og:description" content="[^"]*">/, `<meta property="og:description" content="${escapeHtml(description)}">`)
+            .replace(/<meta property="og:image" content="[^"]*">/, `<meta property="og:image" content="${escapeHtml(image)}">`)
+            .replace(/<meta name="twitter:title" content="[^"]*">/, `<meta name="twitter:title" content="${escapeHtml(title)}">`)
+            .replace(/<meta name="twitter:description" content="[^"]*">/, `<meta name="twitter:description" content="${escapeHtml(description)}">`)
+            .replace(/<meta name="twitter:image" content="[^"]*">/, `<meta name="twitter:image" content="${escapeHtml(image)}">`)
+            .replace(/<title>[^]*?<\/title>/, `<title>${escapeHtml(title)} · ${escapeHtml(profile.handle || 'OpenWeb')}</title>`);
+        }
+
+        res.send(html);
+      } catch (err) {
+        next(err);
+      }
+    });
+
     app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
   }
 
