@@ -163,9 +163,7 @@
     select.className = 'theme-switcher';
     const stored = localStorage.getItem('openweb-theme');
     const themes = [
-      { value: '', label: 'System' },
-      { value: 'dark', label: 'Dunkel' },
-      { value: 'light', label: 'Hell' },
+      { value: '', label: 'Dunkel' },
       { value: 'midnight', label: 'Midnight' },
       { value: 'sunset', label: 'Sunset' },
     ];
