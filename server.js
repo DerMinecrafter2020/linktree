@@ -146,7 +146,30 @@ async function finalizeApp() {
     app.use('/api/navidrome', navidromeRoutes);
 
     app.get('/setup.html', (req, res) => res.redirect('/login'));
-    app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+
+    // Service Worker mit eingebetteter Versionsnummer ausliefern (kein Caching!)
+    app.get('/sw.js', (req, res) => {
+      const pkg = require('./package.json');
+      const swContent = fs.readFileSync(path.join(__dirname, 'public', 'sw.js'), 'utf8')
+        .replace('__APP_VERSION__', pkg.version);
+      res.setHeader('Content-Type', 'application/javascript');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.send(swContent);
+    });
+
+    // Statische Dateien: kurzer Cache mit Revalidierung
+    app.use(express.static(path.join(__dirname, 'public'), {
+      index: false,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache');
+        } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+          res.setHeader('Cache-Control', 'public, max-age=60, must-revalidate');
+        } else {
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+        }
+      },
+    }));
     app.get('/admin.html', (req, res) => res.redirect('/admin'));
     app.get('/admin', (req, res, next) => {
       const { isIpAllowed } = require('./lib/auth');
