@@ -454,7 +454,7 @@
       this.setState('idle');
       const wrap = $('#navidrome-player');
       if (wrap) {
-        wrap.hidden = true;
+        wrap.hidden = false;
       }
       setText('.np-title', 'Momentan läuft nichts', wrap);
       setText('.np-artist', 'Starte Musik in Navidrome, dann erscheint sie hier', wrap);
