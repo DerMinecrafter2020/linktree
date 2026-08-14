@@ -719,13 +719,20 @@ body {
 }
 
 [data-theme="midnight"] {
-  --bg-0: #02020a;
-  --bg-1: #050514;
-  --bg-2: #0a0a1c;
-  --neon-pink: #ff4da6;
-  --neon-cyan: #00d2ff;
-  --neon-violet: #9d7aff;
-  --neon-lime: #c4ff4d;
+  --bg-0: #000005;
+  --bg-1: #02020a;
+  --bg-2: #050514;
+  --text: #e8e8ff;
+  --text-dim: #8585a8;
+  --text-faint: #50506e;
+  --neon-pink: #ff33aa;
+  --neon-cyan: #00e5ff;
+  --neon-violet: #b18aff;
+  --neon-lime: #d4ff66;
+  --border: rgba(200, 200, 255, 0.08);
+  --border-strong: rgba(200, 200, 255, 0.18);
+  --glass: rgba(200, 200, 255, 0.03);
+  --glass-hover: rgba(200, 200, 255, 0.06);
 }
 
 [data-theme="sunset"] {
