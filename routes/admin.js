@@ -23,6 +23,13 @@ const router = express.Router();
 
 router.use(requireAdminSession);
 
+router.param('id', (req, res, next, id) => {
+  if (!/^\d+$/.test(id)) {
+    return res.status(400).json({ ok: false, error: 'Ungültige ID' });
+  }
+  next();
+});
+
 // ---------- Auth (nur Logout/Me; Login ist oeffentlich unter /api/login) ----------
 router.post('/logout', async (req, res) => {
   await audit.log(req, 'logout', 'user', req.session?.userId);

@@ -136,7 +136,7 @@ async function finalizeApp() {
       max: 60,
       standardHeaders: true,
       legacyHeaders: false,
-      keyGenerator: (req) => req.session?.userId || (req.ip || req.socket.remoteAddress || 'unknown'),
+      keyGenerator: (req) => req.ip || req.socket.remoteAddress || 'unknown',
       handler: (req, res) => res.status(429).json({ ok: false, error: 'Zu viele Admin-Anfragen. Bitte warte einen Moment.' }),
     });
     app.use('/api/admin', adminLimiter);

@@ -13,6 +13,13 @@ const alert = require('../lib/alert');
 
 const router = express.Router();
 
+router.param('id', (req, res, next, id) => {
+  if (!/^\d+$/.test(id)) {
+    return res.status(400).json({ ok: false, error: 'Ungültige ID' });
+  }
+  next();
+});
+
 async function requireApiKey(req, res, next) {
   const key = req.headers['x-api-key'];
   if (!key) return res.status(401).json({ ok: false, error: 'API-Key erforderlich' });
