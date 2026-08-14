@@ -307,6 +307,8 @@ async function finalizeApp() {
         }
         const image = isPlaying && track.coverUrl ? `${absUrl}${track.coverUrl}` : `${absUrl}/icons/icon.svg`;
 
+        const pkg = require('./package.json');
+
         html = html
           .replace(/<meta property="og:site_name" content="[^"]*"\s*\/?>/, `<meta property="og:site_name" content="${escapeHtml(profile.name || profile.handle || 'OpenWeb')}">`)
           .replace(/<meta property="og:title" content="[^"]*"\s*\/?>/, `<meta property="og:title" content="${escapeHtml(pageTitle)}">`)
@@ -316,7 +318,8 @@ async function finalizeApp() {
           .replace(/<meta name="twitter:title" content="[^"]*"\s*\/?>/, `<meta name="twitter:title" content="${escapeHtml(pageTitle)}">`)
           .replace(/<meta name="twitter:description" content="[^"]*"\s*\/?>/, `<meta name="twitter:description" content="${escapeHtml(pageDescription)}">`)
           .replace(/<meta name="twitter:image" content="[^"]*"\s*\/?>/, `<meta name="twitter:image" content="${escapeHtml(image)}">`)
-          .replace(/<title>[^]*?<\/title>/, `<title>${escapeHtml(pageTitle)}</title>`);
+          .replace(/<title>[^]*?<\/title>/, `<title>${escapeHtml(pageTitle)}</title>`)
+          .replace('__APP_VERSION__', pkg.version);
 
         // JSON-LD strukturierte Daten
         const jsonLd = {
