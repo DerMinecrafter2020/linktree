@@ -197,6 +197,32 @@ code {
 .card-block p  { color: var(--text-dim); font-size: 14px; margin-bottom: 14px; line-height: 1.5; }
 .card-block.danger { border-color: rgba(255, 77, 109, 0.3); }
 
+/* ---------- Daten-Tab Grid ---------- */
+.data-grid-top {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(14px, 2vw, 18px);
+  margin-bottom: clamp(14px, 2vw, 18px);
+}
+.data-grid-top .card-block { margin-bottom: 0; }
+
+.data-grid-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(14px, 2vw, 18px);
+  margin-bottom: clamp(14px, 2vw, 18px);
+}
+.data-grid-actions .card-block { margin-bottom: 0; }
+.data-grid-actions .card-block .btn { width: 100%; }
+
+@media (max-width: 900px) {
+  .data-grid-top { grid-template-columns: 1fr; }
+  .data-grid-actions { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) {
+  .data-grid-actions { grid-template-columns: 1fr; }
+}
+
 /* ---------- Sub-Tabs (Settings) ---------- */
 .sub-tabsystem { width: 100%; }
 .sub-tab-radio {
