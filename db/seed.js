@@ -46,7 +46,7 @@ async function seed(overrides = {}) {
     (profile.bio || 'Azubi, 21 Jahre alt').slice(0, 280),
     (profile.avatar || 'CA').toUpperCase().slice(0, 2) || 'CA',
     profile.avatarUrl || null,
-    ['dark', 'neon', 'midnight'].includes(profile.theme) ? profile.theme : 'dark',
+    ['dark', 'neon', 'midnight', 'sunset'].includes(profile.theme) ? profile.theme : 'dark',
   ]);
   console.log('[seed] Profil angelegt');
 

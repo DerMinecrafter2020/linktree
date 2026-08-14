@@ -113,7 +113,7 @@ async function finalizeApp() {
       cookie: {
         maxAge: parseInt(process.env.SESSION_MAX_AGE_MS || '86400000', 10),
         httpOnly: true,
-        secure: true,
+        secure: NODE_ENV === 'production',
         sameSite: 'lax',
       },
     }));
@@ -125,7 +125,7 @@ async function finalizeApp() {
       max: 120,
       standardHeaders: true,
       legacyHeaders: false,
-      keyGenerator: (req) => req.ip || req.connection.remoteAddress || 'unknown',
+      keyGenerator: (req) => req.ip || req.socket.remoteAddress || 'unknown',
       handler: (req, res) => res.status(429).json({ ok: false, error: 'Zu viele Anfragen. Bitte warte einen Moment.' }),
     });
     app.use('/api', publicLimiter);
@@ -136,7 +136,7 @@ async function finalizeApp() {
       max: 60,
       standardHeaders: true,
       legacyHeaders: false,
-      keyGenerator: (req) => req.session?.userId || (req.ip || req.connection.remoteAddress || 'unknown'),
+      keyGenerator: (req) => req.session?.userId || (req.ip || req.socket.remoteAddress || 'unknown'),
       handler: (req, res) => res.status(429).json({ ok: false, error: 'Zu viele Admin-Anfragen. Bitte warte einen Moment.' }),
     });
     app.use('/api/admin', adminLimiter);
@@ -242,6 +242,8 @@ async function finalizeApp() {
       }
     });
 
+    const indexHtmlTemplate = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+
     // Startseite mit dynamischen Open-Graph-Tags fuer aktuellen Track
     app.get('/', async (req, res, next) => {
       try {
@@ -258,12 +260,13 @@ async function finalizeApp() {
           ? (publicDomain.startsWith('http') ? publicDomain : `${req.protocol}://${publicDomain}`)
           : `${req.protocol}://${req.get('host')}`;
 
-        let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+        let html = indexHtmlTemplate;
         html = html.replace(/(<meta name="robots"[^>]*?>)?/i, '<meta name="robots" content="index, follow" />');
 
         // Custom CSS injizieren
         if (profile.custom_css) {
-          html = html.replace(/(<\/head>)/i, `\n<style>${profile.custom_css}</style>\n$1`);
+          const safeCss = String(profile.custom_css).replace(/<\/style/gi, '<\\/style');
+          html = html.replace(/(<\/head>)/i, `\n<style>${safeCss}</style>\n$1`);
         }
 
         const track = await getNowPlaying();

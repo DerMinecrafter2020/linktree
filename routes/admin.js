@@ -122,62 +122,62 @@ router.get('/stats/links', async (req, res, next) => {
   try {
     const days = Math.min(90, Math.max(1, parseInt(req.query.days, 10) || 30));
     const totalRes = await db.query(`
-      SELECT COUNT(*)::int AS total FROM link_clicks WHERE clicked_at > NOW() - INTERVAL '${days} days'
-    `);
+      SELECT COUNT(*)::int AS total FROM link_clicks WHERE clicked_at > NOW() - $1 * INTERVAL '1 day'
+    `, [days]);
     const linksRes = await db.query(`
       SELECT l.id, l.title, l.url, l.slug,
         COUNT(lc.id)::int AS clicks,
         COUNT(DISTINCT lc.ip_hash) AS unique_visitors
       FROM links l
-      LEFT JOIN link_clicks lc ON lc.link_id = l.id AND lc.clicked_at > NOW() - INTERVAL '${days} days'
+      LEFT JOIN link_clicks lc ON lc.link_id = l.id AND lc.clicked_at > NOW() - $1 * INTERVAL '1 day'
       GROUP BY l.id
       ORDER BY clicks DESC, l.position ASC
-    `);
+    `, [days]);
     const timelineRes = await db.query(`
       SELECT DATE(clicked_at) AS day, COUNT(*)::int AS count
       FROM link_clicks
-      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      WHERE clicked_at > NOW() - $1 * INTERVAL '1 day'
       GROUP BY day
       ORDER BY day ASC
-    `);
+    `, [days]);
     const utmRes = await db.query(`
       SELECT COALESCE(utm_source, '(direkt)') AS source,
              COALESCE(utm_medium, '(unbekannt)') AS medium,
              COUNT(*)::int AS count
       FROM link_clicks
-      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      WHERE clicked_at > NOW() - $1 * INTERVAL '1 day'
       GROUP BY utm_source, utm_medium
       ORDER BY count DESC
       LIMIT 20
-    `);
+    `, [days]);
     const devicesRes = await db.query(`
       SELECT COALESCE(device_type, 'unbekannt') AS device_type, COUNT(*)::int AS count
       FROM link_clicks
-      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      WHERE clicked_at > NOW() - $1 * INTERVAL '1 day'
       GROUP BY device_type
       ORDER BY count DESC
-    `);
+    `, [days]);
     const browsersRes = await db.query(`
       SELECT COALESCE(browser, 'unbekannt') AS browser, COUNT(*)::int AS count
       FROM link_clicks
-      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      WHERE clicked_at > NOW() - $1 * INTERVAL '1 day'
       GROUP BY browser
       ORDER BY count DESC
-    `);
+    `, [days]);
     const osRes = await db.query(`
       SELECT COALESCE(os, 'unbekannt') AS os, COUNT(*)::int AS count
       FROM link_clicks
-      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      WHERE clicked_at > NOW() - $1 * INTERVAL '1 day'
       GROUP BY os
       ORDER BY count DESC
-    `);
+    `, [days]);
     const countriesRes = await db.query(`
       SELECT COALESCE(country_code, 'unbekannt') AS country_code, COUNT(*)::int AS count
       FROM link_clicks
-      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      WHERE clicked_at > NOW() - $1 * INTERVAL '1 day'
       GROUP BY country_code
       ORDER BY count DESC
-    `);
+    `, [days]);
     res.json({
       ok: true,
       data: {
@@ -790,7 +790,7 @@ router.post('/import', async (req, res, next) => {
         ]);
       }
 
-      if (Array.isArray(data.link_categories)) {
+      if (Array.isArray(data.link_categories) && data.link_categories.length > 0) {
         await client.query('DELETE FROM link_categories');
         for (let i = 0; i < data.link_categories.length; i++) {
           const c = data.link_categories[i];
@@ -800,7 +800,7 @@ router.post('/import', async (req, res, next) => {
         }
       }
 
-      if (Array.isArray(data.links)) {
+      if (Array.isArray(data.links) && data.links.length > 0) {
         await client.query('DELETE FROM links');
         for (let i = 0; i < data.links.length; i++) {
           const l = data.links[i];

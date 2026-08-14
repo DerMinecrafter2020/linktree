@@ -7,6 +7,7 @@
 const express = require('express');
 const { decrypt } = require('../lib/crypto');
 const { getNowPlaying, buildSubsonicUrl, getSettings } = require('../lib/navidrome');
+const { requireAdminSession } = require('../lib/auth');
 
 const router = express.Router();
 
@@ -54,7 +55,7 @@ router.get('/cover-art', async (req, res, next) => {
   }
 });
 
-router.post('/control', async (req, res, next) => {
+router.post('/control', requireAdminSession, async (req, res, next) => {
   try {
     const settings = await getSettings();
     if (!settings || !settings.enabled || !settings.url || !settings.username || !settings.password_encrypted) {

@@ -3,6 +3,7 @@
 // =========================================================
 
 const express = require('express');
+const bcrypt = require('bcrypt');
 const db = require('../lib/db');
 const auth = require('../lib/auth');
 const v = require('../lib/validators');
@@ -18,7 +19,7 @@ async function requireApiKey(req, res, next) {
   const { rows } = await db.query('SELECT id, key_hash FROM api_keys');
   let match = null;
   for (const r of rows) {
-    if (await require('bcrypt').compare(key, r.key_hash)) { match = r; break; }
+    if (await bcrypt.compare(key, r.key_hash)) { match = r; break; }
   }
   if (!match) return res.status(401).json({ ok: false, error: 'Ungueltiger API-Key' });
   await db.query('UPDATE api_keys SET last_used_at = NOW() WHERE id = $1', [match.id]);
@@ -31,7 +32,7 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 Minuten
 const LOGIN_MAX_ATTEMPTS = 10;
 
 function rateLimitLogin(req, res, next) {
-  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
   const now = Date.now();
   const record = loginAttempts.get(ip);
   if (record && record.count >= LOGIN_MAX_ATTEMPTS) {
@@ -148,7 +149,7 @@ router.post('/links/:id/unlock', async (req, res, next) => {
     const link = rows[0];
     if (!link.password_hash) return res.json({ ok: true, data: { url: link.url } });
     const password = String(req.body.password || '');
-    const valid = await require('bcrypt').compare(password, link.password_hash);
+    const valid = await bcrypt.compare(password, link.password_hash);
     if (!valid) return res.status(401).json({ ok: false, error: 'Falsches Passwort' });
     res.json({ ok: true, data: { url: link.url } });
   } catch (err) {
@@ -180,7 +181,7 @@ async function sendDiscordWebhook(payload) {
 router.post('/links/:id/click', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const ip = req.ip || req.connection.remoteAddress || null;
+    const ip = req.ip || req.socket.remoteAddress || null;
     const ipHash = ip ? require('crypto').createHash('sha256').update(ip).digest('hex') : null;
     const utm = req.body.utm || {};
     const ua = req.headers['user-agent'] || '';
@@ -277,7 +278,7 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
 
     alert.notify('login', 'Admin-Login erkannt', {
       email: user.email,
-      ip: req.ip || req.connection.remoteAddress || '-',
+      ip: req.ip || req.socket.remoteAddress || '-',
       userAgent: req.headers['user-agent'] || '-',
       country: parseCountryCode(req) || '-',
       time: new Date().toISOString(),
