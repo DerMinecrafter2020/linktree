@@ -10,7 +10,7 @@
   const AVATAR_TARGET_BYTES = 80 * 1024;
   const POPULAR_IDS = ['instagram','tiktok','youtube','github','discord','twitch','spotify','x','linkedin','whatsapp','telegram','snapchat','reddit','facebook','figma','notion'];
   const DASHBOARD_ICON_IDS = ['plex','jellyfin','emby','navidrome','spotify','youtube','netflix','disneyplus','primevideo','protonmail','nextcloud','homeassistant','pihole','adguard','traefik','nginx','portainer','docker','github','gitlab','discord','telegram','whatsapp','reddit','twitch','instagram','tiktok'];
-  const TAB_TITLES = { links: 'Links', stats: 'Statistik', apikeys: 'API-Keys', profile: 'Profil', music: 'Musik', data: 'Daten', settings: 'Einstellungen' };
+  const TAB_TITLES = { links: 'Links', stats: 'Statistik', apikeys: 'API-Keys', profile: 'Profil', music: 'Musik', data: 'Daten', settings: 'Einstellungen', audit: 'Audit-Log' };
 
   const state = { profile: null, links: [], navidrome: null };
   const TAB_STORAGE_KEY = 'openweb-admin-active-tab';
@@ -1372,11 +1372,13 @@
   }
 
   function switchSubTab(name) {
+    if (!name) return;
     $$('.sub-tab').forEach(b => b.classList.toggle('active', b.dataset.subtab === name));
     $$('.sub-tab-panel').forEach(p => {
       p.hidden = p.dataset.subtab !== name;
       p.classList.toggle('active', p.dataset.subtab === name);
     });
+    sessionStorage.setItem('openweb-admin-active-subtab', name);
   }
 
   function bindSubTabs() {

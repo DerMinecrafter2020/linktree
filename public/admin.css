@@ -224,8 +224,6 @@ code {
   color: var(--neon-cyan);
   border-color: rgba(0, 240, 255, 0.3);
 }
-.sub-tab-panel { display: none; }
-.sub-tab-panel.active { display: block; }
 .card-block.danger h3 { color: var(--neon-red); }
 
 body.admin-locked .content {
