@@ -66,7 +66,7 @@
     getLinkStats: (days = 30) => get(`/admin/stats/links?days=${encodeURIComponent(days)}`),
 
     getLinkCategories: () => get('/admin/link-categories'),
-    getQRCode: (text) => get(`/admin/qr-code?text=${encodeURIComponent(text)}`),
+    getQRCode: (text) => get(`/qr-code?text=${encodeURIComponent(text)}`),
     createLinkCategory: (cat) => post('/admin/link-categories', cat),
     updateLinkCategory: (id, cat) => patch(`/admin/link-categories/${id}`, cat),
     deleteLinkCategory: (id) => del(`/admin/link-categories/${id}`),

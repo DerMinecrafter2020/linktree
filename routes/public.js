@@ -220,6 +220,24 @@ router.post('/links/:id/click', async (req, res, next) => {
     next(err);
   }
 });
+router.get('/qr-code', async (req, res, next) => {
+  try {
+    const text = req.query.text;
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ ok: false, error: 'text Parameter fehlt' });
+    }
+    const safeText = text.slice(0, 1000);
+    const dataUrl = await require('qrcode').toDataURL(safeText, {
+      width: 400,
+      margin: 2,
+      color: { dark: '#11111f', light: '#ffffff' },
+      errorCorrectionLevel: 'M',
+    });
+    res.json({ ok: true, data: { dataUrl } });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get('/public/profile', requireApiKey, async (req, res, next) => {
   try {

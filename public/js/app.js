@@ -356,7 +356,7 @@
       if (!wrap) return;
       this.tick();
       if (this.pollTimer) clearInterval(this.pollTimer);
-      this.pollTimer = setInterval(() => this.tick(), 10_000);
+      this.pollTimer = setInterval(() => this.tick(), 3000);
       if (this.progressTimer) clearInterval(this.progressTimer);
       this.progressTimer = setInterval(() => this.updateProgress(), 1000);
     },
