@@ -365,6 +365,8 @@ body {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  min-width: 0;
+  width: 100%;
 }
 
 .np-title {
@@ -395,6 +397,8 @@ body {
   text-overflow: ellipsis;
   transition: max-height 0.3s ease, opacity 0.25s ease, margin-top 0.3s ease;
   pointer-events: none;
+  min-width: 0;
+  width: 100%;
 }
 
 .np-player:hover .np-album,
@@ -421,6 +425,8 @@ body {
   text-overflow: ellipsis;
   transition: max-height 0.3s ease, opacity 0.25s ease, margin-top 0.3s ease;
   pointer-events: none;
+  min-width: 0;
+  width: 100%;
 }
 
 .np-bitrate { color: var(--neon-cyan); }
@@ -932,12 +938,16 @@ body {
     right: auto;
     display: block;
     width: 100%;
-    margin-bottom: 12px;
+    max-width: 100%;
+    margin: 0 auto 12px;
     text-align: left;
   }
-  .np-player { padding: 10px 12px; gap: 10px; }
+  .np-player { padding: 10px 12px; gap: 10px; min-width: 0; }
+  .np-info { min-width: 0; }
   .footer { font-size: 10px; }
   .profile-actions { margin-top: 10px; }
+  .card { overflow: visible; }
+  .link:hover { transform: none; }
 }
 
 @media (min-width: 481px) and (max-width: 767px) {
