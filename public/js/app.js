@@ -14,9 +14,13 @@
   function setText(sel, text, root = document) {
     const el = $(sel, root);
     if (!el) return null;
+    const newText = String(text ?? '');
+    if (el.dataset.lastText === newText) return el;
+    el.dataset.lastText = newText;
+
     el.classList.remove('marquee-content', 'marquee-scroll');
     el.style.removeProperty('--marquee-offset');
-    el.innerHTML = `<span class="marquee-inner">${escapeHtml(String(text ?? ''))}</span>`;
+    el.innerHTML = `<span class="marquee-inner">${escapeHtml(newText)}</span>`;
     const inner = el.querySelector('.marquee-inner');
     if (inner && inner.scrollWidth > el.clientWidth + 2) {
       const offset = -(inner.scrollWidth - el.clientWidth);
@@ -59,7 +63,6 @@
     img.src = src;
     img.alt = alt;
     img.className = cls;
-    img.loading = 'lazy';
     img.referrerPolicy = 'no-referrer';
     img.onerror = () => {
       console.warn('[img] failed to load:', src.slice(0, 120));

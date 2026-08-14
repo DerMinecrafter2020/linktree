@@ -643,6 +643,8 @@ body {
   border-radius: 10px;
   filter: brightness(0) invert(1);
   opacity: 0.9;
+  flex-shrink: 0;
+  display: block;
 }
 
 .link-icon:hover .link-icon-img {
