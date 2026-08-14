@@ -109,6 +109,7 @@ async function finalizeApp() {
       resave: false,
       saveUninitialized: false,
       name: 'openweb.sid',
+      rolling: true,
       cookie: {
         maxAge: parseInt(process.env.SESSION_MAX_AGE_MS || '86400000', 10),
         httpOnly: true,

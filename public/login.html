@@ -40,6 +40,10 @@
         <span>Passwort</span>
         <input name="password" type="password" autocomplete="current-password" required placeholder="••••••••" />
       </label>
+      <label class="row remember-me">
+        <input name="remember" type="checkbox" />
+        <span>Eingeloggt bleiben (30 Tage)</span>
+      </label>
       <div class="form-actions">
         <button type="submit" class="btn primary">Anmelden</button>
       </div>
@@ -60,8 +64,9 @@
         const email = form.email.value.trim();
         const password = form.password.value;
 
+        const remember = form.remember?.checked || false;
         try {
-          await window.api.login(email, password);
+          await window.api.login(email, password, remember);
           location.href = '/admin';
         } catch (err) {
           errorEl.textContent = err.message || 'Login fehlgeschlagen';

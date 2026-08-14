@@ -49,7 +49,7 @@
     unlockLink: (id, password) => post(`/links/${id}/unlock`, { password }),
 
     // Auth
-    login: (email, password) => post('/login', { email, password }),
+    login: (email, password, remember = false) => post('/login', { email, password, remember }),
     logout: () => post('/admin/logout'),
     me: () => get('/admin/me'),
 
