@@ -1618,12 +1618,20 @@
     function renderTrack(track) {
       const state = track.paused ? 'paused' : 'playing';
       setState(state);
-      badge.textContent = track.paused ? 'Stopped' : 'Playing';
+      badge.textContent = track.paused ? 'Stopped' : (track.isRadio ? '📡 LIVE' : 'Playing');
       applyMarquee(titleEl, escapeHtml(track.title || 'Unbekannt'));
+
       const parts = [];
-      if (track.artist) parts.push(escapeHtml(track.artist));
+      if (track.isRadio) {
+        parts.push(escapeHtml(track.artist || 'Internetradio'));
+      } else if (track.artist) {
+        parts.push(escapeHtml(track.artist));
+      }
+      if (track.album && !track.isRadio) parts.push(escapeHtml(track.album));
+
       const bitrate = track.bitrate ? `${track.bitrate} kbps` : null;
       const extra = [];
+      if (track.isRadio) extra.push('<span class="admin-np-radio-badge">📡 LIVE</span>');
       if (bitrate) extra.push(`Bitrate: <span class="admin-np-bitrate">${bitrate}</span>`);
       const metaText = parts.join(' · ') + (extra.length ? ' | ' + extra.join(' | ') : '');
       applyMarquee(metaEl, metaText);
@@ -1635,7 +1643,7 @@
         cover.appendChild(img);
       } else {
         cover.classList.add('placeholder');
-        cover.appendChild(document.createTextNode('🎵'));
+        cover.appendChild(document.createTextNode(track.isRadio ? '📻' : '🎵'));
       }
 
       lastServerPosition = track.position || 0;
@@ -1646,6 +1654,10 @@
 
     function updateProgress() {
       if (!currentTrack) return;
+      if (currentTrack.isRadio) {
+        progressEl.textContent = currentTrack.radioStreamUrl ? '📡 Stream' : '📡 Radio';
+        return;
+      }
       if (!currentTrack.paused) {
         const now = performance.now();
         localPosition += (now - lastTickAt) / 1000;
