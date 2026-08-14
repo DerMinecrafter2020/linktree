@@ -247,9 +247,9 @@
       <!-- TAB: SETTINGS -->
       <section class="tab" data-tab="settings" hidden>
         <div class="sub-tabs">
-          <button type="button" class="sub-tab active" data-subtab="status">🛡️ Status</button>
-          <button type="button" class="sub-tab" data-subtab="notifications">🔔 Benachrichtigungen</button>
-          <button type="button" class="sub-tab" data-subtab="security">🔑 Sicherheit</button>
+          <button type="button" class="sub-tab active" data-target="status" onclick="openSubTab('status')">🛡️ Status</button>
+          <button type="button" class="sub-tab" data-target="notifications" onclick="openSubTab('notifications')">🔔 Benachrichtigungen</button>
+          <button type="button" class="sub-tab" data-target="security" onclick="openSubTab('security')">🔑 Sicherheit</button>
         </div>
 
         <div class="sub-tab-panel active" data-subtab="status">
@@ -554,6 +554,19 @@
   <!-- Toast -->
   <div id="toast" class="toast" hidden></div>
 
+  <script>
+    function openSubTab(name) {
+      const tab = document.querySelector('[data-tab="settings"]');
+      if (!tab || !name) return;
+      tab.querySelectorAll('.sub-tab').forEach(b => {
+        b.classList.toggle('active', b.dataset.target === name);
+      });
+      tab.querySelectorAll('.sub-tab-panel').forEach(p => {
+        p.hidden = p.dataset.subtab !== name;
+      });
+      try { sessionStorage.setItem('openweb-admin-active-subtab', name); } catch (e) {}
+    }
+  </script>
   <script src="/js/api-client.js"></script>
   <script src="/js/icons.js"></script>
   <script src="/js/navidrome.js"></script>

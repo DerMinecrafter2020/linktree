@@ -105,6 +105,7 @@ body {
   z-index: 1;
   width: 100%;
   max-width: min(460px, 94vw);
+  min-width: 0;
   margin: auto;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.015) 100%);
   border: 1px solid var(--border);
@@ -113,6 +114,7 @@ body {
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   box-shadow: var(--shadow-neon);
+  overflow: hidden;
 }
 
 /* ---------- Profile ---------- */
@@ -895,32 +897,45 @@ body {
 
 /* ---------- Breakpoints ---------- */
 @media (max-width: 480px) {
-  body { padding: 10px 8px; }
+  body { padding: 8px; align-items: flex-start; }
   .card {
-    width: 100%;
-    max-width: 100%;
-    border-radius: 20px;
-    padding: clamp(18px, 5vw, 24px) clamp(12px, 4vw, 16px) clamp(14px, 4vw, 18px);
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    border-radius: 18px;
+    padding: 18px 12px 16px;
+    margin: 0;
   }
-  .links { width: 100%; gap: 10px; }
-  .link { width: 100%; padding: 12px 14px; min-height: 56px; }
-  .link-top { gap: 10px; }
+  .links {
+    width: 100% !important;
+    min-width: 0 !important;
+    gap: 10px;
+  }
+  .link {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 12px 14px;
+    min-height: 56px;
+  }
+  .link-top { gap: 10px; width: 100%; min-width: 0; }
   .link-icon { width: 36px; height: 36px; min-width: 36px; font-size: 18px; }
-  .link-text { gap: 10px; min-width: 0; }
+  .link-text { gap: 10px; min-width: 0; width: 100%; }
   .link-title { font-size: 14px; }
   .link-sub { font-size: 10px; }
   .link-arrow { font-size: 18px; }
   .link-url { font-size: 10px; }
   .theme-switcher {
-    top: 8px;
-    right: 8px;
-    padding: 6px 24px 6px 10px;
-    font-size: 12px;
-    min-width: 100px;
-    border-radius: 10px;
+    position: relative;
+    top: auto;
+    right: auto;
+    display: block;
+    width: 100%;
+    margin-bottom: 12px;
+    text-align: left;
   }
   .np-player { padding: 10px 12px; gap: 10px; }
   .footer { font-size: 10px; }
+  .profile-actions { margin-top: 10px; }
 }
 
 @media (min-width: 481px) and (max-width: 767px) {

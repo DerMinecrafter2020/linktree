@@ -1371,48 +1371,7 @@
     if (tab) observer.observe(tab, { attributes: true, attributeFilter: ['hidden'] });
   }
 
-  function switchSubTab(name) {
-    const settingsTab = document.querySelector('[data-tab="settings"]');
-    if (!settingsTab || !name) return;
-    const buttons = Array.from(settingsTab.querySelectorAll('.sub-tab'));
-    const panels = Array.from(settingsTab.querySelectorAll('.sub-tab-panel'));
-    buttons.forEach(b => b.classList.toggle('active', b.dataset.subtab === name));
-    panels.forEach(p => p.hidden = p.dataset.subtab !== name);
-    sessionStorage.setItem('openweb-admin-active-subtab', name);
-  }
-
-  function bindSubTabs() {
-    const settingsTab = document.querySelector('[data-tab="settings"]');
-    if (!settingsTab) return;
-
-    // Event-Delegation auf den Container
-    const bar = settingsTab.querySelector('.sub-tabs');
-    if (bar) {
-      bar.addEventListener('click', (e) => {
-        const btn = e.target.closest('.sub-tab');
-        if (!btn) return;
-        switchSubTab(btn.dataset.subtab);
-      });
-    }
-
-    // Wenn Tab wieder sichtbar wird, letzten Zustand wiederherstellen
-    const observer = new MutationObserver(() => {
-      if (!settingsTab.hidden) {
-        const saved = sessionStorage.getItem('openweb-admin-active-subtab');
-        const target = saved && settingsTab.querySelector(`.sub-tab[data-subtab="${saved}"]`) ? saved : 'status';
-        switchSubTab(target);
-      }
-    });
-    observer.observe(settingsTab, { attributes: true, attributeFilter: ['hidden'] });
-
-    // Initialen Zustand setzen
-    const saved = sessionStorage.getItem('openweb-admin-active-subtab');
-    const target = saved && settingsTab.querySelector(`.sub-tab[data-subtab="${saved}"]`) ? saved : 'status';
-    switchSubTab(target);
-  }
-
   function bindSettings() {
-    bindSubTabs();
     loadAdminStatus();
     loadDbInfo();
     loadServerInfo();
