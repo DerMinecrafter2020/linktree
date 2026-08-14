@@ -146,6 +146,7 @@ async function finalizeApp() {
 
     app.get('/setup.html', (req, res) => res.redirect('/login'));
     app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+    app.get('/admin.html', (req, res) => res.redirect('/admin'));
     app.get('/admin', (req, res, next) => {
       const { isIpAllowed } = require('./lib/auth');
       if (!isIpAllowed(req)) return res.status(403).send('Admin-Zugang von dieser IP nicht erlaubt');
