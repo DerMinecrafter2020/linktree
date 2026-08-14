@@ -40,6 +40,8 @@ html {
   height: 100%;
   min-height: 100vh;
   min-height: 100dvh;
+  width: 100%;
+  max-width: 100%;
   overflow-x: hidden;
 }
 
@@ -49,11 +51,12 @@ body {
   background: radial-gradient(120% 80% at 50% 0%, #11122a 0%, var(--bg-1) 40%, var(--bg-0) 100%);
   min-height: 100vh;
   min-height: 100dvh;
+  width: 100%;
+  max-width: 100%;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: clamp(12px, 4vw, 32px) clamp(12px, 5vw, 20px);
-  overflow-x: hidden;
+  padding: 16px 12px 32px;
   overflow-x: hidden;
   overflow-y: auto;
   position: relative;
@@ -105,8 +108,8 @@ body {
 .card {
   position: relative;
   z-index: 1;
-  width: 100%;
-  max-width: min(460px, 94vw);
+  width: min(460px, 100%);
+  max-width: 100%;
   min-width: 0;
   margin: auto;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.015) 100%);
@@ -644,9 +647,9 @@ body {
 
 /* ---------- Theme Switcher ---------- */
 .theme-switcher {
-  position: fixed;
-  top: 12px;
-  right: 12px;
+  position: absolute;
+  top: 0;
+  right: 0;
   z-index: 50;
   padding: 8px 28px 8px 12px;
   border: 1px solid var(--border);
@@ -666,6 +669,7 @@ body {
   background-position: right 10px center;
   background-size: 12px;
   min-width: 120px;
+  max-width: calc(100% - 24px);
 }
 .theme-switcher option {
   background: var(--bg-2);
@@ -905,14 +909,14 @@ body {
 
 /* ---------- Breakpoints ---------- */
 @media (max-width: 480px) {
-  body { padding: 8px; align-items: flex-start; }
+  body { padding: 12px 10px 32px; align-items: flex-start; }
   .card {
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0 !important;
     border-radius: 18px;
-    padding: 18px 12px 16px;
-    margin: 0;
+    padding: 46px 14px 18px;
+    margin: 0 auto;
   }
   .links {
     width: 100% !important;
@@ -933,13 +937,13 @@ body {
   .link-arrow { font-size: 18px; }
   .link-url { font-size: 10px; }
   .theme-switcher {
-    position: relative;
-    top: auto;
-    right: auto;
+    position: absolute;
+    top: 12px;
+    right: 12px;
     display: block;
-    width: 100%;
-    max-width: 100%;
-    margin: 0 auto 12px;
+    width: auto;
+    max-width: calc(100% - 28px);
+    margin: 0;
     text-align: left;
   }
   .np-player { padding: 10px 12px; gap: 10px; min-width: 0; }
@@ -951,12 +955,13 @@ body {
 }
 
 @media (min-width: 481px) and (max-width: 767px) {
-  .card { max-width: 420px; }
+  .card { width: min(420px, 100%); margin: auto; }
   .np-cover { width: 72px; height: 72px; }
 }
 
 @media (min-width: 768px) {
-  .card { max-width: 460px; }
+  body { align-items: center; }
+  .card { width: min(460px, 100%); margin: auto; }
   .np-info { text-align: center; }
   .np-title { font-size: 16px; margin-bottom: 4px; }
 }
