@@ -198,6 +198,14 @@ code {
 .card-block.danger { border-color: rgba(255, 77, 109, 0.3); }
 
 /* ---------- Sub-Tabs (Settings) ---------- */
+.sub-tabsystem { width: 100%; }
+.sub-tab-radio {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
 .sub-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -207,6 +215,10 @@ code {
   border-bottom: 1px solid var(--border);
 }
 .sub-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   background: transparent;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -217,12 +229,24 @@ code {
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s, color 0.2s, border-color 0.2s;
+  min-height: 44px;
+  touch-action: manipulation;
+  user-select: none;
 }
 .sub-tab:hover { background: var(--glass); color: var(--text); }
-.sub-tab.active {
+.sub-tab-radio:checked:nth-of-type(1) ~ .sub-tabs .sub-tab:nth-of-type(1),
+.sub-tab-radio:checked:nth-of-type(2) ~ .sub-tabs .sub-tab:nth-of-type(2),
+.sub-tab-radio:checked:nth-of-type(3) ~ .sub-tabs .sub-tab:nth-of-type(3) {
   background: rgba(0, 240, 255, 0.08);
   color: var(--neon-cyan);
   border-color: rgba(0, 240, 255, 0.3);
+}
+.sub-tab-panels { width: 100%; }
+.sub-tab-panel { display: none; }
+.sub-tab-radio:checked:nth-of-type(1) ~ .sub-tab-panels .sub-tab-panel:nth-of-type(1),
+.sub-tab-radio:checked:nth-of-type(2) ~ .sub-tab-panels .sub-tab-panel:nth-of-type(2),
+.sub-tab-radio:checked:nth-of-type(3) ~ .sub-tab-panels .sub-tab-panel:nth-of-type(3) {
+  display: block;
 }
 .card-block.danger h3 { color: var(--neon-red); }
 
