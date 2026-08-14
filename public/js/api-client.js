@@ -44,7 +44,7 @@
     // Öffentlich
     getProfile: () => get('/profile'),
     getLinks: () => get('/links'),
-    getLinkCategories: () => get('/link-categories'),
+    getLinkCategories: () => get('/links/categories'),
     trackLinkClick: (id, utm) => post(`/links/${id}/click`, { utm }),
     unlockLink: (id, password) => post(`/links/${id}/unlock`, { password }),
 

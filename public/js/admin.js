@@ -1371,7 +1371,27 @@
     if (tab) observer.observe(tab, { attributes: true, attributeFilter: ['hidden'] });
   }
 
+  function switchSubTab(name) {
+    $$('.sub-tab').forEach(b => b.classList.toggle('active', b.dataset.subtab === name));
+    $$('.sub-tab-panel').forEach(p => {
+      p.hidden = p.dataset.subtab !== name;
+      p.classList.toggle('active', p.dataset.subtab === name);
+    });
+  }
+
+  function bindSubTabs() {
+    const tab = document.querySelector('[data-tab="settings"]');
+    if (!tab) return;
+    $$('.sub-tab', tab).forEach(btn => {
+      btn.addEventListener('click', () => switchSubTab(btn.dataset.subtab));
+    });
+    const saved = sessionStorage.getItem('openweb-admin-active-subtab');
+    if (saved && tab.querySelector(`[data-subtab="${saved}"]`)) switchSubTab(saved);
+    else switchSubTab('status');
+  }
+
   function bindSettings() {
+    bindSubTabs();
     loadAdminStatus();
     loadDbInfo();
     loadServerInfo();

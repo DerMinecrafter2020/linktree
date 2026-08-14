@@ -227,10 +227,10 @@
           <h3>🔑 API-Keys</h3>
           <p class="hint">API-Keys erlauben externen Lesezugriff auf /api/public/profile und /api/public/links (Header: X-API-Key).</p>
           <ul id="api-key-list" class="api-key-list"></ul>
-          <label class="row">
-            <input id="api-key-name" type="text" placeholder="Name für neuen Key…" />
+          <div class="form inline">
+            <input id="api-key-name" type="text" placeholder="Name für neuen Key…" class="inline-input" />
             <button type="button" id="api-key-add-btn" class="btn primary">Erstellen</button>
-          </label>
+          </div>
           <div id="api-key-result" class="hint" hidden></div>
         </div>
       </section>
@@ -246,114 +246,128 @@
 
       <!-- TAB: SETTINGS -->
       <section class="tab" data-tab="settings" hidden>
-        <div class="card-block" id="admin-status-block">
-          <h3>🛡️ Admin-Bereich</h3>
-          <p id="admin-status-text">Status wird geladen…</p>
-          <p id="admin-status-hint" class="hint">
-            Aktivieren/Deaktivieren nur auf dem Server via Umgebungsvariable <code>ADMIN_ENABLED</code>.
-          </p>
+        <nav class="sub-tabs" aria-label="Einstellungen Unterseiten">
+          <button type="button" class="sub-tab active" data-subtab="status">🛡️ Status</button>
+          <button type="button" class="sub-tab" data-subtab="notifications">🔔 Benachrichtigungen</button>
+          <button type="button" class="sub-tab" data-subtab="security">🔑 Sicherheit</button>
+        </nav>
+
+        <div class="sub-tab-panel active" data-subtab="status">
+          <div class="card-block" id="admin-status-block">
+            <h3>🛡️ Admin-Bereich</h3>
+            <p id="admin-status-text">Status wird geladen…</p>
+            <p id="admin-status-hint" class="hint">
+              Aktivieren/Deaktivieren nur auf dem Server via Umgebungsvariable <code>ADMIN_ENABLED</code>.
+            </p>
+          </div>
+          <div class="card-block">
+            <h3>📊 Server-Info</h3>
+            <p id="server-info-status">Status wird geladen…</p>
+            <ul id="server-info-list" class="hint steps"></ul>
+          </div>
+          <div class="card-block">
+            <h3>🔌 Datenbank</h3>
+            <p id="db-info-status">Status wird geladen…</p>
+            <ul id="db-info-list" class="hint steps"></ul>
+          </div>
         </div>
-        <div class="card-block">
-          <h3>📊 Server-Info</h3>
-          <p id="server-info-status">Status wird geladen…</p>
-          <ul id="server-info-list" class="hint steps"></ul>
+
+        <div class="sub-tab-panel" data-subtab="notifications" hidden>
+          <div class="card-block">
+            <h3>🔔 Discord-Benachrichtigungen</h3>
+            <form id="discord-form" class="form">
+              <label class="row">
+                <input name="discord_webhook_enabled" type="checkbox" />
+                <span>Webhook bei neuem Klick aktivieren</span>
+              </label>
+              <label>
+                <span>Discord Webhook-URL</span>
+                <input name="discord_webhook_url" type="url" placeholder="https://discord.com/api/webhooks/..." />
+              </label>
+              <label>
+                <span>Nachrichten-Template (Platzhalter: {{title}}, {{url}}, {{timestamp}})</span>
+                <input name="discord_webhook_template" type="text" placeholder="Neuer Klick auf **{{title}}**" />
+              </label>
+              <div class="form-actions">
+                <button type="button" id="discord-test-btn" class="btn ghost">Test senden</button>
+                <button type="submit" class="btn primary">Speichern</button>
+              </div>
+            </form>
+          </div>
+          <div class="card-block">
+            <h3>🚨 Alert-Einstellungen</h3>
+            <p class="hint">Benachrichtigungen bei kritischen Ereignissen per E-Mail (SMTP) oder generischem Webhook.</p>
+            <form id="alert-form" class="form">
+              <label class="row">
+                <input name="email_enabled" type="checkbox" />
+                <span>E-Mail-Benachrichtigungen aktivieren</span>
+              </label>
+              <label>
+                <span>Empfänger-E-Mail</span>
+                <input name="email_to" type="email" placeholder="admin@example.com" />
+              </label>
+              <label>
+                <span>SMTP-Host</span>
+                <input name="smtp_host" type="text" placeholder="smtp.example.com" />
+              </label>
+              <label>
+                <span>SMTP-Port</span>
+                <input name="smtp_port" type="number" value="587" />
+              </label>
+              <label>
+                <span>SMTP-Benutzer</span>
+                <input name="smtp_user" type="text" />
+              </label>
+              <label>
+                <span>SMTP-Passwort</span>
+                <input name="smtp_password" type="password" />
+              </label>
+              <label class="row">
+                <input name="smtp_secure" type="checkbox" checked />
+                <span>Sichere Verbindung (TLS)</span>
+              </label>
+              <label>
+                <span>Webhook-URL (Discord-kompatibel)</span>
+                <input name="webhook_url" type="url" placeholder="https://discord.com/api/webhooks/..." />
+              </label>
+              <div class="hint">Benachrichtigen bei:</div>
+              <label class="row">
+                <input name="notify_login" type="checkbox" checked />
+                <span>Login</span>
+              </label>
+              <label class="row">
+                <input name="notify_backup_fail" type="checkbox" checked />
+                <span>Backup-Fehler</span>
+              </label>
+              <label class="row">
+                <input name="notify_password" type="checkbox" checked />
+                <span>Passwortwechsel</span>
+              </label>
+              <div class="form-actions">
+                <button type="button" id="alert-test-btn" class="btn ghost">Test senden</button>
+                <button type="submit" class="btn primary">Speichern</button>
+              </div>
+            </form>
+          </div>
         </div>
-        <div class="card-block">
-          <h3>🔌 Datenbank</h3>
-          <p id="db-info-status">Status wird geladen…</p>
-          <ul id="db-info-list" class="hint steps"></ul>
-        </div>
-        <div class="card-block">
-          <h3>🔔 Discord-Benachrichtigungen</h3>
-          <form id="discord-form" class="form">
-            <label class="row">
-              <input name="discord_webhook_enabled" type="checkbox" />
-              <span>Webhook bei neuem Klick aktivieren</span>
-            </label>
-            <label>
-              <span>Discord Webhook-URL</span>
-              <input name="discord_webhook_url" type="url" placeholder="https://discord.com/api/webhooks/..." />
-            </label>
-            <label>
-              <span>Nachrichten-Template (Platzhalter: {{title}}, {{url}}, {{timestamp}})</span>
-              <input name="discord_webhook_template" type="text" placeholder="Neuer Klick auf **{{title}}**" />
-            </label>
-            <div class="form-actions">
-              <button type="button" id="discord-test-btn" class="btn ghost">Test senden</button>
-              <button type="submit" class="btn primary">Speichern</button>
-            </div>
-          </form>
-        </div>
-        <div class="card-block">
-          <h3>🔑 Passwort ändern</h3>
-          <form id="change-password-form" class="form">
-            <label>
-              <span>Aktuelles Passwort</span>
-              <input name="currentPassword" type="password" required />
-            </label>
-            <label>
-              <span>Neues Passwort</span>
-              <input name="newPassword" type="password" minlength="8" required />
-            </label>
-            <div class="form-actions">
-              <button type="submit" class="btn primary">Passwort ändern</button>
-            </div>
-          </form>
-        </div>
-        <div class="card-block">
-          <h3>🚨 Alert-Einstellungen</h3>
-          <p class="hint">Benachrichtigungen bei kritischen Ereignissen per E-Mail (SMTP) oder generischem Webhook.</p>
-          <form id="alert-form" class="form">
-            <label class="row">
-              <input name="email_enabled" type="checkbox" />
-              <span>E-Mail-Benachrichtigungen aktivieren</span>
-            </label>
-            <label>
-              <span>Empfänger-E-Mail</span>
-              <input name="email_to" type="email" placeholder="admin@example.com" />
-            </label>
-            <label>
-              <span>SMTP-Host</span>
-              <input name="smtp_host" type="text" placeholder="smtp.example.com" />
-            </label>
-            <label>
-              <span>SMTP-Port</span>
-              <input name="smtp_port" type="number" value="587" />
-            </label>
-            <label>
-              <span>SMTP-Benutzer</span>
-              <input name="smtp_user" type="text" />
-            </label>
-            <label>
-              <span>SMTP-Passwort</span>
-              <input name="smtp_password" type="password" />
-            </label>
-            <label class="row">
-              <input name="smtp_secure" type="checkbox" checked />
-              <span>Sichere Verbindung (TLS)</span>
-            </label>
-            <label>
-              <span>Webhook-URL (Discord-kompatibel)</span>
-              <input name="webhook_url" type="url" placeholder="https://discord.com/api/webhooks/..." />
-            </label>
-            <div class="hint">Benachrichtigen bei:</div>
-            <label class="row">
-              <input name="notify_login" type="checkbox" checked />
-              <span>Login</span>
-            </label>
-            <label class="row">
-              <input name="notify_backup_fail" type="checkbox" checked />
-              <span>Backup-Fehler</span>
-            </label>
-            <label class="row">
-              <input name="notify_password" type="checkbox" checked />
-              <span>Passwortwechsel</span>
-            </label>
-            <div class="form-actions">
-              <button type="button" id="alert-test-btn" class="btn ghost">Test senden</button>
-              <button type="submit" class="btn primary">Speichern</button>
-            </div>
-          </form>
+
+        <div class="sub-tab-panel" data-subtab="security" hidden>
+          <div class="card-block">
+            <h3>🔑 Passwort ändern</h3>
+            <form id="change-password-form" class="form">
+              <label>
+                <span>Aktuelles Passwort</span>
+                <input name="currentPassword" type="password" required />
+              </label>
+              <label>
+                <span>Neues Passwort</span>
+                <input name="newPassword" type="password" minlength="8" required />
+              </label>
+              <div class="form-actions">
+                <button type="submit" class="btn primary">Passwort ändern</button>
+              </div>
+            </form>
+          </div>
         </div>
       </section>
 
@@ -363,10 +377,10 @@
           <h3>🏷️ Kategorien</h3>
           <p class="hint">Kategorien gruppieren Links auf der Startseite.</p>
           <ul id="category-list" class="category-list"></ul>
-          <label class="row">
+          <div class="form inline">
             <input id="category-input" type="text" placeholder="Neue Kategorie …" />
             <button type="button" id="category-add-btn" class="btn primary">Hinzufügen</button>
-          </label>
+          </div>
         </div>
         <div class="card-block">
           <h3>💾 Automatische Backups</h3>

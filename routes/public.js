@@ -110,6 +110,13 @@ function isLinkVisible(link, nowBerlin) {
   return true;
 }
 
+router.get('/links/categories', async (req, res, next) => {
+  try {
+    const { rows } = await db.query('SELECT id, name, position FROM link_categories ORDER BY position ASC, name ASC');
+    res.json({ ok: true, data: rows });
+  } catch (err) { next(err); }
+});
+
 router.get('/links', async (req, res, next) => {
   try {
     const { rows } = await db.query(`

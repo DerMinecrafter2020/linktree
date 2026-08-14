@@ -238,7 +238,7 @@ body {
 
 /* ---------- Navidrome Player ---------- */
 .np-player {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
@@ -249,6 +249,7 @@ body {
   position: relative;
   overflow: hidden;
 }
+.np-player:not([hidden]) { display: flex; }
 
 .np-player::before {
   content: '';
