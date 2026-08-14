@@ -217,9 +217,15 @@ async function finalizeApp() {
     });
 
     // Kurzlink-Weiterleitungen
+    function safeSlug(value) {
+      const s = String(value || '').trim().toLowerCase();
+      if (!/^[a-z0-9_-]{1,64}$/.test(s)) return null;
+      return s;
+    }
+
     app.get('/go/:slug', async (req, res, next) => {
       try {
-        const slug = v.safeSlug(req.params.slug);
+        const slug = safeSlug(req.params.slug);
         if (!slug) return res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
         const { rows } = await db.query(`
           SELECT id, url FROM links WHERE slug = $1 AND is_active = true LIMIT 1
