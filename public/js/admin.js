@@ -1371,25 +1371,44 @@
     if (tab) observer.observe(tab, { attributes: true, attributeFilter: ['hidden'] });
   }
 
-  function switchSubTab(name) {
+  function switchSubTab(name, scope = document) {
     if (!name) return;
-    $$('.sub-tab').forEach(b => b.classList.toggle('active', b.dataset.subtab === name));
-    $$('.sub-tab-panel').forEach(p => {
-      p.hidden = p.dataset.subtab !== name;
-      p.classList.toggle('active', p.dataset.subtab === name);
+    $$('.sub-tab', scope).forEach(b => {
+      const isActive = b.dataset.subtab === name;
+      b.classList.toggle('active', isActive);
+      b.setAttribute('aria-selected', String(isActive));
+    });
+    $$('.sub-tab-panel', scope).forEach(p => {
+      const isActive = p.dataset.subtab === name;
+      p.hidden = !isActive;
+      p.classList.toggle('active', isActive);
     });
     sessionStorage.setItem('openweb-admin-active-subtab', name);
   }
 
   function bindSubTabs() {
-    const tab = document.querySelector('[data-tab="settings"]');
-    if (!tab) return;
-    $$('.sub-tab', tab).forEach(btn => {
-      btn.addEventListener('click', () => switchSubTab(btn.dataset.subtab));
+    const settingsTab = document.querySelector('[data-tab="settings"]');
+    if (!settingsTab) return;
+    $$('.sub-tab', settingsTab).forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        switchSubTab(btn.dataset.subtab, settingsTab);
+      });
     });
+
+    const tabObserver = new MutationObserver(() => {
+      if (!settingsTab.hidden) {
+        const saved = sessionStorage.getItem('openweb-admin-active-subtab');
+        const target = saved && settingsTab.querySelector(`[data-subtab="${saved}"]`) ? saved : 'status';
+        switchSubTab(target, settingsTab);
+      }
+    });
+    tabObserver.observe(settingsTab, { attributes: true, attributeFilter: ['hidden'] });
+
     const saved = sessionStorage.getItem('openweb-admin-active-subtab');
-    if (saved && tab.querySelector(`[data-subtab="${saved}"]`)) switchSubTab(saved);
-    else switchSubTab('status');
+    const target = saved && settingsTab.querySelector(`[data-subtab="${saved}"]`) ? saved : 'status';
+    switchSubTab(target, settingsTab);
   }
 
   function bindSettings() {

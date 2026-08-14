@@ -324,17 +324,23 @@
   const state = { categories: [] };
 
   async function render() {
-    const [profile, links] = await Promise.all([
-      window.api.getProfile(),
-      window.api.getLinks(),
-    ]);
-    renderProfile(profile);
-    buildThemeSwitcher(profile?.allow_visitor_theme !== false);
-    if (profile?.is_public === false) {
-      renderPrivateNotice(profile);
-    } else {
-      state.categories = await window.api.getLinkCategories();
-      renderLinks(links);
+    try {
+      const [profile, links, categories] = await Promise.all([
+        window.api.getProfile(),
+        window.api.getLinks(),
+        window.api.getLinkCategories().catch(() => []),
+      ]);
+      state.categories = categories || [];
+      renderProfile(profile);
+      buildThemeSwitcher(profile?.allow_visitor_theme !== false);
+      if (profile?.is_public === false) {
+        renderPrivateNotice(profile);
+      } else {
+        renderLinks(links);
+      }
+    } catch (err) {
+      const nav = $('.links');
+      if (nav) nav.replaceChildren(el('p', 'empty-state', 'Links konnten nicht geladen werden.'));
     }
   }
 

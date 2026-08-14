@@ -246,11 +246,11 @@
 
       <!-- TAB: SETTINGS -->
       <section class="tab" data-tab="settings" hidden>
-        <nav class="sub-tabs" aria-label="Einstellungen Unterseiten">
-          <button type="button" class="sub-tab active" data-subtab="status">🛡️ Status</button>
-          <button type="button" class="sub-tab" data-subtab="notifications">🔔 Benachrichtigungen</button>
-          <button type="button" class="sub-tab" data-subtab="security">🔑 Sicherheit</button>
-        </nav>
+        <div class="sub-tabs" role="tablist" aria-label="Einstellungen Unterseiten">
+          <button type="button" class="sub-tab active" role="tab" data-subtab="status" aria-selected="true">🛡️ Status</button>
+          <button type="button" class="sub-tab" role="tab" data-subtab="notifications" aria-selected="false">🔔 Benachrichtigungen</button>
+          <button type="button" class="sub-tab" role="tab" data-subtab="security" aria-selected="false">🔑 Sicherheit</button>
+        </div>
 
         <div class="sub-tab-panel active" data-subtab="status">
           <div class="card-block" id="admin-status-block">
