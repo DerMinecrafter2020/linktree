@@ -402,6 +402,8 @@
 
     updateProgress() {
       if (!this.currentTrack) return;
+      // Radio hat keine endliche Dauer, Position nicht hochzaehlen
+      if (this.currentTrack.isRadio) return;
       const state = this.currentTrack.paused === true ? 'paused' : 'playing';
       const now = performance.now();
       if (state === 'playing') {
@@ -440,6 +442,11 @@
       const wrap = $('#navidrome-player');
       const extraEl = wrap?.querySelector('.np-extra');
       if (!extraEl) return;
+      if (data.isRadio) {
+        extraEl.innerHTML = '<div class="np-radio-badge">📡 LIVE</div>';
+        extraEl.hidden = false;
+        return;
+      }
       const bitrateHtml = data.bitrate ? `<div class="np-bitrate">${escapeHtml(`${data.bitrate} kbps`)}</div>` : '';
       const timeHtml = data.duration
         ? `<div class="np-time">${escapeHtml(`${this.formatDuration(position)} / ${this.formatDuration(data.duration)}`)}</div>`
@@ -483,6 +490,14 @@
       this.setState(state);
       const wrap = $('#navidrome-player');
       if (wrap) wrap.hidden = false;
+
+      // Radio-Klasse setzen/entfernen
+      if (data.isRadio) {
+        wrap?.classList.add('radio');
+      } else {
+        wrap?.classList.remove('radio');
+      }
+
       const cover = wrap?.querySelector('.np-cover');
       if (cover) {
         cover.replaceChildren();
@@ -490,14 +505,19 @@
         if (data.coverUrl) {
           cover.appendChild(createIconImg(data.coverUrl, data.title || '', 'np-cover-img'));
         } else {
-          cover.appendChild(document.createTextNode('🎵'));
+          cover.appendChild(document.createTextNode(data.isRadio ? '📻' : '🎵'));
           cover.classList.add('placeholder');
         }
       }
 
       let artist = data.artist || data.album || '';
-      if (state === 'paused' && artist) artist += ' (pausiert)';
-      else if (state === 'paused') artist = 'Pausiert';
+      if (data.isRadio) {
+        artist = artist || 'Internetradio';
+        if (state === 'paused') artist += ' (pausiert)';
+      } else {
+        if (state === 'paused' && artist) artist += ' (pausiert)';
+        else if (state === 'paused') artist = 'Pausiert';
+      }
       setText('.np-title', data.title || 'Unbekannt', wrap);
       setText('.np-artist', artist, wrap);
       this.updateFavicon(data.coverUrl);
@@ -507,7 +527,11 @@
         albumEl.hidden = !data.album;
       }
       this.renderExtra(data, data.position || 0);
-      document.title = data.artist ? `${data.artist} — ${data.title}` : data.title;
+      if (data.isRadio) {
+        document.title = `📻 ${data.title}`;
+      } else {
+        document.title = data.artist ? `${data.artist} — ${data.title}` : data.title;
+      }
       if (state === 'paused') document.title += ' (pausiert)';
     },
 

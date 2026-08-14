@@ -271,12 +271,17 @@ async function finalizeApp() {
 
         const track = await getNowPlaying();
         const isPlaying = track && track.playing;
-        const pageTitle = isPlaying
-          ? `🎵 ${track.artist ? track.artist + ' — ' : ''}${track.title}`
-          : `${escapeHtml(profile.handle || profile.name || 'OpenWeb')}`;
-        const pageDescription = isPlaying
-          ? (track.paused ? 'Momentan pausiert' : `Aktuell läuft: ${track.title}${track.artist ? ' von ' + track.artist : ''}${track.album ? ' (' + track.album + ')' : ''}`)
-          : escapeHtml(profile.bio || 'Alle wichtigen Links auf einen Blick.');
+        let pageTitle, pageDescription;
+        if (isPlaying && track.isRadio) {
+          pageTitle = `📻 ${track.title}`;
+          pageDescription = track.paused ? 'Momentan pausiert' : `Hört gerade: ${track.title}`;
+        } else if (isPlaying) {
+          pageTitle = `🎵 ${track.artist ? track.artist + ' — ' : ''}${track.title}`;
+          pageDescription = track.paused ? 'Momentan pausiert' : `Aktuell läuft: ${track.title}${track.artist ? ' von ' + track.artist : ''}${track.album ? ' (' + track.album + ')' : ''}`;
+        } else {
+          pageTitle = `${escapeHtml(profile.handle || profile.name || 'OpenWeb')}`;
+          pageDescription = escapeHtml(profile.bio || 'Alle wichtigen Links auf einen Blick.');
+        }
         const image = isPlaying && track.coverUrl ? `${absUrl}${track.coverUrl}` : `${absUrl}/icons/icon.svg`;
 
         html = html
