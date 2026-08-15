@@ -1078,7 +1078,7 @@ router.post('/change-password', async (req, res, next) => {
       const options = await generateRegistrationOptions({
         rpName: 'OpenWeb',
         rpID: req.hostname,
-        userID: String(req.session.userId),
+        userID: new Uint8Array(Buffer.from(String(req.session.userId))),
         userName: user.email,
         attestationType: 'none',
         excludeCredentials: existing.map(r => ({
@@ -1112,10 +1112,10 @@ router.post('/change-password', async (req, res, next) => {
       });
       
       if (verification.verified) {
-        const { credentialPublicKey, credentialID, counter } = verification.registrationInfo;
+        const { id, publicKey, counter } = verification.registrationInfo.credential;
         await db.query(
           'INSERT INTO webauthn_credentials (user_id, credential_id, public_key, counter) VALUES ($1, $2, $3, $4)',
-          [req.session.userId, credentialID, credentialPublicKey, counter]
+          [req.session.userId, id, publicKey, counter]
         );
         await db.query('UPDATE users SET webauthn_current_challenge = NULL WHERE id = $1', [req.session.userId]);
         res.json({ ok: true });

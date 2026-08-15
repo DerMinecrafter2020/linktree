@@ -458,7 +458,7 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
       const { verifyAuthenticationResponse } = require('@simplewebauthn/server');
       
       const body = req.body;
-      const { rows: creds } = await db.query('SELECT * FROM webauthn_credentials WHERE user_id = $1 AND credential_id = $2', [user.id, Buffer.from(body.id, 'base64url')]);
+      const { rows: creds } = await db.query('SELECT * FROM webauthn_credentials WHERE user_id = $1 AND credential_id = $2', [user.id, body.id]);
       const authenticator = creds[0];
       if (!authenticator) return res.status(400).json({ ok: false, error: 'Key nicht gefunden' });
       
@@ -467,10 +467,10 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
         expectedChallenge,
         expectedOrigin: `${req.protocol}://${req.get('host')}`,
         expectedRPID: req.hostname,
-        authenticator: {
-          credentialID: authenticator.credential_id,
-          credentialPublicKey: authenticator.public_key,
-          counter: authenticator.counter,
+        credential: {
+          id: authenticator.credential_id,
+          publicKey: authenticator.public_key,
+          counter: Number(authenticator.counter),
         },
       });
       

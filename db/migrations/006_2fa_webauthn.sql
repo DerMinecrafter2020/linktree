@@ -6,7 +6,7 @@ ALTER TABLE users
 CREATE TABLE IF NOT EXISTS webauthn_credentials (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  credential_id BYTEA NOT NULL UNIQUE,
+  credential_id VARCHAR(255) NOT NULL UNIQUE,
   public_key BYTEA NOT NULL,
   counter BIGINT NOT NULL DEFAULT 0,
   transports VARCHAR(255)[],
