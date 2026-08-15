@@ -221,11 +221,10 @@ router.post('/links/:id/click', async (req, res, next) => {
   }
 });
 
-router.get('/icon/simpleicon/:id', async (req, res, next) => {
+router.get('/icon/simpleicon/:id.svg', async (req, res, next) => {
   try {
     const id = req.params.id;
     if (!/^[a-z0-9-]+$/.test(id)) return res.status(400).send('Bad Request');
-    const fetch = require('node-fetch') || global.fetch;
     const response = await fetch(`https://cdn.jsdelivr.net/npm/simple-icons@11/icons/${id}.svg`);
     if (!response.ok) return res.status(response.status).send('Not Found');
     res.setHeader('Content-Type', 'image/svg+xml');

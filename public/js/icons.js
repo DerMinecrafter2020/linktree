@@ -103,7 +103,7 @@ window.icons = {
   },
 
   url(id) {
-    return `/api/icon/simpleicon/${id}`;
+    return `/api/icon/simpleicon/${id}.svg`;
   },
 
   dashboardUrl(name, format = 'png', variant = '') {

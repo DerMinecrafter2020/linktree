@@ -284,14 +284,14 @@ body {
 .np-turntable-base {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #f5f6f8 0%, #e2e4e9 100%);
+  background: linear-gradient(135deg, #2e2e2e 0%, #1a1a1a 100%);
   border-radius: 12%;
   position: relative;
   box-shadow: 
-    0 8px 16px rgba(0,0,0,0.4), 
-    inset 0 2px 4px rgba(255,255,255,0.8),
-    inset 0 -2px 6px rgba(0,0,0,0.1),
-    0 0 0 1px rgba(0,0,0,0.1);
+    0 8px 16px rgba(0,0,0,0.6), 
+    inset 0 2px 4px rgba(255,255,255,0.1),
+    inset 0 -2px 6px rgba(0,0,0,0.5),
+    0 0 0 1px rgba(0,0,0,0.8);
 }
 
 .np-cover {
@@ -301,18 +301,18 @@ body {
   width: 90%;
   height: 90%;
   border-radius: 50%;
-  /* Bronze/Metallic Vinyl Grooves */
+  /* Black Vinyl Grooves */
   background:
-    radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), transparent 45%),
+    radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15), transparent 45%),
     repeating-radial-gradient(
       circle at 50% 50%,
-      rgba(215, 175, 155, 0.5) 0px,
-      rgba(150, 100, 85, 0.3) 1px,
-      rgba(0, 0, 0, 0.4) 2px,
-      rgba(0, 0, 0, 0.2) 3px,
-      rgba(215, 175, 155, 0.2) 4px
+      rgba(30, 30, 30, 0.9) 0px,
+      rgba(20, 20, 20, 0.9) 1px,
+      rgba(0, 0, 0, 1) 2px,
+      rgba(10, 10, 10, 0.9) 3px,
+      rgba(30, 30, 30, 0.9) 4px
     ),
-    linear-gradient(145deg, #8a6c5b 0%, #b29381 50%, #523f33 100%);
+    linear-gradient(145deg, #222 0%, #111 50%, #000 100%);
   display: flex;
   align-items: center;
   justify-content: center;
