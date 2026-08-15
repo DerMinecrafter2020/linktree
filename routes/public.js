@@ -327,6 +327,7 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
     // Eingeloggt bleiben: Session-Cookie auf 30 Tage verlängern
     if (req.body.remember === true) {
       const rememberMs = 30 * 24 * 60 * 60 * 1000;
+      req.session.cookie.originalMaxAge = rememberMs;
       req.session.cookie.maxAge = rememberMs;
       req.session.cookie.expires = new Date(Date.now() + rememberMs);
     }
