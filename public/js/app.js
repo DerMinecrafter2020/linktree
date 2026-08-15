@@ -87,7 +87,7 @@
     if (icon.startsWith('dashboardicon:') && window.icons) {
       const parsed = window.icons.parse(icon);
       if (!parsed.url) return '🔗';
-      return createIconImg(parsed.url, '', 'link-icon-img');
+      return createIconImg(parsed.url, '', 'link-icon-img no-filter');
     }
 
     if (/^https?:\/\//i.test(icon)) {

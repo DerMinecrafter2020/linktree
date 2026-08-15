@@ -251,7 +251,7 @@ router.get('/icon/dashboardicon/:name/:format?', async (req, res, next) => {
     res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
     
     const buffer = await response.arrayBuffer();
-    res.send(Buffer.from(buffer));
+    res.end(Buffer.from(buffer));
   } catch (err) {
     next(err);
   }
