@@ -1419,6 +1419,109 @@
       } catch (err) { toast('Fehler: ' + err.message, true); }
     });
 
+    // --- 2FA & WebAuthn ---
+    async function load2faStatus() {
+      try {
+        const { totp_enabled, webauthn_keys } = await window.api.get2faStatus();
+        const badge = $('#totp-status-badge');
+        const setupBtn = $('#totp-setup-btn');
+        const disableBtn = $('#totp-disable-btn');
+        
+        if (totp_enabled) {
+          badge.textContent = 'Aktiv';
+          badge.style.background = 'var(--accent)';
+          setupBtn.hidden = true;
+          disableBtn.hidden = false;
+        } else {
+          badge.textContent = 'Inaktiv';
+          badge.style.background = '#666';
+          setupBtn.hidden = false;
+          disableBtn.hidden = true;
+        }
+        
+        const list = $('#webauthn-list');
+        list.innerHTML = '';
+        if (!webauthn_keys || webauthn_keys.length === 0) {
+          list.innerHTML = '<li><span class="hint">Keine Schlüssel registriert</span></li>';
+        } else {
+          webauthn_keys.forEach((k, idx) => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+              <span>YubiKey / Security Key ${idx + 1} (Erstellt: ${new Date(k.created_at).toLocaleDateString()})</span>
+              <button class="btn danger sm delete-webauthn" data-id="${k.id}">Löschen</button>
+            `;
+            list.appendChild(li);
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load 2FA status:', err);
+      }
+    }
+    
+    $('#totp-setup-btn')?.addEventListener('click', async () => {
+      try {
+        const data = await window.api.setupTotp();
+        $('#totp-qrcode').src = data.qrcode;
+        $('#totp-secret-text').textContent = data.secret;
+        $('#totp-setup-container').hidden = false;
+        $('#totp-setup-btn').hidden = true;
+      } catch (err) { toast('Fehler: ' + err.message, true); }
+    });
+    
+    $('#totp-cancel-btn')?.addEventListener('click', () => {
+      $('#totp-setup-container').hidden = true;
+      $('#totp-setup-btn').hidden = false;
+    });
+    
+    $('#totp-verify-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const code = e.target.code.value;
+      try {
+        await window.api.verifyTotp(code);
+        toast('TOTP erfolgreich aktiviert!');
+        $('#totp-setup-container').hidden = true;
+        load2faStatus();
+      } catch (err) { toast('Fehler: ' + err.message, true); }
+    });
+    
+    $('#totp-disable-btn')?.addEventListener('click', async () => {
+      if (!confirm('Sicher, dass du TOTP deaktivieren willst?')) return;
+      try {
+        await window.api.disableTotp();
+        toast('TOTP deaktiviert.');
+        load2faStatus();
+      } catch (err) { toast('Fehler: ' + err.message, true); }
+    });
+    
+    $('#webauthn-register-btn')?.addEventListener('click', async () => {
+      try {
+        const options = await window.api.getWebauthnRegisterOptions();
+        const { startRegistration } = window.SimpleWebAuthnBrowser;
+        const authResp = await startRegistration(options);
+        await window.api.verifyWebauthnRegister(authResp);
+        toast('Schlüssel erfolgreich registriert!');
+        load2faStatus();
+      } catch (err) { 
+        console.error(err);
+        toast('Fehler bei der Registrierung: ' + err.message, true); 
+      }
+    });
+    
+    $('#webauthn-list')?.addEventListener('click', async (e) => {
+      if (e.target.classList.contains('delete-webauthn')) {
+        const id = e.target.dataset.id;
+        if (!confirm('Diesen Schlüssel wirklich löschen?')) return;
+        try {
+          await window.api.deleteWebauthn(id);
+          toast('Schlüssel gelöscht.');
+          load2faStatus();
+        } catch (err) { toast('Fehler: ' + err.message, true); }
+      }
+    });
+    
+    // Initial call
+    load2faStatus();
+
     loadAlertSettings();
     $('#alert-form')?.addEventListener('submit', async (e) => {
       e.preventDefault();

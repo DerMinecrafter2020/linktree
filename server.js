@@ -61,8 +61,36 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(cookieParser());
+app.use(compression());
+
+// Rate Limiting für die API
+const rateLimit = require('express-rate-limit');
+
+// Strikteres Limit für Login & Setup (z.B. max 10 Versuche pro 15 Minuten)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { ok: false, error: 'Zu viele Anfragen. Bitte in 15 Minuten erneut versuchen.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Moderates Limit für allgemeine API (z.B. 200 Requests pro Minute)
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 200,
+  message: { ok: false, error: 'API-Limit erreicht. Bitte kurz warten.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api/auth/login', authLimiter);
+app.use('/api/setup', authLimiter);
+app.use('/api', apiLimiter);
 
 // =========================================================
 // App je nach Setup-Status finalisieren

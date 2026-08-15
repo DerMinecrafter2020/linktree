@@ -323,6 +323,27 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
     }
 
     req.loginRateLimit?.increment(false);
+    
+    // 2FA / WebAuthn Check
+    const db = require('../lib/db');
+    const { rows } = await db.query('SELECT id FROM webauthn_credentials WHERE user_id = $1 LIMIT 1', [user.id]);
+    const hasWebAuthn = rows.length > 0;
+    
+    if (user.totp_enabled || hasWebAuthn) {
+      req.session.pendingUserId = user.id;
+      if (req.body.remember === true) req.session.pendingRemember = true;
+      await new Promise((resolve, reject) => req.session.save((err) => (err ? reject(err) : resolve())));
+      return res.json({ 
+        ok: true, 
+        data: {
+          requires_2fa: true, 
+          methods: [
+            ...(user.totp_enabled ? ['totp'] : []),
+            ...(hasWebAuthn ? ['webauthn'] : [])
+          ]
+        }
+      });
+    }
 
     // Eingeloggt bleiben: Session-Cookie auf 30 Tage verlängern
     if (req.body.remember === true) {
@@ -352,5 +373,117 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
     next(err);
   }
 });
+
+  // ---------- 2FA Login Endpoints ----------
+  
+  async function completeLogin(req, res, user) {
+    if (req.session.pendingRemember) {
+      const rememberMs = 30 * 24 * 60 * 60 * 1000;
+      req.session.cookie.originalMaxAge = rememberMs;
+      req.session.cookie.maxAge = rememberMs;
+      req.session.cookie.expires = new Date(Date.now() + rememberMs);
+    }
+    req.session.userId = user.id;
+    req.session.email = user.email;
+    delete req.session.pendingUserId;
+    delete req.session.pendingRemember;
+    req.session.touch();
+    await new Promise((resolve, reject) => req.session.save((err) => (err ? reject(err) : resolve())));
+
+    const audit = require('../lib/audit');
+    const alert = require('../lib/alert');
+    const { parseCountryCode } = require('../lib/utils');
+    await audit.log(req, 'login_2fa', 'user', user.id);
+    alert.notify('login', 'Admin-Login erkannt (2FA)', {
+      email: user.email,
+      ip: req.ip || req.socket.remoteAddress || '-',
+      userAgent: req.headers['user-agent'] || '-',
+      country: parseCountryCode(req) || '-',
+      time: new Date().toISOString(),
+    }).catch(() => {});
+    res.json({ ok: true, data: { id: user.id, email: user.email } });
+  }
+
+  router.post('/login/totp', rateLimitLogin, async (req, res, next) => {
+    try {
+      if (!req.session.pendingUserId) return res.status(401).json({ ok: false, error: 'Session abgelaufen' });
+      const { code } = req.body;
+      const db = require('../lib/db');
+      const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [req.session.pendingUserId]);
+      const user = rows[0];
+      if (!user || !user.totp_enabled || !user.totp_secret) {
+        return res.status(400).json({ ok: false, error: 'TOTP nicht konfiguriert' });
+      }
+      const { authenticator } = require('otplib');
+      const isValid = authenticator.check(code, user.totp_secret);
+      if (!isValid) {
+        req.loginRateLimit?.increment(true);
+        return res.status(401).json({ ok: false, error: 'Ungueltiger Code' });
+      }
+      req.loginRateLimit?.increment(false);
+      await completeLogin(req, res, user);
+    } catch (err) { next(err); }
+  });
+
+  router.post('/login/webauthn/options', rateLimitLogin, async (req, res, next) => {
+    try {
+      if (!req.session.pendingUserId) return res.status(401).json({ ok: false, error: 'Session abgelaufen' });
+      const db = require('../lib/db');
+      const { rows } = await db.query('SELECT credential_id FROM webauthn_credentials WHERE user_id = $1', [req.session.pendingUserId]);
+      if (!rows.length) return res.status(400).json({ ok: false, error: 'Keine YubiKeys registriert' });
+      
+      const { generateAuthenticationOptions } = require('@simplewebauthn/server');
+      const options = await generateAuthenticationOptions({
+        rpID: req.hostname,
+        allowCredentials: rows.map(r => ({
+          id: r.credential_id,
+          type: 'public-key',
+        })),
+        userVerification: 'preferred',
+      });
+      await db.query('UPDATE users SET webauthn_current_challenge = $1 WHERE id = $2', [options.challenge, req.session.pendingUserId]);
+      res.json(options);
+    } catch (err) { next(err); }
+  });
+
+  router.post('/login/webauthn/verify', rateLimitLogin, async (req, res, next) => {
+    try {
+      if (!req.session.pendingUserId) return res.status(401).json({ ok: false, error: 'Session abgelaufen' });
+      const db = require('../lib/db');
+      const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [req.session.pendingUserId]);
+      const user = rows[0];
+      if (!user || !user.webauthn_current_challenge) return res.status(400).json({ ok: false, error: 'Kein aktiver Challenge' });
+      
+      const expectedChallenge = user.webauthn_current_challenge;
+      const { verifyAuthenticationResponse } = require('@simplewebauthn/server');
+      
+      const body = req.body;
+      const { rows: creds } = await db.query('SELECT * FROM webauthn_credentials WHERE user_id = $1 AND credential_id = $2', [user.id, Buffer.from(body.id, 'base64url')]);
+      const authenticator = creds[0];
+      if (!authenticator) return res.status(400).json({ ok: false, error: 'Key nicht gefunden' });
+      
+      const verification = await verifyAuthenticationResponse({
+        response: body,
+        expectedChallenge,
+        expectedOrigin: `${req.protocol}://${req.get('host')}`,
+        expectedRPID: req.hostname,
+        authenticator: {
+          credentialID: authenticator.credential_id,
+          credentialPublicKey: authenticator.public_key,
+          counter: authenticator.counter,
+        },
+      });
+      
+      if (verification.verified) {
+        await db.query('UPDATE webauthn_credentials SET counter = $1, last_used_at = NOW() WHERE id = $2', [verification.authenticationInfo.newCounter, authenticator.id]);
+        await db.query('UPDATE users SET webauthn_current_challenge = NULL WHERE id = $1', [user.id]);
+        req.loginRateLimit?.increment(false);
+        await completeLogin(req, res, user);
+      } else {
+        req.loginRateLimit?.increment(true);
+        res.status(401).json({ ok: false, error: 'Verifizierung fehlgeschlagen' });
+      }
+    } catch (err) { next(err); }
+  });
 
 module.exports = router;

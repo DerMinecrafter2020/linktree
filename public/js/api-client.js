@@ -102,5 +102,18 @@
     // Navidrome (öffentlicher Proxy)
     navidromeNowPlaying: () => get('/navidrome/now-playing'),
     navidromeControl: (action) => post('/navidrome/control', { action }),
+
+    // 2FA & WebAuthn
+    get2faStatus: () => get('/admin/settings/2fa/status'),
+    setupTotp: () => post('/admin/settings/2fa/totp/setup'),
+    verifyTotp: (code) => post('/admin/settings/2fa/totp/verify', { code }),
+    disableTotp: () => post('/admin/settings/2fa/totp/disable'),
+    getWebauthnRegisterOptions: () => post('/admin/settings/2fa/webauthn/register-options'),
+    verifyWebauthnRegister: (res) => post('/admin/settings/2fa/webauthn/register-verify', res),
+    deleteWebauthn: (id) => del(`/admin/settings/2fa/webauthn/${id}`),
+
+    loginTotp: (code) => post('/auth/login/totp', { code }),
+    getWebauthnLoginOptions: () => post('/auth/login/webauthn/options'),
+    verifyWebauthnLogin: (res) => post('/auth/login/webauthn/verify', res)
   };
 })();

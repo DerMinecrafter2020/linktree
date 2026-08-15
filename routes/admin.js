@@ -1009,4 +1009,128 @@ router.post('/change-password', async (req, res, next) => {
   }
 });
 
+  // ---------- 2FA & WebAuthn Settings ----------
+
+  router.get('/settings/2fa/status', async (req, res) => {
+    try {
+      const db = require('../lib/db');
+      const { rows } = await db.query('SELECT totp_enabled FROM users WHERE id = $1', [req.session.userId]);
+      const { rows: webauthn } = await db.query('SELECT id, created_at, last_used_at FROM webauthn_credentials WHERE user_id = $1', [req.session.userId]);
+      res.json({ ok: true, totp_enabled: rows[0]?.totp_enabled || false, webauthn_keys: webauthn });
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+  });
+
+  router.post('/settings/2fa/totp/setup', async (req, res) => {
+    try {
+      const { authenticator } = require('otplib');
+      const QRCode = require('qrcode');
+      const secret = authenticator.generateSecret();
+      
+      const db = require('../lib/db');
+      const { rows } = await db.query('SELECT email FROM users WHERE id = $1', [req.session.userId]);
+      const email = rows[0]?.email || 'admin@openweb';
+      
+      const otpauth = authenticator.keyuri(email, 'OpenWeb Admin', secret);
+      const qrcodeUrl = await QRCode.toDataURL(otpauth);
+      
+      // Speichere Secret temporär (z.B. in Session, aber hier überschreiben wir direkt für den Setup-Prozess)
+      // Normalerweise speichert man das erst nach erfolgreicher Validierung, aber für Einfachheit:
+      await db.query('UPDATE users SET totp_secret = $1 WHERE id = $2', [secret, req.session.userId]);
+      
+      res.json({ ok: true, secret, qrcode: qrcodeUrl });
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+  });
+
+  router.post('/settings/2fa/totp/verify', async (req, res) => {
+    try {
+      const { code } = req.body;
+      const db = require('../lib/db');
+      const { rows } = await db.query('SELECT totp_secret FROM users WHERE id = $1', [req.session.userId]);
+      const secret = rows[0]?.totp_secret;
+      
+      const { authenticator } = require('otplib');
+      if (!secret || !authenticator.check(code, secret)) {
+        return res.status(400).json({ ok: false, error: 'Ungueltiger Code' });
+      }
+      
+      await db.query('UPDATE users SET totp_enabled = true WHERE id = $1', [req.session.userId]);
+      res.json({ ok: true });
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+  });
+  
+  router.post('/settings/2fa/totp/disable', async (req, res) => {
+    try {
+      const db = require('../lib/db');
+      await db.query('UPDATE users SET totp_enabled = false, totp_secret = NULL WHERE id = $1', [req.session.userId]);
+      res.json({ ok: true });
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+  });
+
+  router.post('/settings/2fa/webauthn/register-options', async (req, res) => {
+    try {
+      const db = require('../lib/db');
+      const { rows } = await db.query('SELECT email FROM users WHERE id = $1', [req.session.userId]);
+      const user = rows[0];
+      
+      const { generateRegistrationOptions } = require('@simplewebauthn/server');
+      const { rows: existing } = await db.query('SELECT credential_id FROM webauthn_credentials WHERE user_id = $1', [req.session.userId]);
+      
+      const options = await generateRegistrationOptions({
+        rpName: 'OpenWeb',
+        rpID: req.hostname,
+        userID: String(req.session.userId),
+        userName: user.email,
+        attestationType: 'none',
+        excludeCredentials: existing.map(r => ({
+          id: r.credential_id,
+          type: 'public-key'
+        })),
+        authenticatorSelection: {
+          residentKey: 'preferred',
+          userVerification: 'preferred',
+        }
+      });
+      
+      await db.query('UPDATE users SET webauthn_current_challenge = $1 WHERE id = $2', [options.challenge, req.session.userId]);
+      res.json(options);
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+  });
+
+  router.post('/settings/2fa/webauthn/register-verify', async (req, res) => {
+    try {
+      const db = require('../lib/db');
+      const { rows } = await db.query('SELECT webauthn_current_challenge FROM users WHERE id = $1', [req.session.userId]);
+      const expectedChallenge = rows[0]?.webauthn_current_challenge;
+      if (!expectedChallenge) return res.status(400).json({ ok: false, error: 'Kein Challenge aktiv' });
+      
+      const { verifyRegistrationResponse } = require('@simplewebauthn/server');
+      const verification = await verifyRegistrationResponse({
+        response: req.body,
+        expectedChallenge,
+        expectedOrigin: `${req.protocol}://${req.get('host')}`,
+        expectedRPID: req.hostname,
+      });
+      
+      if (verification.verified) {
+        const { credentialPublicKey, credentialID, counter } = verification.registrationInfo;
+        await db.query(
+          'INSERT INTO webauthn_credentials (user_id, credential_id, public_key, counter) VALUES ($1, $2, $3, $4)',
+          [req.session.userId, credentialID, credentialPublicKey, counter]
+        );
+        await db.query('UPDATE users SET webauthn_current_challenge = NULL WHERE id = $1', [req.session.userId]);
+        res.json({ ok: true });
+      } else {
+        res.status(400).json({ ok: false, error: 'Registrierung fehlgeschlagen' });
+      }
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+  });
+  
+  router.delete('/settings/2fa/webauthn/:id', async (req, res) => {
+    try {
+      const db = require('../lib/db');
+      await db.query('DELETE FROM webauthn_credentials WHERE id = $1 AND user_id = $2', [req.params.id, req.session.userId]);
+      res.json({ ok: true });
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+  });
+
 module.exports = router;

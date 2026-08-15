@@ -1,0 +1,15 @@
+ALTER TABLE users 
+  ADD COLUMN IF NOT EXISTS totp_secret VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS webauthn_current_challenge VARCHAR(255);
+
+CREATE TABLE IF NOT EXISTS webauthn_credentials (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  credential_id BYTEA NOT NULL UNIQUE,
+  public_key BYTEA NOT NULL,
+  counter BIGINT NOT NULL DEFAULT 0,
+  transports VARCHAR(255)[],
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

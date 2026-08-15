@@ -390,6 +390,45 @@
                   </div>
                 </form>
               </div>
+
+              <div class="card-block">
+                <h3>🛡️ Zwei-Faktor-Authentifizierung (TOTP)</h3>
+                <p class="hint">Erhöhe die Sicherheit deines Kontos mit einer Authenticator-App (z.B. Google Authenticator, Authy, Aegis).</p>
+                <div id="totp-status-container" style="margin-bottom: 1rem;">
+                  <span class="badge" id="totp-status-badge">Status wird geladen...</span>
+                </div>
+                
+                <div id="totp-setup-container" hidden>
+                  <p>1. Scanne diesen QR-Code mit deiner Authenticator-App:</p>
+                  <img id="totp-qrcode" src="" alt="QR Code" style="max-width: 200px; display: block; margin: 1rem 0; border-radius: 8px;" />
+                  <p>Oder gib diesen Code manuell ein: <code id="totp-secret-text" style="user-select: all;"></code></p>
+                  
+                  <form id="totp-verify-form" class="form" style="margin-top: 1rem;">
+                    <label>
+                      <span>2. Bestätigungscode eingeben</span>
+                      <input name="code" type="text" placeholder="123456" required />
+                    </label>
+                    <div class="form-actions">
+                      <button type="submit" class="btn primary">Aktivieren</button>
+                      <button type="button" id="totp-cancel-btn" class="btn ghost">Abbrechen</button>
+                    </div>
+                  </form>
+                </div>
+                
+                <div class="form-actions" id="totp-actions">
+                  <button type="button" id="totp-setup-btn" class="btn primary" hidden>TOTP Aktivieren</button>
+                  <button type="button" id="totp-disable-btn" class="btn danger" hidden>TOTP Deaktivieren</button>
+                </div>
+              </div>
+              
+              <div class="card-block">
+                <h3>🔐 Security Keys (YubiKey / WebAuthn)</h3>
+                <p class="hint">Nutze einen Hardware-Sicherheitsschlüssel (z.B. YubiKey) oder Windows Hello / Touch ID für die Anmeldung.</p>
+                <ul id="webauthn-list" class="category-list" style="margin-bottom: 1rem;"></ul>
+                <div class="form-actions">
+                  <button type="button" id="webauthn-register-btn" class="btn primary">Neuen Schlüssel registrieren</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -582,6 +621,7 @@
   <!-- Toast -->
   <div id="toast" class="toast" hidden></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@simplewebauthn/browser@9.0.1/dist/bundle/index.umd.min.js"></script>
   <script src="/js/api-client.js"></script>
   <script src="/js/icons.js"></script>
   <script src="/js/navidrome.js"></script>
