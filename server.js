@@ -8,6 +8,8 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
+const compression = require('compression');
 const setup = require('./lib/setup');
 
 const app = express();
