@@ -510,6 +510,7 @@ body {
   width: 100%;
 }
 
+.np-format { color: var(--neon-pink); font-weight: 600; }
 .np-bitrate { color: var(--neon-cyan); }
 .np-time { color: var(--text-faint); }
 

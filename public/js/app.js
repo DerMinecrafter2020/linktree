@@ -450,12 +450,13 @@
         extraEl.hidden = false;
         return;
       }
+      const formatHtml = data.format ? `<div class="np-format">${escapeHtml(data.format.toUpperCase())}</div>` : '';
       const bitrateHtml = data.bitrate ? `<div class="np-bitrate">${escapeHtml(`${data.bitrate} kbps`)}</div>` : '';
       const timeHtml = data.duration
         ? `<div class="np-time">${escapeHtml(`${this.formatDuration(position)} / ${this.formatDuration(data.duration)}`)}</div>`
         : '';
-      extraEl.innerHTML = bitrateHtml + timeHtml;
-      extraEl.hidden = !data.bitrate && !data.duration;
+      extraEl.innerHTML = formatHtml + bitrateHtml + timeHtml;
+      extraEl.hidden = !data.bitrate && !data.duration && !data.format;
     },
 
     renderIdle() {
