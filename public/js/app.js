@@ -452,11 +452,22 @@
       }
       const formatHtml = data.format ? `<div class="np-format">${escapeHtml(data.format.toUpperCase())}</div>` : '';
       const bitrateHtml = data.bitrate ? `<div class="np-bitrate">${escapeHtml(`${data.bitrate} kbps`)}</div>` : '';
-      const timeHtml = data.duration
-        ? `<div class="np-time">${escapeHtml(`${this.formatDuration(position)} / ${this.formatDuration(data.duration)}`)}</div>`
-        : '';
-      extraEl.innerHTML = formatHtml + bitrateHtml + timeHtml;
-      extraEl.hidden = !data.bitrate && !data.duration && !data.format;
+      extraEl.innerHTML = formatHtml + bitrateHtml;
+      extraEl.hidden = !data.bitrate && !data.format;
+
+      const progressEl = $('#np-progress');
+      if (progressEl) {
+        if (data.isRadio) {
+          progressEl.textContent = data.streamUrl ? '📡 Stream' : '📡 Radio';
+          progressEl.hidden = false;
+        } else if (data.duration) {
+          progressEl.textContent = `${this.formatDuration(position)} / ${this.formatDuration(data.duration)}`;
+          progressEl.hidden = false;
+        } else {
+          progressEl.textContent = '';
+          progressEl.hidden = true;
+        }
+      }
     },
 
     renderIdle() {
@@ -469,6 +480,8 @@
       setText('.np-artist', 'Starte Musik in Navidrome, dann erscheint sie hier', wrap);
       const albumEl = wrap?.querySelector('.np-album');
       if (albumEl) { albumEl.textContent = ''; albumEl.hidden = true; }
+      const progressEl = $('#np-progress');
+      if (progressEl) { progressEl.textContent = ''; progressEl.hidden = true; }
       const extraEl = wrap?.querySelector('.np-extra');
       if (extraEl) { extraEl.innerHTML = ''; extraEl.hidden = true; }
       const cover = wrap?.querySelector('.np-cover');

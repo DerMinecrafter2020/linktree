@@ -464,6 +464,14 @@ body {
   letter-spacing: 0.2px;
 }
 
+.np-progress {
+  font-size: clamp(10px, 3.2vw, 12px);
+  color: var(--text-faint);
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: 4px;
+}
+
+
 .np-album {
   display: block;
   max-height: 0;

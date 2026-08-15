@@ -14,7 +14,7 @@ const alert = require('../lib/alert');
 const router = express.Router();
 
 router.param('id', (req, res, next, id) => {
-  if (!/^\d+$/.test(id)) {
+  if (!/^\d+$/.test(id) && !/^[0-9a-fA-F-]{36}$/.test(id) && !/^[a-z0-9-]+$/.test(id)) {
     return res.status(400).json({ ok: false, error: 'Ungültige ID' });
   }
   next();
