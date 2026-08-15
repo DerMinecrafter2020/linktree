@@ -103,7 +103,7 @@ window.icons = {
   },
 
   url(id) {
-    return `/api/icon/simpleicon/${id}.svg`;
+    return `https://cdn.jsdelivr.net/npm/simple-icons@11/icons/${id}.svg`;
   },
 
   dashboardUrl(name, format = 'png', variant = '') {
