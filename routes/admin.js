@@ -599,7 +599,7 @@ router.get('/db-info', async (req, res, next) => {
 });
 
 // ---------- Navidrome-Settings (Admin) ----------
-router.get('/navidrome', async (req, res, next) => {
+router.get('/settings/navidrome', async (req, res, next) => {
   try {
     const { rows } = await db.query(`
       SELECT id, enabled, url, username, poll_interval_sec, updated_at
@@ -642,7 +642,7 @@ router.post('/settings/navidrome/discord-test', async (req, res, next) => {
   }
 });
 
-router.post('/navidrome', async (req, res, next) => {
+router.post('/settings/navidrome', async (req, res, next) => {
   try {
     const enabled = !!req.body.enabled;
     const url = req.body.url ? v.safeUrl(req.body.url) : null;
@@ -691,7 +691,7 @@ router.post('/navidrome', async (req, res, next) => {
   }
 });
 
-router.post('/navidrome/test', async (req, res, next) => {
+router.post('/settings/navidrome/test', async (req, res, next) => {
   try {
     const { rows } = await db.query('SELECT * FROM navidrome_settings WHERE id = 1 LIMIT 1');
     const settings = rows[0];

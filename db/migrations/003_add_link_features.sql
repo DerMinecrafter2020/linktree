@@ -95,7 +95,7 @@ FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 -- Audit-Log für Admin-Aktionen
 CREATE TABLE IF NOT EXISTS audit_log (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id    UUID NULL,
+  user_id    INTEGER NULL,
   action     VARCHAR(40) NOT NULL,
   entity     VARCHAR(40) NULL,
   entity_id  VARCHAR(80) NULL,
