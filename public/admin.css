@@ -1,5 +1,5 @@
-/* =========================================================
-   OpenWeb — Admin-Oberflaeche
+﻿/* =========================================================
+   OpenWeb â€” Admin-Oberflaeche
    Dark & Neon Theme
    ========================================================= */
 
@@ -1307,3 +1307,77 @@ body.admin-locked #admin-status-block * {
   .content-head { gap: 8px; }
   .content-head h2 { font-size: 20px; }
 }
+
+.admin-np-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  
+  .admin-np-badge {
+    align-self: flex-start;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--bg-3);
+    color: var(--text-faint);
+    border: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  
+  #admin-np-player.playing .admin-np-badge {
+    background: rgba(182, 255, 60, 0.15);
+    color: var(--neon-lime);
+    border-color: rgba(182, 255, 60, 0.45);
+  }
+  
+  #admin-np-player.paused .admin-np-badge {
+    background: rgba(255, 196, 0, 0.12);
+    color: #ffc400;
+    border-color: rgba(255, 196, 0, 0.4);
+  }
+  
+  .admin-np-title,
+  .admin-np-meta {
+    position: relative;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  
+  .admin-np-title {
+    font-size: clamp(16px, 2.5vw, 18px);
+    font-weight: 600;
+    color: var(--text);
+  }
+  
+  .admin-np-meta {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  
+  .admin-np-meta .admin-np-bitrate {
+    color: var(--neon-cyan);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+  
+  .admin-np-meta .admin-np-radio-badge {
+    color: var(--neon-red);
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-size: 11px;
+    animation: radio-pulse 2s ease-in-out infinite;
+  }
+  
+  @keyframes radio-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+

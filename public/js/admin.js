@@ -1571,12 +1571,11 @@
   function initAdminNowPlaying() {
     const player = $('#admin-np-player');
     const cover = $('#admin-np-cover');
+    const badge = $('#admin-np-badge');
     const titleEl = $('#admin-np-title');
-    const artistEl = $('#admin-np-artist');
+    const metaEl = $('#admin-np-meta');
     const progressEl = $('#admin-np-progress');
-    const albumEl = $('#admin-np-album');
-    const extraEl = $('#admin-np-extra');
-    if (!player || !cover || !titleEl || !artistEl || !progressEl || !albumEl || !extraEl) return;
+    if (!player || !cover || !badge || !titleEl || !metaEl || !progressEl) return;
 
     let pollTimer = null;
     let progressTimer = null;
@@ -1623,13 +1622,12 @@
     function renderIdle() {
       currentTrack = null;
       setState('idle');
+      badge.textContent = 'Not playing';
       clearMarquee(titleEl);
       titleEl.textContent = 'Momentan läuft nichts';
-      clearMarquee(artistEl);
-      artistEl.textContent = 'Starte Musik in Navidrome, um die Vorschau zu sehen.';
+      clearMarquee(metaEl);
+      metaEl.textContent = 'Starte Musik in Navidrome, um die Vorschau zu sehen.';
       progressEl.textContent = '00:00 / 00:00';
-      albumEl.hidden = true;
-      extraEl.hidden = true;
       cover.classList.add('placeholder');
       cover.replaceChildren();
     }
@@ -1637,32 +1635,23 @@
     function renderTrack(track) {
       const state = track.paused ? 'paused' : 'playing';
       setState(state);
-      
+      badge.textContent = track.paused ? 'Stopped' : (track.isRadio ? '📡 LIVE' : 'Playing');
       applyMarquee(titleEl, escapeHtml(track.title || 'Unbekannt'));
 
+      const parts = [];
       if (track.isRadio) {
-        applyMarquee(artistEl, escapeHtml(track.artist || 'Internetradio'));
-      } else {
-        applyMarquee(artistEl, escapeHtml(track.artist || '—'));
+        parts.push(escapeHtml(track.artist || 'Internetradio'));
+      } else if (track.artist) {
+        parts.push(escapeHtml(track.artist));
       }
-
-      if (track.album && !track.isRadio) {
-        applyMarquee(albumEl, '💿 ' + escapeHtml(track.album));
-        albumEl.hidden = false;
-      } else {
-        albumEl.hidden = true;
-      }
+      if (track.album && !track.isRadio) parts.push(escapeHtml(track.album));
 
       const bitrate = track.bitrate ? `${track.bitrate} kbps` : null;
-      if (track.isRadio) {
-        extraEl.innerHTML = '<span class="live-indicator"></span> 📡 LIVE' + (bitrate ? ` <span style="opacity:0.5;margin-left:8px">• ${bitrate}</span>` : '');
-        extraEl.hidden = false;
-      } else if (bitrate) {
-        extraEl.innerHTML = `🎵 ${bitrate}`;
-        extraEl.hidden = false;
-      } else {
-        extraEl.hidden = true;
-      }
+      const extra = [];
+      if (track.isRadio) extra.push('<span class="admin-np-radio-badge">📡 LIVE</span>');
+      if (bitrate) extra.push(`Bitrate: <span class="admin-np-bitrate">${bitrate}</span>`);
+      const metaText = parts.join(' · ') + (extra.length ? ' | ' + extra.join(' | ') : '');
+      applyMarquee(metaEl, metaText);
 
       cover.replaceChildren();
       cover.classList.remove('placeholder');
@@ -1671,7 +1660,6 @@
         cover.appendChild(img);
       } else {
         cover.classList.add('placeholder');
-        cover.appendChild(document.createTextNode(track.isRadio ? '📻' : '🎵'));
       }
 
       lastServerPosition = track.position || 0;
