@@ -656,9 +656,17 @@ body {
   display: block;
 }
 
+.link-icon-img.no-filter {
+  filter: none;
+}
+
 .link-icon:hover .link-icon-img {
   filter: brightness(0) invert(1) drop-shadow(0 0 6px var(--neon-cyan));
   opacity: 1;
+}
+
+.link-icon:hover .link-icon-img.no-filter {
+  filter: drop-shadow(0 0 6px var(--neon-cyan));
 }
 
 .link-title {

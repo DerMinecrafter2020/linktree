@@ -87,7 +87,7 @@
     if (icon.startsWith('dashboardicon:') && window.icons) {
       const parsed = window.icons.parse(icon);
       if (!parsed.url) return '🔗';
-      return createIconImg(parsed.url);
+      return createIconImg(parsed.url, '', 'link-icon-img no-filter');
     }
 
     if (/^https?:\/\//i.test(icon)) {
@@ -95,7 +95,7 @@
         const u = new URL(icon);
         if (!['http:', 'https:'].includes(u.protocol)) return '🔗';
       } catch { return '🔗'; }
-      return createIconImg(icon);
+      return createIconImg(icon, '', 'link-icon-img no-filter');
     }
 
     return document.createTextNode(sanitizeIconText(icon));
