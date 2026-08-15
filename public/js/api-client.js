@@ -87,9 +87,10 @@
     createApiKey: (name) => post('/admin/api-keys', { name }),
     deleteApiKey: (id) => del(`/admin/api-keys/${id}`),
 
-    getNavidromeSettings: () => get('/admin/navidrome'),
-    saveNavidromeSettings: (settings) => post('/admin/navidrome', settings),
-    testNavidromeConnection: () => post('/admin/navidrome/test'),
+    getNavidromeSettings: () => get('/admin/settings/navidrome'),
+    saveNavidromeSettings: (cfg) => post('/admin/settings/navidrome', cfg),
+    testNavidromeConnection: () => post('/admin/settings/navidrome/test'),
+    testNavidromeDiscordWebhook: () => post('/admin/settings/navidrome/discord-test'),
 
     exportData: () => get('/admin/export'),
     importData: (data) => post('/admin/import', data),

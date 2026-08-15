@@ -613,6 +613,32 @@ router.get('/navidrome', async (req, res, next) => {
   }
 });
 
+router.post('/settings/navidrome/discord-test', async (req, res, next) => {
+  try {
+    const { sendDiscordWebhook } = require('../lib/discord');
+    const { rows } = await db.query('SELECT discord_webhook_enabled, discord_webhook_url FROM admin_settings WHERE id = 1 LIMIT 1');
+    const settings = rows[0] || {};
+    if (!settings.discord_webhook_url) {
+      return res.status(400).json({ ok: false, error: 'Keine Discord-Webhook-URL im Tab "Admin" hinterlegt' });
+    }
+    
+    // Fake track for testing
+    const testTrack = {
+      title: 'Test Song (Now Playing)',
+      artist: 'OpenWeb Test',
+      album: 'Webhook Integration',
+      coverId: null, // No cover for test, or we can just leave it null
+    };
+
+    const appUrl = process.env.APP_URL ? process.env.APP_URL.replace(/\/$/, '') : null;
+    await sendDiscordWebhook(testTrack, settings.discord_webhook_url, appUrl);
+    
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/navidrome', async (req, res, next) => {
   try {
     const enabled = !!req.body.enabled;

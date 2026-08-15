@@ -392,6 +392,10 @@ async function finalizeApp() {
       runCleanup();
       setInterval(() => { runBackup(); runCleanup(); }, 24 * 60 * 60 * 1000);
     }, next3am - now);
+    
+    // Discord Webhook initialisieren
+    const { initDiscordWebhook } = require('./lib/discord');
+    initDiscordWebhook();
   }
 }
 

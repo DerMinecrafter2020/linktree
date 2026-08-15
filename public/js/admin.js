@@ -1536,6 +1536,17 @@
           : '✅ Verbunden — momentan läuft nichts';
       } catch (err) { status.textContent = '❌ ' + (err.message || 'Netzwerkfehler'); }
     });
+
+    $('#navidrome-discord-test-btn')?.addEventListener('click', async () => {
+      const status = $('#navidrome-status');
+      status.textContent = 'Sende Discord-Test…';
+      try {
+        await window.api.testNavidromeDiscordWebhook();
+        status.textContent = '✅ Discord-Test gesendet (prüfe deinen Kanal)';
+      } catch (err) {
+        status.textContent = '❌ ' + (err.message || 'Netzwerkfehler');
+      }
+    });
   }
 
   async function reloadCategories() { state.categories = await window.api.getLinkCategories(); }
