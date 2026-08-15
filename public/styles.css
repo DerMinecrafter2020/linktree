@@ -576,6 +576,11 @@ body {
   animation: marquee 14s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
+/* Entferne die 3 Punkte (...), wenn der Text bereits scrollt */
+*:has(> .marquee-content) {
+  text-overflow: clip !important;
+}
+
 @keyframes marquee {
   0%, 8%   { transform: translateX(0); }
   42%      { transform: translateX(var(--marquee-offset, 0)); }

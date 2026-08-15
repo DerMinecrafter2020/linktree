@@ -540,8 +540,8 @@
       this.updateFavicon(data.coverUrl);
       const albumEl = wrap?.querySelector('.np-album');
       if (albumEl) {
-        albumEl.textContent = data.album || '';
         albumEl.hidden = !data.album;
+        setText('.np-album', data.album || '', wrap);
       }
       this.renderExtra(data, data.position || 0);
       if (data.isRadio) {
