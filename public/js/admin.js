@@ -965,7 +965,10 @@
     const observer = new MutationObserver(() => {
       if (!tab.hidden) render(currentDays);
     });
-    if (tab) observer.observe(tab, { attributes: true, attributeFilter: ['hidden'] });
+    if (tab) {
+      observer.observe(tab, { attributes: true, attributeFilter: ['hidden'] });
+      if (!tab.hidden) render(currentDays);
+    }
   }
 
   function bindApiKeys() {
@@ -1368,7 +1371,10 @@
     }
     const tab = document.querySelector('[data-tab="audit"]');
     const observer = new MutationObserver(() => { if (!tab.hidden) render(); });
-    if (tab) observer.observe(tab, { attributes: true, attributeFilter: ['hidden'] });
+    if (tab) {
+      observer.observe(tab, { attributes: true, attributeFilter: ['hidden'] });
+      if (!tab.hidden) render();
+    }
   }
 
   function bindSettings() {
