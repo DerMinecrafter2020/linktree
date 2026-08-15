@@ -1016,7 +1016,7 @@ router.post('/change-password', async (req, res, next) => {
       const db = require('../lib/db');
       const { rows } = await db.query('SELECT totp_enabled FROM users WHERE id = $1', [req.session.userId]);
       const { rows: webauthn } = await db.query('SELECT id, created_at, last_used_at FROM webauthn_credentials WHERE user_id = $1', [req.session.userId]);
-      res.json({ ok: true, totp_enabled: rows[0]?.totp_enabled || false, webauthn_keys: webauthn });
+      res.json({ ok: true, data: { totp_enabled: rows[0]?.totp_enabled || false, webauthn_keys: webauthn } });
     } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
   });
 
@@ -1033,11 +1033,9 @@ router.post('/change-password', async (req, res, next) => {
       const otpauth = authenticator.keyuri(email, 'OpenWeb Admin', secret);
       const qrcodeUrl = await QRCode.toDataURL(otpauth);
       
-      // Speichere Secret temporär (z.B. in Session, aber hier überschreiben wir direkt für den Setup-Prozess)
-      // Normalerweise speichert man das erst nach erfolgreicher Validierung, aber für Einfachheit:
       await db.query('UPDATE users SET totp_secret = $1 WHERE id = $2', [secret, req.session.userId]);
       
-      res.json({ ok: true, secret, qrcode: qrcodeUrl });
+      res.json({ ok: true, data: { secret, qrcode: qrcodeUrl } });
     } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
   });
 
@@ -1046,10 +1044,15 @@ router.post('/change-password', async (req, res, next) => {
       const { code } = req.body;
       const db = require('../lib/db');
       const { rows } = await db.query('SELECT totp_secret FROM users WHERE id = $1', [req.session.userId]);
-      const secret = rows[0]?.totp_secret;
+      const user = rows[0];
+      
+      if (!user || !user.totp_secret) {
+        return res.status(400).json({ ok: false, error: 'TOTP nicht eingerichtet' });
+      }
       
       const { authenticator } = require('otplib');
-      if (!secret || !authenticator.check(code, secret)) {
+      const isValid = authenticator.check(code, user.totp_secret);
+      if (!isValid) {
         return res.status(400).json({ ok: false, error: 'Ungueltiger Code' });
       }
       
@@ -1092,7 +1095,7 @@ router.post('/change-password', async (req, res, next) => {
       });
       
       await db.query('UPDATE users SET webauthn_current_challenge = $1 WHERE id = $2', [options.challenge, req.session.userId]);
-      res.json(options);
+      res.json({ ok: true, data: options });
     } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
   });
 
