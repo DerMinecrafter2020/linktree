@@ -627,7 +627,10 @@ router.post('/settings/navidrome/discord-test', async (req, res, next) => {
       title: 'Test Song (Now Playing)',
       artist: 'OpenWeb Test',
       album: 'Webhook Integration',
-      coverId: null, // No cover for test, or we can just leave it null
+      coverId: null, 
+      testCoverUrl: 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ef?auto=format&fit=crop&w=800&q=80', // Dummy Vinyl Bild für Discord
+      url: settings.url || 'https://demo.navidrome.org',
+      albumId: 'test-album-id',
     };
 
     const appUrl = process.env.APP_URL ? process.env.APP_URL.replace(/\/$/, '') : null;
