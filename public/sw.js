@@ -48,6 +48,10 @@ self.addEventListener('fetch', event => {
 
   // API-Requests nie cachen
   const url = new URL(event.request.url);
+  
+  // Nur same-origin Anfragen verarbeiten, um Probleme mit externen CDNs (jsdelivr) zu vermeiden
+  if (url.origin !== self.location.origin) return;
+  
   if (url.pathname.startsWith('/api/')) return;
 
   // Network-First: Versuche immer zuerst vom Server zu laden
