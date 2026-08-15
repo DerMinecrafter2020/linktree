@@ -374,6 +374,32 @@ async function finalizeApp() {
       }
     };
 
+    let lastRecordedTrack = null;
+    const recordMusicHistory = async () => {
+      try {
+        const { getNowPlaying } = require('./lib/navidrome');
+        const db = require('./lib/db');
+        const track = await getNowPlaying();
+        
+        if (track && track.playing && !track.paused) {
+          const trackKey = track.id || (track.title + track.artist);
+          if (trackKey !== lastRecordedTrack) {
+            lastRecordedTrack = trackKey;
+            await db.query(
+              'INSERT INTO music_history (track_id, title, artist, album) VALUES ($1, $2, $3, $4)',
+              [track.id, track.title, track.artist, track.album]
+            );
+          }
+        } else if (!track) {
+          lastRecordedTrack = null;
+        }
+      } catch (err) {
+        console.error('[music-history] Fehler beim Speichern des Verlaufs:', err.message);
+      }
+    };
+    // Alle 15 Sekunden prüfen
+    setInterval(recordMusicHistory, 15000);
+
     // Einmalig beim Start und dann täglich um 03:00 Uhr
     runBackup();
     runCleanup();

@@ -598,6 +598,18 @@ router.get('/db-info', async (req, res, next) => {
   }
 });
 
+// ---------- Music History ----------
+router.get('/music-history', async (req, res) => {
+  try {
+    const db = require('../lib/db');
+    const { rows } = await db.query('SELECT * FROM music_history ORDER BY played_at DESC LIMIT 50');
+    res.json({ ok: true, data: rows });
+  } catch (err) {
+    console.error('[music-history] Error fetching history:', err);
+    res.status(500).json({ ok: false, error: 'Fehler beim Laden des Musikverlaufs' });
+  }
+});
+
 // ---------- Navidrome-Settings (Admin) ----------
 router.get('/settings/navidrome', async (req, res, next) => {
   try {

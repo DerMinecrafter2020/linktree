@@ -1480,6 +1480,34 @@
     }
   }
 
+  async function loadMusicHistory() {
+    try {
+      const historyRes = await window.api.getMusicHistory();
+      const list = $('#music-history-list');
+      if (!list) return;
+      if (!historyRes || !historyRes.data || historyRes.data.length === 0) {
+        list.innerHTML = '<li class="stats-item"><span class="stats-label">Noch keine Songs im Verlauf.</span></li>';
+        return;
+      }
+      
+      list.replaceChildren();
+      historyRes.data.forEach(item => {
+        const d = new Date(item.played_at);
+        const timeStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const li = el('li', { class: 'stats-item' },
+          el('span', { class: 'stats-label' }, 
+            el('strong', {}, item.title), 
+            ' von ', item.artist || 'Unbekannt'
+          ),
+          el('span', { class: 'stats-count' }, timeStr)
+        );
+        list.appendChild(li);
+      });
+    } catch (err) {
+      console.warn('[admin] Music history error:', err.message);
+    }
+  }
+
   function renderNavidromeForm() {
     const form = $('#navidrome-form');
     if (!form) return;
@@ -1495,6 +1523,7 @@
     const form = $('#navidrome-form');
     if (!form || !window.api) return;
     loadNavidromeSettings();
+    loadMusicHistory();
     initAdminNowPlaying();
 
     form.addEventListener('submit', async (e) => {

@@ -86,6 +86,8 @@
     createApiKey: (name) => post('/admin/api-keys', { name }),
     deleteApiKey: (id) => del(`/admin/api-keys/${id}`),
 
+    getMusicHistory: () => get('/admin/music-history'),
+
     getNavidromeSettings: () => get('/admin/settings/navidrome'),
     saveNavidromeSettings: (cfg) => post('/admin/settings/navidrome', cfg),
     testNavidromeConnection: () => post('/admin/settings/navidrome/test'),
