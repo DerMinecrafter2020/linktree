@@ -110,7 +110,7 @@ window.icons = {
     const base = name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
     if (!base) return '';
     const suffix = variant ? `-${variant}` : '';
-    return `https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/${format}/${base}${suffix}.${format}`;
+    return `/api/icon/dashboardicon/${base}${suffix}/${format}`;
   },
 
   getInfo(id) {

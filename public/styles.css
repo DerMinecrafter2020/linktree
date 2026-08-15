@@ -180,7 +180,7 @@ body {
 
 .avatar.has-image { font-size: 0; background: transparent; }
 
-.avatar img {
+.avatar img { filter: none !important;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -441,7 +441,8 @@ body {
 }
 
 .np-title,
-.np-artist {
+.np-artist,
+.np-album {
   position: relative;
   overflow: hidden;
   white-space: nowrap;

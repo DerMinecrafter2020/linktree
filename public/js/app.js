@@ -87,7 +87,7 @@
     if (icon.startsWith('dashboardicon:') && window.icons) {
       const parsed = window.icons.parse(icon);
       if (!parsed.url) return '🔗';
-      return createIconImg(parsed.url, '', 'link-icon-img no-filter');
+      return createIconImg(parsed.url, '', 'link-icon-img');
     }
 
     if (/^https?:\/\//i.test(icon)) {
@@ -131,7 +131,7 @@
       const av = profile.avatar_url;
       const safeImg = av && /^data:image\/(png|jpeg|webp|gif);base64,/i.test(av);
       if (safeImg) {
-        avatarEl.replaceChildren(createIconImg(av));
+        avatarEl.replaceChildren(createIconImg(av, '', 'avatar-img'));
         avatarEl.classList.add('has-image');
       } else {
         avatarEl.replaceChildren(document.createTextNode(

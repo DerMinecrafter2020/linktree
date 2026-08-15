@@ -236,6 +236,27 @@ router.get('/icon/simpleicon/:id.svg', async (req, res, next) => {
   }
 });
 
+router.get('/icon/dashboardicon/:name/:format?', async (req, res, next) => {
+  try {
+    const name = req.params.name;
+    const format = req.params.format || 'png';
+    if (!/^[a-z0-9-]+$/.test(name) || !/^[a-z0-9]+$/.test(format)) {
+      return res.status(400).send('Bad Request');
+    }
+    const url = `https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/${format}/${name}.${format}`;
+    const response = await fetch(url);
+    if (!response.ok) return res.status(response.status).send('Not Found');
+    
+    res.setHeader('Content-Type', format === 'svg' ? 'image/svg+xml' : `image/${format}`);
+    res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+    
+    const buffer = await response.arrayBuffer();
+    res.send(Buffer.from(buffer));
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/qr-code', async (req, res, next) => {
   try {
     const text = req.query.text;
