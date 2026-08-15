@@ -292,20 +292,12 @@ async function finalizeApp() {
           html = html.replace(/(<\/head>)/i, `\n<style>${safeCss}</style>\n$1`);
         }
 
-        const track = await getNowPlaying();
-        const isPlaying = track && track.playing;
-        let pageTitle, pageDescription;
-        if (isPlaying && track.isRadio) {
-          pageTitle = `📻 ${track.title}`;
-          pageDescription = track.paused ? 'Momentan pausiert' : `Hört gerade: ${track.title}`;
-        } else if (isPlaying) {
-          pageTitle = `🎵 ${track.artist ? track.artist + ' — ' : ''}${track.title}`;
-          pageDescription = track.paused ? 'Momentan pausiert' : `Aktuell läuft: ${track.title}${track.artist ? ' von ' + track.artist : ''}${track.album ? ' (' + track.album + ')' : ''}`;
-        } else {
-          pageTitle = `${escapeHtml(profile.handle || profile.name || 'OpenWeb')}`;
-          pageDescription = escapeHtml(profile.bio || 'Alle wichtigen Links auf einen Blick.');
-        }
-        const image = isPlaying && track.coverUrl ? `${absUrl}${track.coverUrl}` : `${absUrl}/icons/icon.svg`;
+        const pageTitle = escapeHtml(profile.handle || profile.name || 'OpenWeb');
+        const pageDescription = escapeHtml(profile.bio || 'Alle wichtigen Links auf einen Blick.');
+        const imageUrl = profile.avatar_url 
+          ? (profile.avatar_url.startsWith('http') ? profile.avatar_url : `${absUrl}${profile.avatar_url}`) 
+          : `${absUrl}/icons/icon.svg`;
+        const image = imageUrl;
 
         const pkg = require('./package.json');
 
