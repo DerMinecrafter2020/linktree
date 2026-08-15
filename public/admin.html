@@ -436,43 +436,39 @@
 
       <!-- TAB: DATEN -->
       <section class="tab" data-tab="data" hidden>
-        <div class="data-grid-top">
-          <div class="card-block" id="category-panel">
-            <h3>🏷️ Kategorien</h3>
-            <p class="hint">Kategorien gruppieren Links auf der Startseite.</p>
-            <ul id="category-list" class="category-list"></ul>
-            <div class="form inline">
-              <input id="category-input" type="text" placeholder="Neue Kategorie …" />
-              <button type="button" id="category-add-btn" class="btn primary">Hinzufügen</button>
-            </div>
-          </div>
-          <div class="card-block">
-            <h3>💾 Automatische Backups</h3>
-            <p class="hint">Täglich um 03:00 Uhr wird automatisch ein Backup erstellt.</p>
-            <ul id="backup-list" class="backup-list"></ul>
-            <div class="toolbar">
-              <button id="backup-now-btn" class="btn primary">Jetzt Backup erstellen</button>
-            </div>
+        <div class="card-block" id="category-panel">
+          <h3>🏷️ Kategorien</h3>
+          <p class="hint">Kategorien gruppieren Links auf der Startseite.</p>
+          <ul id="category-list" class="category-list"></ul>
+          <div class="form inline">
+            <input id="category-input" type="text" placeholder="Neue Kategorie …" />
+            <button type="button" id="category-add-btn" class="btn primary">Hinzufügen</button>
           </div>
         </div>
-        <div class="data-grid-actions">
-          <div class="card-block">
-            <h3>📤 Export</h3>
-            <p>Alle Einstellungen und Links als JSON herunterladen.</p>
-            <button id="export-btn" class="btn">JSON exportieren</button>
+        <div class="card-block">
+          <h3>💾 Automatische Backups</h3>
+          <p class="hint">Täglich um 03:00 Uhr wird automatisch ein Backup erstellt.</p>
+          <ul id="backup-list" class="backup-list"></ul>
+          <div class="toolbar">
+            <button id="backup-now-btn" class="btn primary">Jetzt Backup erstellen</button>
           </div>
-          <div class="card-block">
-            <h3>📥 Import</h3>
-            <p>Eine exportierte JSON-Datei wieder einspielen.</p>
-            <input type="file" id="import-input" accept="application/json" hidden />
-            <button id="import-btn" class="btn">JSON importieren</button>
-          </div>
-          <div class="card-block">
-            <h3>📤 CSV Import</h3>
-            <p>Links aus einer Linktree-CSV importieren.</p>
-            <input type="file" id="linktree-import-input" accept=".csv,text/csv" hidden />
-            <button id="linktree-import-btn" class="btn">CSV auswählen</button>
-          </div>
+        </div>
+        <div class="card-block">
+          <h3>📤 Export</h3>
+          <p>Alle Einstellungen und Links als JSON herunterladen.</p>
+          <button id="export-btn" class="btn">JSON exportieren</button>
+        </div>
+        <div class="card-block">
+          <h3>📥 Import</h3>
+          <p>Eine exportierte JSON-Datei wieder einspielen.</p>
+          <input type="file" id="import-input" accept="application/json" hidden />
+          <button id="import-btn" class="btn">JSON importieren</button>
+        </div>
+        <div class="card-block">
+          <h3>📤 CSV Import</h3>
+          <p>Links aus einer Linktree-CSV importieren.</p>
+          <input type="file" id="linktree-import-input" accept=".csv,text/csv" hidden />
+          <button id="linktree-import-btn" class="btn">CSV auswählen</button>
         </div>
         <div class="card-block danger">
           <h3>🗑️ Zurücksetzen</h3>
