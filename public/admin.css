@@ -1047,13 +1047,13 @@ body.admin-locked #admin-status-block * {
   font-family: 'JetBrains Mono', monospace;
 }
 
-.admin-np-player.playing .admin-np-badge {
+#admin-np-player.playing .admin-np-badge {
   background: rgba(182, 255, 60, 0.15);
   color: var(--neon-lime);
   border-color: rgba(182, 255, 60, 0.45);
 }
 
-.admin-np-player.paused .admin-np-badge {
+#admin-np-player.paused .admin-np-badge {
   background: rgba(255, 196, 0, 0.12);
   color: #ffc400;
   border-color: rgba(255, 196, 0, 0.4);

@@ -1570,7 +1570,7 @@
   // ---------- Admin-Panel: Navidrome Live-Vorschau ----------
   function initAdminNowPlaying() {
     const player = $('#admin-np-player');
-    const cover = player?.querySelector('.admin-np-cover');
+    const cover = $('#admin-np-cover');
     const badge = $('#admin-np-badge');
     const titleEl = $('#admin-np-title');
     const metaEl = $('#admin-np-meta');
@@ -1629,7 +1629,7 @@
       metaEl.textContent = 'Starte Musik in Navidrome, um die Vorschau zu sehen.';
       progressEl.textContent = '00:00 / 00:00';
       cover.classList.add('placeholder');
-      cover.replaceChildren(document.createTextNode('🎵'));
+      cover.replaceChildren();
     }
 
     function renderTrack(track) {
@@ -1656,7 +1656,7 @@
       cover.replaceChildren();
       cover.classList.remove('placeholder');
       if (track.coverUrl) {
-        const img = el('img', { src: track.coverUrl, alt: track.title || '' });
+        const img = el('img', { src: track.coverUrl, alt: track.title || '', class: 'np-cover-img' });
         cover.appendChild(img);
       } else {
         cover.classList.add('placeholder');
