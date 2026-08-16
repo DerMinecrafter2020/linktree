@@ -289,19 +289,48 @@
         toast('✅ Profil gespeichert');
       } catch (err) { toast('Fehler: ' + err.message, true); }
     });
+
+    const legalForm = $('#legal-form');
+    if (legalForm) {
+      legalForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const updates = {
+          impressum_text: fd.get('impressum_text') || '',
+          datenschutz_text: fd.get('datenschutz_text') || '',
+        };
+        try {
+          // Since the API expects the full profile, we merge updates into state.profile
+          const newProfile = { ...state.profile, ...updates };
+          const res = await window.api.saveAdminProfile(newProfile);
+          state.profile = res;
+          toast('Rechtliche Texte gespeichert!');
+        } catch (err) {
+          toast('Fehler: ' + err.message, true);
+        }
+      });
+    }
   }
 
   function renderProfile() {
     if (!state.profile) return;
     const f = $('#profile-form');
-    f.name.value = state.profile.name || '';
-    f.handle.value = state.profile.handle || '';
-    f.bio.value = state.profile.bio || '';
-    f.avatar.value = state.profile.avatar || '';
-    f.is_public.checked = state.profile.is_public !== false;
-    f.allow_visitor_theme.checked = state.profile.allow_visitor_theme !== false;
-    f.custom_css.value = state.profile.custom_css || '';
-    updateAvatarPreview(state.profile.avatar_url || null);
+    if (f) {
+      f.name.value = state.profile.name || '';
+      f.handle.value = state.profile.handle || '';
+      f.bio.value = state.profile.bio || '';
+      f.avatar.value = state.profile.avatar || '';
+      f.is_public.checked = state.profile.is_public !== false;
+      f.allow_visitor_theme.checked = state.profile.allow_visitor_theme !== false;
+      f.custom_css.value = state.profile.custom_css || '';
+      updateAvatarPreview(state.profile.avatar_url || null);
+    }
+    
+    const fLegal = $('#legal-form');
+    if (fLegal) {
+      fLegal.impressum_text.value = state.profile.impressum_text || '';
+      fLegal.datenschutz_text.value = state.profile.datenschutz_text || '';
+    }
   }
 
   function buildLinkRow(link) {

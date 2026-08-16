@@ -72,6 +72,8 @@ router.post('/profile', async (req, res, next) => {
     const isPublic = req.body.is_public !== false;
     const allowVisitorTheme = req.body.allow_visitor_theme !== false;
     const customCss = req.body.custom_css !== undefined ? String(req.body.custom_css || '').slice(0, 5000) : undefined;
+    const impressumText = req.body.impressum_text !== undefined ? String(req.body.impressum_text || '').slice(0, 10000) : undefined;
+    const datenschutzText = req.body.datenschutz_text !== undefined ? String(req.body.datenschutz_text || '').slice(0, 10000) : undefined;
 
     const updates = [
       'name = EXCLUDED.name',
@@ -86,18 +88,41 @@ router.post('/profile', async (req, res, next) => {
     ];
     const values = [name, handle, bio, avatar, avatarUrl, theme, isPublic, allowVisitorTheme];
     let idx = 9;
+    
+    let extraCols = [];
+    let extraVals = [];
+    
     if (customCss !== undefined) {
       updates.splice(-1, 0, `custom_css = EXCLUDED.custom_css`);
       values.push(customCss);
-      idx++;
+      extraCols.push('custom_css');
+      extraVals.push('$' + idx++);
+    }
+    
+    if (impressumText !== undefined) {
+      updates.splice(-1, 0, `impressum_text = EXCLUDED.impressum_text`);
+      values.push(impressumText);
+      extraCols.push('impressum_text');
+      extraVals.push('$' + idx++);
     }
 
+    if (datenschutzText !== undefined) {
+      updates.splice(-1, 0, `datenschutz_text = EXCLUDED.datenschutz_text`);
+      values.push(datenschutzText);
+      extraCols.push('datenschutz_text');
+      extraVals.push('$' + idx++);
+    }
+    
+    const extraColsStr = extraCols.length ? ', ' + extraCols.join(', ') : '';
+    const extraValsStr = extraVals.length ? ', ' + extraVals.join(', ') : '';
+
     await db.query(`
-      INSERT INTO profile (id, name, handle, bio, avatar, avatar_url, theme, is_public, allow_visitor_theme${customCss !== undefined ? ', custom_css' : ''})
-      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8${customCss !== undefined ? ', $' + idx : ''})
+      INSERT INTO profile (id, name, handle, bio, avatar, avatar_url, theme, is_public, allow_visitor_theme${extraColsStr})
+      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8${extraValsStr})
       ON CONFLICT (id) DO UPDATE SET ${updates.join(', ')}
     `, values);
 
+    await audit.log(req, 'profile_update', 'profile', 1);
     const { rows } = await db.query('SELECT * FROM profile WHERE id = 1 LIMIT 1');
     res.json({ ok: true, data: rows[0] });
   } catch (err) {

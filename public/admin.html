@@ -256,11 +256,13 @@
           <input type="radio" name="settings-tab" id="settings-status" class="sub-tab-radio" checked />
           <input type="radio" name="settings-tab" id="settings-notifications" class="sub-tab-radio" />
           <input type="radio" name="settings-tab" id="settings-security" class="sub-tab-radio" />
+          <input type="radio" name="settings-tab" id="settings-legal" class="sub-tab-radio" />
 
           <div class="sub-tabs">
             <label for="settings-status" class="sub-tab">🛡️ Status</label>
             <label for="settings-notifications" class="sub-tab">🔔 Benachrichtigungen</label>
             <label for="settings-security" class="sub-tab">🔑 Sicherheit</label>
+            <label for="settings-legal" class="sub-tab">⚖️ Rechtliches</label>
           </div>
 
           <div class="sub-tab-panels">
@@ -418,6 +420,26 @@
                 <div class="form-actions">
                   <button type="button" id="webauthn-register-btn" class="btn primary">Neuen Schlüssel registrieren</button>
                 </div>
+              </div>
+            </div>
+            
+            <div class="sub-tab-panel" id="panel-legal">
+              <div class="card-block">
+                <h3>⚖️ Rechtliche Angaben</h3>
+                <p class="hint">Diese Texte werden automatisch auf den Unterseiten /impressum und /datenschutz angezeigt.</p>
+                <form id="legal-form" class="form">
+                  <label>
+                    <span>Impressum (HTML erlaubt)</span>
+                    <textarea name="impressum_text" rows="8" placeholder="Angaben gemäß § 5 TMG..."></textarea>
+                  </label>
+                  <label>
+                    <span>Datenschutzerklärung (HTML erlaubt)</span>
+                    <textarea name="datenschutz_text" rows="8" placeholder="Datenschutz auf einen Blick..."></textarea>
+                  </label>
+                  <div class="form-actions">
+                    <button type="submit" class="btn primary">Speichern</button>
+                  </div>
+                </form>
               </div>
             </div>
           </div>

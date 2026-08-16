@@ -374,6 +374,24 @@ async function finalizeApp() {
       }
     });
 
+    const impressumHtmlTemplate = fs.readFileSync(path.join(__dirname, 'public', 'impressum.template.html'), 'utf8');
+    app.get(['/impressum.html', '/impressum'], async (req, res, next) => {
+      try {
+        const { rows } = await db.query('SELECT impressum_text FROM profile WHERE id = 1 LIMIT 1');
+        const content = rows[0]?.impressum_text || 'Noch kein Impressum hinterlegt.';
+        res.send(impressumHtmlTemplate.replace('__CONTENT__', content));
+      } catch (err) { next(err); }
+    });
+
+    const datenschutzHtmlTemplate = fs.readFileSync(path.join(__dirname, 'public', 'datenschutz.template.html'), 'utf8');
+    app.get(['/datenschutz.html', '/datenschutz'], async (req, res, next) => {
+      try {
+        const { rows } = await db.query('SELECT datenschutz_text FROM profile WHERE id = 1 LIMIT 1');
+        const content = rows[0]?.datenschutz_text || 'Noch keine Datenschutzerklärung hinterlegt.';
+        res.send(datenschutzHtmlTemplate.replace('__CONTENT__', content));
+      } catch (err) { next(err); }
+    });
+
     app.get('*', (req, res) => res.status(404).sendFile(path.join(__dirname, 'public', '404.html')));
   }
 
