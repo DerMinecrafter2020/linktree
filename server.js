@@ -116,6 +116,14 @@ async function finalizeApp() {
     app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
     app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
   } else {
+    console.log('[server] Prüfe auf ausstehende Datenbank-Migrationen...');
+    try {
+      await require('./db/migrate').run();
+    } catch (err) {
+      console.error('[server] Fehler bei der Datenbank-Migration:', err.message);
+      // Wir setzen fort, aber es könnte zu Problemen führen
+    }
+
     const session = require('express-session');
     const PgSession = require('connect-pg-simple')(session);
     const db = require('./lib/db');
