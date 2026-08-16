@@ -39,7 +39,7 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 Minuten
 const LOGIN_MAX_ATTEMPTS = 10;
 
 function rateLimitLogin(req, res, next) {
-  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
   const now = Date.now();
   const record = loginAttempts.get(ip);
   if (record && record.count >= LOGIN_MAX_ATTEMPTS) {
@@ -188,7 +188,7 @@ async function sendDiscordWebhook(payload) {
 router.post('/links/:id/click', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const ip = req.ip || req.socket.remoteAddress || null;
+    const ip = req.ip || req.socket?.remoteAddress || null;
     const ipHash = ip ? require('crypto').createHash('sha256').update(ip).digest('hex') : null;
     const utm = req.body.utm || {};
     const ua = req.headers['user-agent'] || '';
@@ -362,7 +362,7 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
 
     alert.notify('login', 'Admin-Login erkannt', {
       email: user.email,
-      ip: req.ip || req.socket.remoteAddress || '-',
+      ip: req.ip || req.socket?.remoteAddress || '-',
       userAgent: req.headers['user-agent'] || '-',
       country: parseCountryCode(req) || '-',
       time: new Date().toISOString(),
@@ -392,11 +392,11 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
 
     const audit = require('../lib/audit');
     const alert = require('../lib/alert');
-    const { parseCountryCode } = require('../lib/utils');
+    const { parseCountryCode } = require('../lib/analytics');
     await audit.log(req, 'login_2fa', 'user', user.id);
     alert.notify('login', 'Admin-Login erkannt (2FA)', {
       email: user.email,
-      ip: req.ip || req.socket.remoteAddress || '-',
+      ip: req.ip || req.socket?.remoteAddress || '-',
       userAgent: req.headers['user-agent'] || '-',
       country: parseCountryCode(req) || '-',
       time: new Date().toISOString(),
