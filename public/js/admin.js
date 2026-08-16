@@ -1687,13 +1687,13 @@
     });
   }
 
-  async function reloadCategories() { state.categories = await window.api.getLinkCategories(); }
+  async function reloadCategories() { state.categories = await window.api.getAdminLinkCategories(); }
   async function reloadLinks() { state.links = await window.api.getAdminLinks(); renderLinks(); }
   async function reloadAll() {
     [state.profile, state.links, state.categories] = await Promise.all([
       window.api.getAdminProfile(),
       window.api.getAdminLinks(),
-      window.api.getLinkCategories(),
+      window.api.getAdminLinkCategories(),
     ]);
     renderProfile();
     renderLinks();

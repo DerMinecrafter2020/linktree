@@ -6,20 +6,10 @@
   <meta name="description" content="Alle wichtigen Links auf einen Blick." />
   <meta name="robots" content="index, follow" />
   <meta name="theme-color" content="#000000" />
-  <meta http-equiv="Content-Security-Policy" content="
-    default-src 'self';
-    script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
-    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-    font-src 'self' https://fonts.gstatic.com;
-    img-src 'self' data: https: blob:;
-    connect-src 'self';
-    base-uri 'self';
-    form-action 'self';
-    object-src 'none';
-  " />
-  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
-  <meta http-equiv="Permissions-Policy" content="geolocation=(), microphone=(), camera=(), payment=()" />
+  
+  
+  
+  
   <title>Cornelius Ahner · Links</title>
   <meta property="og:site_name" content="Cornelius Ahner" />
   <meta property="og:title" content="Cornelius Ahner · Links" />
@@ -30,13 +20,11 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Cornelius Ahner · Links" />
   <meta name="twitter:description" content="Alle wichtigen Links auf einen Blick." />
-  <meta name="twitter:image" content="" />
+  <meta name="twitter:image" content="https://cornyriegel.de/icons/icon.svg" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" id="favicon" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icons/icon.svg" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/fonts.css" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -105,6 +93,10 @@
     <footer class="footer">
       <span class="dot"></span>
       <span>made with <span class="heart">♥</span> · <span class="year"></span> · <a href="/changelog.html" class="footer-link">Changelog</a> · v__APP_VERSION__</span>
+      <div style="margin-top: 10px; font-size: 0.85em; display: flex; gap: 15px; justify-content: center;">
+        <a href="/impressum.html" class="footer-link">Impressum</a>
+        <a href="/datenschutz.html" class="footer-link">Datenschutz</a>
+      </div>
     </footer>
   </main>
 
@@ -131,7 +123,12 @@
       }).catch(console.error);
       // Falls der Controller wechselt (neuer SW uebernimmt), Seite neu laden
       let refreshing = false;
+      let hadController = !!navigator.serviceWorker.controller;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController) {
+          hadController = true;
+          return;
+        }
         if (refreshing) return;
         refreshing = true;
         window.location.reload();

@@ -164,6 +164,7 @@
     const select = document.createElement('select');
     select.id = 'theme-switcher';
     select.className = 'theme-switcher';
+    select.setAttribute('aria-label', 'Design wählen');
     const stored = localStorage.getItem('openweb-theme');
     const themes = [
       { value: '', label: 'Dunkel' },
