@@ -35,6 +35,17 @@
     <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
 
     <div class="changelog-entry">
+      <h2>2026-08-23 — OpenWeb v3.0.0 (Music Assistant Update)</h2>
+      <ul>
+        <li><strong>Music Assistant:</strong> Vollständige Integration von Music Assistant (Standalone Server). Liest den aktuellen Song, die korrekte Laufzeit und Cover-Bilder direkt über die JSON-RPC API (bzw. Warteschlange) aus.</li>
+        <li><strong>Navidrome & Music Assistant:</strong> Das System prüft nun intelligent beide Systeme gleichzeitig und zeigt das an, was gerade aktiv spielt (mit Fallback auf pausierte Titel).</li>
+        <li><strong>Audio-Qualitätsanzeige:</strong> Unterstützung für die Anzeige von Sample-Raten und Bit-Tiefen (z. B. <code>44.1 kHz / 16 bits</code> bei FLAC) zusätzlich zur klassischen Bitrate (<code>320 kbps</code>).</li>
+        <li><strong>Discord-Integration:</strong> Das Webhook-System unterstützt nun nahtlos Music Assistant, lädt externe Cover-URLs direkt in Discord hoch und hängt die Audioqualität (Format + Bitrate) elegant an die Nachricht an.</li>
+        <li><strong>Stabilität:</strong> 3-Sekunden Timeout für Music Assistant Abfragen hinzugefügt, damit das Fallback zu Navidrome immer pfeilschnell reagiert.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <h2>2026-08-09 — OpenWeb Feature-Bundle v2.1</h2>
       <ul>
         <li><strong>Public Frontend:</strong> Teilen-Button, QR-Code-Anzeige, Kategorie-Gruppierung, Theme-Switcher (System/Dunkel/Hell/Midnight/Sunset), Passwort-Dialog für geschützte Links, privates Profil-Hinweis, PWA-Registrierung.</li>
