@@ -992,11 +992,17 @@
     // Erst laden, wenn der Tab sichtbar wird
     const tab = document.querySelector('[data-tab="stats"]');
     const observer = new MutationObserver(() => {
-      if (!tab.hidden) render(currentDays);
+      if (!tab.hidden) {
+        render(currentDays);
+        if (typeof loadMusicHistory === 'function') loadMusicHistory();
+      }
     });
     if (tab) {
       observer.observe(tab, { attributes: true, attributeFilter: ['hidden'] });
-      if (!tab.hidden) render(currentDays);
+      if (!tab.hidden) {
+        render(currentDays);
+        if (typeof loadMusicHistory === 'function') loadMusicHistory();
+      }
     }
   }
 
@@ -1708,7 +1714,6 @@
     const form = $('#navidrome-form');
     if (!form || !window.api) return;
     loadNavidromeSettings();
-    loadMusicHistory();
     initAdminNowPlaying();
 
     form.addEventListener('submit', async (e) => {
