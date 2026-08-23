@@ -421,18 +421,28 @@ async function finalizeApp() {
         const { getNowPlaying: getMAPlaying } = require('./lib/musicassistant');
         const db = require('./lib/db');
         
-        let track = await getMAPlaying();
+        let track = null;
+        try {
+          track = await getMAPlaying();
+        } catch (e) {}
+        
         if (!track || !track.playing) {
-          track = await getNavidromePlaying();
+          try {
+            track = await getNavidromePlaying();
+          } catch (e) {}
         }
         
         if (track && track.playing && !track.paused) {
           const trackKey = track.id || (track.title + track.artist);
           if (trackKey !== lastRecordedTrack) {
             lastRecordedTrack = trackKey;
+            const tId = track.id ? String(track.id).substring(0, 255) : null;
+            const tTitle = (track.title || 'Unbekannt').substring(0, 255);
+            const tArtist = (track.artist || '').substring(0, 255);
+            const tAlbum = (track.album || '').substring(0, 255);
             await db.query(
               'INSERT INTO music_history (track_id, title, artist, album) VALUES ($1, $2, $3, $4)',
-              [track.id ? String(track.id) : null, track.title, track.artist, track.album]
+              [tId, tTitle, tArtist, tAlbum]
             );
           }
         } else if (!track || !track.playing) {
