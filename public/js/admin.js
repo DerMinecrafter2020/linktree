@@ -830,7 +830,7 @@
         d.setDate(d.getDate() - i);
         const key = d.toISOString().slice(0, 10);
         labels.push(key);
-        const found = timeline.find(t => t.day === key);
+        const found = timeline.find(t => String(t.day).slice(0, 10) === key);
         counts.push(found ? found.count : 0);
       }
       const max = Math.max(1, ...counts);
