@@ -1617,13 +1617,13 @@
       const historyRes = await window.api.getMusicHistory();
       const list = $('#music-history-list');
       if (!list) return;
-      if (!historyRes || !historyRes.history || historyRes.history.length === 0) {
+      if (!historyRes || historyRes.length === 0) {
         list.innerHTML = '<li class="stats-item"><span class="stats-label">Noch keine Songs im Verlauf.</span></li>';
         return;
       }
       
       list.replaceChildren();
-      historyRes.history.forEach(item => {
+      historyRes.forEach(item => {
         const d = new Date(item.played_at);
         const timeStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const li = el('li', { class: 'stats-item' },
