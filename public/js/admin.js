@@ -1624,39 +1624,70 @@
       
       list.replaceChildren();
       
-      const renderItem = (item) => {
+      const renderItem = (item, groupLabel) => {
         const d = new Date(item.played_at);
-        const dateStr = d.toLocaleDateString('de-DE');
         const timeStr = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
         
+        const timeEl = el('div', { class: 'history-time' }, el('span', {}, timeStr));
+        if (groupLabel === 'Letzte 7 Tage' || groupLabel === 'Älter') {
+          const dateStr = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+          timeEl.appendChild(el('span', {}, dateStr));
+        }
+
         return el('li', { class: 'history-item' },
           el('div', { class: 'history-info' },
             el('div', { class: 'history-title', title: item.title }, item.title),
             el('div', { class: 'history-artist', title: item.artist || 'Unbekannt' }, item.artist || 'Unbekannt')
           ),
-          el('div', { class: 'history-time' },
-            el('span', {}, timeStr),
-            el('span', {}, dateStr)
-          )
+          timeEl
         );
       };
 
-      // Show top 10 items directly
-      const visibleItems = historyRes.slice(0, 10);
-      visibleItems.forEach(item => list.appendChild(renderItem(item)));
+      const groups = {
+        'Heute': [],
+        'Gestern': [],
+        'Letzte 7 Tage': [],
+        'Älter': []
+      };
 
-      // If more items exist, show them in a <details> block
-      if (historyRes.length > 10) {
-        const remainingItems = historyRes.slice(10);
-        const expandedList = el('ul', { class: 'stats-list history-list-expanded' });
-        remainingItems.forEach(item => expandedList.appendChild(renderItem(item)));
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const lastWeek = new Date(today);
+      lastWeek.setDate(lastWeek.getDate() - 7);
+
+      historyRes.forEach(item => {
+        const d = new Date(item.played_at);
+        if (d >= today) groups['Heute'].push(item);
+        else if (d >= yesterday) groups['Gestern'].push(item);
+        else if (d >= lastWeek) groups['Letzte 7 Tage'].push(item);
+        else groups['Älter'].push(item);
+      });
+
+      Object.entries(groups).forEach(([label, items]) => {
+        if (items.length === 0) return;
         
-        const details = el('details', { class: 'history-details' },
-          el('summary', {}, 'Ältere anzeigen...'),
-          expandedList
-        );
-        list.appendChild(details);
-      }
+        const header = el('div', { class: 'history-group-title', style: 'margin-top: 16px; margin-bottom: 8px; font-weight: 600; color: var(--text-dim); font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;' }, label);
+        list.appendChild(header);
+        
+        // Show only the first 5 in the group directly, hide the rest if there are too many (e.g., > 10)
+        // But for grouped view, usually showing all in the group is fine, let's limit it to 10 per group
+        const visibleItems = items.slice(0, 10);
+        visibleItems.forEach(item => list.appendChild(renderItem(item, label)));
+        
+        if (items.length > 10) {
+          const remainingItems = items.slice(10);
+          const expandedList = el('ul', { class: 'stats-list history-list-expanded' });
+          remainingItems.forEach(item => expandedList.appendChild(renderItem(item, label)));
+          
+          const details = el('details', { class: 'history-details' },
+            el('summary', {}, `${remainingItems.length} weitere anzeigen...`),
+            expandedList
+          );
+          list.appendChild(details);
+        }
+      });
     } catch (err) {
       console.warn('[admin] Music history error:', err.message);
     }

@@ -627,7 +627,7 @@ router.get('/db-info', async (req, res, next) => {
 router.get('/music-history', async (req, res) => {
   try {
     const db = require('../lib/db');
-    const { rows } = await db.query('SELECT * FROM music_history ORDER BY played_at DESC LIMIT 50');
+    const { rows } = await db.query('SELECT * FROM music_history ORDER BY played_at DESC LIMIT 150');
     res.json({ ok: true, data: rows });
   } catch (err) {
     console.error('[music-history] Error fetching history:', err);
