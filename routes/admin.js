@@ -211,11 +211,13 @@ router.get('/stats/links', async (req, res, next) => {
       ORDER BY count DESC
     `, [days]);
     const musicHistoryRes = await db.query(`
-      SELECT * FROM music_history 
+      SELECT DISTINCT ON (title, artist) title, artist, album, played_at
+      FROM music_history 
       WHERE played_at > NOW() - $1 * INTERVAL '1 day'
-      ORDER BY played_at DESC 
-      LIMIT 150
+      ORDER BY title, artist, played_at DESC
     `, [days]);
+    // Re-sort by played_at after dedup
+    musicHistoryRes.rows.sort((a, b) => new Date(b.played_at) - new Date(a.played_at));
     res.json({
       ok: true,
       data: {
