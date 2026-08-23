@@ -1855,7 +1855,14 @@
       }
       if (track.album && !track.isRadio) parts.push(escapeHtml(track.album));
 
-      const bitrate = track.bitrate ? `${track.bitrate} kbps` : null;
+      let bitrate = null;
+      if (track.bitrate) {
+        if (typeof track.bitrate === 'number' || !isNaN(track.bitrate)) {
+          bitrate = `${track.bitrate} kbps`;
+        } else {
+          bitrate = track.bitrate;
+        }
+      }
       const extra = [];
       if (track.isRadio) extra.push('<span class="admin-np-radio-badge">📡 LIVE</span>');
       if (bitrate) extra.push(`Bitrate: <span class="admin-np-bitrate">${bitrate}</span>`);
@@ -1889,7 +1896,12 @@
         lastTickAt = now;
       }
       const duration = currentTrack.duration || 0;
-      if (duration > 0) localPosition = Math.min(localPosition, duration);
+      if (duration > 0 && localPosition >= duration) {
+        localPosition = duration;
+        tick();
+      } else if (duration > 0) {
+        localPosition = Math.min(localPosition, duration);
+      }
       progressEl.textContent = `${formatDuration(localPosition)} / ${formatDuration(duration)}`;
     }
 
@@ -1897,11 +1909,15 @@
       return [track.title, track.artist, track.album].filter(Boolean).join('::');
     }
 
+    let isPolling = false;
     async function tick() {
+      if (isPolling) return;
+      isPolling = true;
       try {
         const track = await window.NavidromeAPI.nowPlaying();
         if (!track || !track.playing) {
           if (currentTrack) renderIdle();
+          isPolling = false;
           return;
         }
         const previousId = currentTrack ? trackId(currentTrack) : null;
@@ -1921,13 +1937,14 @@
       } catch (err) {
         console.warn('[admin np] poll failed:', err.message);
       }
+      isPolling = false;
     }
 
     tick();
     if (progressTimer) clearInterval(progressTimer);
     progressTimer = setInterval(updateProgress, 1000);
     if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(tick, 30_000);
+    pollTimer = setInterval(tick, 3000);
   }
 
   async function initApp() {
