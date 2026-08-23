@@ -1634,16 +1634,16 @@
         const d = new Date(item.played_at);
         const timeStr = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
         
-        const timeEl = el('div', { class: 'history-time' }, el('span', {}, timeStr));
+        const timeEl = el('div', { class: 'stat-counts' }, el('span', { class: 'stat-clicks' }, timeStr));
         if (groupLabel === 'Letzte 7 Tage' || groupLabel === 'Älter') {
           const dateStr = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-          timeEl.appendChild(el('span', {}, dateStr));
+          timeEl.appendChild(el('span', { class: 'stat-unique' }, dateStr));
         }
 
-        return el('li', { class: 'history-item' },
-          el('div', { class: 'history-info' },
-            el('div', { class: 'history-title', title: item.title }, item.title),
-            el('div', { class: 'history-artist', title: item.artist || 'Unbekannt' }, item.artist || 'Unbekannt')
+        return el('li', { class: 'stat-row' },
+          el('div', { class: 'stat-info' },
+            el('span', { class: 'stat-title', title: item.title }, item.title),
+            el('span', { class: 'stat-url', title: item.artist || 'Unbekannt' }, item.artist || 'Unbekannt')
           ),
           timeEl
         );
