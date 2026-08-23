@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Changelog der OpenWeb Link-in-Bio Seite." />
+  <meta name="theme-color" content="#000000" />
+  
+  <title>Changelog · OpenWeb</title>
+  
+  
+  <link rel="stylesheet" href="/fonts.css" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .changelog { max-width: 720px; }
+    .changelog h1 { font-size: clamp(24px, 6vw, 32px); margin-bottom: 8px; }
+    .changelog .subtitle { color: var(--text-dim); margin-bottom: 28px; font-size: 14px; }
+    .changelog-entry { margin-bottom: 24px; }
+    .changelog-entry h2 { font-size: 16px; color: var(--neon-cyan); margin-bottom: 6px; }
+    .changelog-entry ul { list-style: none; padding-left: 0; }
+    .changelog-entry li { position: relative; padding-left: 18px; margin-bottom: 6px; color: var(--text-dim); font-size: 14px; line-height: 1.5; }
+    .changelog-entry li::before { content: '•'; position: absolute; left: 0; color: var(--neon-pink); }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 32px; color: var(--neon-cyan); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="aurora" aria-hidden="true">
+    <span class="blob blob-1"></span>
+    <span class="blob blob-2"></span>
+    <span class="blob blob-3"></span>
+  </div>
+
+  <main class="card changelog">
+    <h1>Changelog</h1>
+    <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
+
+    <div class="changelog-entry">
+      <h2>2026-08-09 — OpenWeb Feature-Bundle v2.1</h2>
+      <ul>
+        <li><strong>Public Frontend:</strong> Teilen-Button, QR-Code-Anzeige, Kategorie-Gruppierung, Theme-Switcher (System/Dunkel/Hell/Midnight/Sunset), Passwort-Dialog für geschützte Links, privates Profil-Hinweis, PWA-Registrierung.</li>
+        <li><strong>Admin Panel:</strong> Link-Categories, Link-Suche, Link-Archiv, zeitgesteuerte Links, Ablaufdatum, interne Notizen, QR-Code-Dialog, Vorschau-Modus, Link-Erreichbarkeits-Check, Statistik-Dashboard mit Chart und Zeitraum-Filter, CSV-Export, API-Key-Verwaltung, Linktree-CSV-Import, Backup-Liste, Audit-Log, Server-Info, Alert-Einstellungen.</li>
+        <li><strong>Analytics:</strong> UTM-Tracking, Geräte-, Browser-, OS- und Länder-Aufschlüsselung, Discord-Webhook bei Klicks.</li>
+        <li><strong>SEO/Sicherheit:</strong> Sitemap.xml, robots.txt, robots-Meta-Tags, Open-Graph/Twitter-Card Fallbacks, JSON-LD, 404-Seite, Rate-Limiting, Admin-IP-Whitelist, Audit-Log.</li>
+        <li><strong>Wartung:</strong> Tägliche automatische Backups, tägliches Bereinigen abgelaufener Sessions und alter Klickdaten.</li>
+        <li><strong>Setup:</strong> Passwortstärke-Anzeige mit Kriterien-Checkliste und verbesserter Validierung.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <h2>2026-08-09</h2>
+      <ul>
+        <li>System-Theme: der Theme-Switcher bietet jetzt einen "System"-Modus, der automatisch zwischen hellem und dunklem Design basierend auf der Geräteeinstellung wechselt.</li>
+        <li>PWA-Unterstützung: manifest.json, Service-Worker für Offline-Caching und Add-to-Homescreen-Funktion hinzugefügt.</li>
+        <li>CSV-Export der Klickstatistik im Admin-Statistik-Tab.</li>
+        <li>Öffentliche API-Doku-Seite unter /api-docs mit Beispielen für Profil, Links, Klick-Tracking und Passwort-Entsperrung.</li>
+        <li>Automatische Sitemap-Generierung unter /sitemap.xml mit Startseite, Changelog, API-Doku und allen aktiven Kurzlinks.</li>
+        <li>Analytics-Erweiterung: Klicks werden jetzt mit Gerätetyp, Browser, Betriebssystem und Ländercode erfasst; Statistik-Tab zeigt die Aufschlüsselung.</li>
+        <li>Robots.txt-Endpunkt mit Sitemap-Verweis und Crawler-Ausschluss für Admin, Login und API.</li>
+        <li>Benutzerdefinierte 404-Seite für unbekannte Kurzlinks und alle nicht existierenden Routen.</li>
+        <li>Robots-Meta-Tags: Admin, Login und 404 mit noindex; Startseite mit index, follow.</li>
+        <li>Tägliche Wartung um 03:00 Uhr: automatisches Löschen abgelaufener Sessions und Klickdaten älter als DATA_RETENTION_DAYS.</li>
+        <li>Server-Info-Endpoint /api/admin/server-info mit Uptime, Version, Link-/Klickzahlen und Datenbankgröße; angezeigt im Settings-Tab.</li>
+        <li>Setup-Seite mit Passwortstärke-Anzeige, visuellen Kriterien und verbesserter Validierung.</li>
+        <li>Audit-Log: Datenbank-Tabelle audit_log speichert Login, Logout, Link-Änderungen, Imports, Backups, API-Keys und Passwortwechsel mit Zeitstempel, IP und User-Agent.</li>
+        <li>Neuer Admin-Tab "Audit-Log" zeigt die letzten 200 Aktionen tabellarisch.</li>
+        <li>Verbesserte Open-Graph/Twitter-Card Tags: konsistente og:url, Fallback auf Profil-Bio und Icon wenn kein Track läuft.</li>
+        <li>JSON-LD strukturierte Daten (schema.org/Person) für bessere Suchmaschinen-Auffindbarkeit.</li>
+        <li>Alert-System: E-Mail (SMTP) und Webhook-Benachrichtigungen für Login, Backup-Fehler und Passwortwechsel.</li>
+        <li>Neue Alert-Einstellungen im Settings-Tab mit Test-Button.</li>
+        <li>Admin-Rate-Limiting: /api/admin ist auf 60 Anfragen pro 15 Minuten begrenzt.</li>
+        <li>IP-Whitelist für Admin-Zugang via ADMIN_IP_ALLOWLIST (einzelne IPs oder CIDR-Ranges).</li>
+        <li>Public-Frontend: Teilen-Button (Web Share API / Clipboard) und QR-Code-Anzeige direkt auf der Startseite.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <h2>2026-08-10</h2>
+      <ul>
+        <li>Klick-Statistik: jeder Link-Klick wird mit Zeitstempel, gehashte IP, User-Agent und Referrer gespeichert; neuer Admin-Tab mit Chart und Ranking.</li>
+        <li>Zeitgesteuerte Links: Sichtbarkeit pro Link mit "ab/bis" Datum und optionalen Wochentagen (Berliner Zeit).</li>
+        <li>Link-Kategorien: Links lassen sich gruppieren, Reihenfolge der Kategorien ist steuerbar.</li>
+        <li>Interne Admin-Notizen pro Link.</li>
+        <li>QR-Code-Dialog im Admin-Panel mit echten, scanbaren Codes, Download-Button und QR-Button pro Link.</li>
+        <li>Discord-Benachrichtigungen: optionaler Webhook bei jedem neuen Link-Klick (mit Template-Platzhaltern).</li>
+        <li>Admin-Link-Suche filtert nach Titel, Untertitel, URL, Slug und Notiz.</li>
+        <li>Statistik-Zeitraum-Filter: 7, 30 oder 90 Tage.</li>
+        <li>Öffentliches Rate-Limiting: max. 120 API-Anfragen/Minute pro IP.</li>
+        <li>Health-Check Endpoint /health für Monitoring und Load-Balancer.</li>
+        <li>Admin-Vorschau-Modus: zeigt die Startseite in einem iframe direkt im Admin.</li>
+        <li>Passwortgeschützte einzelne Links mit Entsperr-Dialog auf der Startseite.</li>
+        <li>Ablaufdatum pro Link: Link wird danach automatisch inaktiv.</li>
+        <li>Custom CSS im Admin: eigene Styles für die Startseite.</li>
+        <li>UTM-Tracking: utm_source, utm_medium und utm_campaign werden pro Klick gespeichert und in der Statistik angezeigt.</li>
+        <li>Automatische tägliche Backups um 03:00 Uhr plus manuelle Backup-Erstellung und Download im Admin.</li>
+        <li>Link-Archiv: inaktive Links können im Admin eingesehen und wiederhergestellt werden.</li>
+        <li>Linktree-CSV-Import: schneller Import von Links aus einer CSV-Datei.</li>
+        <li>API-Keys für externen Lesezugriff auf /api/public/profile und /api/public/links.</li>
+        <li>Öffentlich/privat-Toggle: private Profile zeigen Besuchern eine Sperrhinweis-Seite statt Links.</li>
+        <li>Link-Erreichbarkeits-Check direkt im Admin mit Status-Code und Antwortzeit.</li>
+        <li>Besucher-Theme-Switcher: wählbar zwischen System, Dunkel, Hell, Midnight und Sunset.</li>
+        <li>Kurzlinks: optionale Slugs, erreichbar unter /go/&lt;slug&gt;.</li>
+        <li>Meta-Beschreibungen pro Link für SEO/Social-Share; Profil-Bio wird als Fallback verwendet.</li>
+        <li>Angezeigte URL pro Link: im Admin optional "cornyriegel.de/Appname" einstellbar, Klick öffnet weiterhin die echte URL.</li>
+        <li>Hover-URLs werden gekürzt dargestellt, wenn keine eigene Display-URL gesetzt ist.</li>
+        <li>Navidrome-Spielzeit bleibt synchron, Pausieren wird korrekt erkannt, Polling wurde auf 10 Sekunden verkürzt.</li>
+        <li>Pausierte Musik verschwindet nach 2 Minuten Inaktivität automatisch aus der Anzeige.</li>
+        <li>Umlaute in allen Oberflächentexten korrigiert (z. B. "öffnen", "ändern", "löschen", "für", "überschreiben").</li>
+        <li>Sicherheit: Login-Brute-Force-Schutz (10 Versuche / 15 Minuten), Setup-Config gibt keine Passwörter mehr aus, CSP weiter gehärtet.</li>
+        <li>Share-Embed zeigt aktuell gespielten Song (Open Graph / Twitter Card).</li>
+        <li>Seitentitel wird dynamisch zum aktuellen Track.</li>
+        <li>Admin-Player zeigt Live-Abspielposition in Echtzeit.</li>
+        <li>Album wird auf der Startseite unter dem Künstlernamen angezeigt (Hover / Klick).</li>
+        <li>Bei Trackwechsel wird nur der Player aktualisiert, nicht die ganze Seite neu geladen.</li>
+        <li>Changelog-Unterseite hinzugefügt.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <h2>2026-08-09</h2>
+      <ul>
+        <li>Navidrome-Integration mit Vinyl-Style-Cover und Marquee-Scrolling.</li>
+        <li>Admin-Panel mit Datenbank-Info und Navidrome-Testverbindung.</li>
+        <li>Login-Session und Trust-Proxy-Konfiguration für HTTPS hinter nginx stabilisiert.</li>
+      </ul>
+    </div>
+
+    <a href="/" class="back-link">← Zurück zur Startseite</a>
+  </main>
+</body>
+</html>

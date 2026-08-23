@@ -1,0 +1,152 @@
+﻿  function initAdminNowPlaying() {
+    const player = #admin-np-player;
+    const cover = #admin-np-cover;
+    const badge = #admin-np-badge;
+    const titleEl = #admin-np-title;
+    const metaEl = #admin-np-meta;
+    const progressEl = #admin-np-progress;
+    if (!player || !cover || !badge || !titleEl || !metaEl || !progressEl) return;
+
+    let pollTimer = null;
+    let progressTimer = null;
+    let currentTrack = null;
+    let lastServerPosition = 0;
+    let localPosition = 0;
+    let lastTickAt = 0;
+
+    function setState(state) {
+      player.classList.remove('idle', 'playing', 'paused');
+      player.classList.add(state);
+    }
+
+    function formatDuration(seconds) {
+      const s = parseInt(seconds || 0, 10);
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return ${m}:;
+    }
+
+    function applyMarquee(container, html) {
+      container.classList.remove('marquee-content', 'marquee-scroll');
+      container.style.removeProperty('--marquee-offset');
+      container.innerHTML = <span class=" marquee-inner\></span>;
+ const inner = container.querySelector('.marquee-inner');
+ if (!inner) return;
+ const needsScroll = inner.scrollWidth > container.clientWidth + 2;
+ if (needsScroll) {
+ const offset = -(inner.scrollWidth - container.clientWidth);
+ inner.classList.add('marquee-content');
+ inner.style.setProperty('--marquee-offset', offset + 'px');
+ requestAnimationFrame(() => {
+ inner.classList.add('marquee-scroll');
+ });
+ }
+ }
+
+ function clearMarquee(container) {
+ container.classList.remove('marquee-content', 'marquee-scroll');
+ container.style.removeProperty('--marquee-offset');
+ container.textContent = '';
+ }
+
+ function renderIdle() {
+ currentTrack = null;
+ setState('idle');
+ badge.textContent = 'Not playing';
+ clearMarquee(titleEl);
+ titleEl.textContent = 'Momentan läuft nichts';
+ clearMarquee(metaEl);
+ metaEl.textContent = 'Starte Musik in Navidrome, um die Vorschau zu sehen.';
+ progressEl.textContent = '00:00 / 00:00';
+ cover.classList.add('placeholder');
+ cover.replaceChildren();
+ }
+
+ function renderTrack(track) {
+ const state = track.paused ? 'paused' : 'playing';
+ setState(state);
+ badge.textContent = track.paused ? 'Stopped' : (track.isRadio ? '📡 LIVE' : 'Playing');
+ applyMarquee(titleEl, escapeHtml(track.title || 'Unbekannt'));
+
+ const parts = [];
+ if (track.isRadio) {
+ parts.push(escapeHtml(track.artist || 'Internetradio'));
+ } else if (track.artist) {
+ parts.push(escapeHtml(track.artist));
+ }
+ if (track.album && !track.isRadio) parts.push(escapeHtml(track.album));
+
+ const bitrate = track.bitrate ? ${track.bitrate} kbps : null;
+ const extra = [];
+ if (track.isRadio) extra.push('<span class=\admin-np-radio-badge\>📡 LIVE</span>');
+ if (bitrate) extra.push(Bitrate: <span class=\admin-np-bitrate\></span>);
+ const metaText = parts.join(' · ') + (extra.length ? ' | ' + extra.join(' | ') : '');
+ applyMarquee(metaEl, metaText);
+
+ cover.replaceChildren();
+ cover.classList.remove('placeholder');
+ if (track.coverUrl) {
+ const img = el('img', { src: track.coverUrl, alt: track.title || '', class: 'np-cover-img' });
+ cover.appendChild(img);
+ } else {
+ cover.classList.add('placeholder');
+ }
+
+ lastServerPosition = track.position || 0;
+ localPosition = lastServerPosition;
+ lastTickAt = performance.now();
+ updateProgress();
+ }
+
+ function updateProgress() {
+ if (!currentTrack) return;
+ if (currentTrack.isRadio) {
+ progressEl.textContent = currentTrack.radioStreamUrl ? '📡 Stream' : '📡 Radio';
+ return;
+ }
+ if (!currentTrack.paused) {
+ const now = performance.now();
+ localPosition += (now - lastTickAt) / 1000;
+ lastTickAt = now;
+ }
+ const duration = currentTrack.duration || 0;
+ if (duration > 0) localPosition = Math.min(localPosition, duration);
+ progressEl.textContent = ${formatDuration(localPosition)} / ;
+ }
+
+ function trackId(track) {
+ return [track.title, track.artist, track.album].filter(Boolean).join('::');
+ }
+
+ async function tick() {
+ try {
+ const track = await window.NavidromeAPI.nowPlaying();
+ if (!track || !track.playing) {
+ if (currentTrack) renderIdle();
+ return;
+ }
+ const previousId = currentTrack ? trackId(currentTrack) : null;
+ const newId = trackId(track);
+ if (JSON.stringify(track) !== JSON.stringify(currentTrack)) {
+ currentTrack = track;
+ renderTrack(track);
+ } else {
+ lastServerPosition = track.position || 0;
+ localPosition = lastServerPosition;
+ lastTickAt = performance.now();
+ updateProgress();
+ }
+ if (previousId && previousId !== newId) {
+ console.log('[admin np] neuer Track erkannt, aktualisiere Anzeige');
+ }
+ } catch (err) {
+ console.warn('[admin np] poll failed:', err.message);
+ }
+ }
+
+ tick();
+ if (progressTimer) clearInterval(progressTimer);
+ progressTimer = setInterval(updateProgress, 1000);
+ if (pollTimer) clearInterval(pollTimer);
+ pollTimer = setInterval(tick, 30_000);
+ }

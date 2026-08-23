@@ -1,0 +1,50 @@
+# =========================================================
+# Git-Attribute für OpenWeb
+# =========================================================
+# Zwingt alle Shell-Scripts (.sh) auf Linux-Zeilenenden (LF),
+# auch wenn auf Windows entwickelt wird. Verhindert den
+# klassischen Bash-Fehler:
+#   "./install.sh: line 1: 404:: command not found"
+#   (durch Carriage-Return \r am Ende der Shebang-Zeile).
+
+# Shell-Scripts: immer LF (sonst scheitert bash an Shebang \r)
+*.sh          text eol=lf
+*.bash        text eol=lf
+install.sh    text eol=lf
+
+# Web-Quellcode: immer LF
+*.js          text eol=lf
+*.mjs         text eol=lf
+*.cjs         text eol=lf
+*.ts          text eol=lf
+*.tsx         text eol=lf
+*.jsx         text eol=lf
+*.html        text eol=lf
+*.htm         text eol=lf
+*.css         text eol=lf
+*.scss        text eol=lf
+*.sass        text eol=lf
+*.svg         text eol=lf
+
+# Konfig / Daten: immer LF
+*.md          text eol=lf
+*.txt         text eol=lf
+*.json        text eol=lf
+*.yml         text eol=lf
+*.yaml        text eol=lf
+*.toml        text eol=lf
+*.cfg         text eol=lf
+*.ini         text eol=lf
+*.env         text eol=lf
+*.example     text eol=lf
+*.sql         text eol=lf
+LICENSE       text eol=lf
+
+# Binary-Files explizit markieren (keine Konvertierung)
+*.png         binary
+*.jpg         binary
+*.jpeg        binary
+*.gif         binary
+*.ico         binary
+*.woff        binary
+*.woff2       binary

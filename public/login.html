@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#000000" />
+  
+  
+  
+  
+  <title>Admin Login · OpenWeb</title>
+  
+  
+  <link rel="stylesheet" href="/fonts.css" />
+  <link rel="stylesheet" href="/admin.css" />
+</head>
+<body class="login-page">
+
+  <div class="login-card">
+    <h1>🔐 Admin Login</h1>
+    <p id="login-desc">Melde dich mit deiner Admin-E-Mail und deinem Passwort an.</p>
+
+    <form id="login-form" class="form">
+      <label>
+        <span>E-Mail</span>
+        <input name="email" type="email" autocomplete="email" required placeholder="admin@example.com" />
+      </label>
+      <label>
+        <span>Passwort</span>
+        <input name="password" type="password" autocomplete="current-password" required placeholder="••••••••" />
+      </label>
+      <label class="row remember-me">
+        <input name="remember" type="checkbox" />
+        <span>Eingeloggt bleiben (30 Tage)</span>
+      </label>
+      <div class="form-actions">
+        <button type="submit" class="btn primary">Weiter</button>
+      </div>
+    </form>
+    
+    <form id="totp-form" class="form" hidden>
+      <label>
+        <span>Authentifizierungscode (TOTP)</span>
+        <input name="code" type="text" autocomplete="one-time-code" placeholder="123456" />
+      </label>
+      <div class="form-actions">
+        <button type="submit" class="btn primary">Anmelden</button>
+      </div>
+    </form>
+    
+    <div id="webauthn-container" class="form-actions" style="margin-top: 1rem;" hidden>
+      <button id="webauthn-btn" class="btn">🛡️ Mit YubiKey (WebAuthn) anmelden</button>
+    </div>
+
+    <p id="login-error" class="login-error"></p>
+  </div>
+
+  <script src="/js/api-client.js"></script>
+  <!-- SimpleWebAuthn Browser Script -->
+  <script src="https://cdn.jsdelivr.net/npm/@simplewebauthn/browser@9.0.1/dist/bundle/index.umd.min.js"></script>
+  
+  <script>
+    (() => {
+      'use strict';
+      const loginForm = document.getElementById('login-form');
+      const totpForm = document.getElementById('totp-form');
+      const webauthnContainer = document.getElementById('webauthn-container');
+      const webauthnBtn = document.getElementById('webauthn-btn');
+      const errorEl = document.getElementById('login-error');
+      const descEl = document.getElementById('login-desc');
+
+      loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorEl.textContent = '';
+        const email = loginForm.email.value.trim();
+        const password = loginForm.password.value;
+        const remember = loginForm.remember?.checked || false;
+        try {
+          const res = await window.api.login(email, password, remember);
+          if (res && res.requires_2fa) {
+            loginForm.hidden = true;
+            descEl.textContent = 'Zwei-Faktor-Authentifizierung erforderlich.';
+            if (res.methods.includes('totp')) {
+              totpForm.hidden = false;
+              totpForm.code.focus();
+            }
+            if (res.methods.includes('webauthn')) {
+              webauthnContainer.hidden = false;
+            }
+          } else {
+            location.href = '/admin';
+          }
+        } catch (err) {
+          errorEl.textContent = err.message || 'Login fehlgeschlagen';
+        }
+      });
+
+      totpForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorEl.textContent = '';
+        const code = totpForm.code.value.trim();
+        if (!code) return;
+        try {
+          await window.api.loginTotp(code);
+          location.href = '/admin';
+        } catch (err) {
+          errorEl.textContent = err.message || 'Code ungültig';
+        }
+      });
+      
+      webauthnBtn.addEventListener('click', async () => {
+        errorEl.textContent = '';
+        try {
+          const options = await window.api.getWebauthnLoginOptions();
+          const { startAuthentication } = window.SimpleWebAuthnBrowser;
+          const authResp = await startAuthentication(options);
+          await window.api.verifyWebauthnLogin(authResp);
+          location.href = '/admin';
+        } catch (err) {
+          console.error(err);
+          errorEl.textContent = err.message || 'YubiKey Fehler';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

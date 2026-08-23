@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Alle wichtigen Links auf einen Blick." />
+  <meta name="robots" content="index, follow" />
+  <meta name="theme-color" content="#000000" />
+  
+  
+  
+  
+  <title>Cornelius Ahner · Links</title>
+  <meta property="og:site_name" content="Cornelius Ahner" />
+  <meta property="og:title" content="Cornelius Ahner · Links" />
+  <meta property="og:description" content="Alle wichtigen Links auf einen Blick." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://cornyriegel.de/icons/icon.svg" />
+  <meta property="og:url" content="https://cornyriegel.de" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Cornelius Ahner · Links" />
+  <meta name="twitter:description" content="Alle wichtigen Links auf einen Blick." />
+  <meta name="twitter:image" content="https://cornyriegel.de/icons/icon.svg" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" id="favicon" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/icon.svg" />
+  <link rel="stylesheet" href="/fonts.css" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Passwort-Dialog für geschützte Links -->
+  <dialog id="link-password-dialog" class="dialog password-dialog">
+    <form method="dialog" class="form">
+      <h3>🔒 Geschützter Link</h3>
+      <p class="hint">Dieser Link ist passwortgeschützt. Bitte gib das Passwort ein.</p>
+      <label>
+        <span>Passwort</span>
+        <input id="link-password-input" type="password" />
+      </label>
+      <p id="link-password-error" class="hint error" hidden>Falsches Passwort.</p>
+      <div class="form-actions">
+        <button type="button" id="link-password-cancel" class="btn ghost">Abbrechen</button>
+        <button type="submit" class="btn primary">Öffnen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="aurora" aria-hidden="true">
+    <span class="blob blob-1"></span>
+    <span class="blob blob-2"></span>
+    <span class="blob blob-3"></span>
+  </div>
+
+  <main class="card">
+    <header class="profile">
+      <div class="avatar-wrap">
+        <div class="avatar-ring"></div>
+        <div class="avatar" aria-label="Profilbild">CA</div>
+      </div>
+      <h1 class="name">@corneliusahner</h1>
+      <p class="handle">Cornelius Ahner</p>
+      <p class="bio">Azubi, 21 Jahre alt</p>
+      <div class="profile-actions">
+        <button type="button" id="share-btn" class="profile-action" title="Seite teilen">📤</button>
+        <button type="button" id="qr-public-btn" class="profile-action" title="QR-Code anzeigen">📱</button>
+      </div>
+    </header>
+
+    <section id="navidrome-player" class="np-player idle" aria-label="Aktuell gespielter Track" hidden>
+      <div class="np-turntable-wrap" aria-hidden="true">
+        <div class="np-turntable-base">
+          <div class="np-cover"></div>
+          <div class="np-tonearm">
+            <div class="np-tonearm-base"></div>
+            <div class="np-tonearm-arm"></div>
+            <div class="np-tonearm-head"></div>
+          </div>
+        </div>
+      </div>
+      <div class="np-info">
+        <div class="np-title">Verbinde mit Navidrome…</div>
+        <div class="np-artist">—</div>
+        <div class="np-progress" id="np-progress"></div>
+        <div class="np-album" aria-hidden="true"></div>
+        <div class="np-extra" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <nav class="links" aria-label="Wichtige Links">
+      <!-- Links werden dynamisch geladen -->
+    </nav>
+
+    <footer class="footer">
+      <span class="dot"></span>
+      <span>made with <span class="heart">♥</span> · <span class="year"></span> · <a href="/changelog.html" class="footer-link">Changelog</a> · v2.0.8</span>
+      <div style="margin-top: 10px; font-size: 0.85em; display: flex; gap: 15px; justify-content: center;">
+        <a href="/impressum.html" class="footer-link">Impressum</a>
+        <a href="/datenschutz.html" class="footer-link">Datenschutz</a>
+      </div>
+    </footer>
+  </main>
+
+  <script src="/js/api-client.js"></script>
+  <script src="/js/icons.js"></script>
+  <script src="/js/navidrome.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        // Regelmaessig auf Updates pruefen (alle 5 Minuten)
+        setInterval(() => reg.update(), 5 * 60 * 1000);
+        // Wenn ein neuer SW bereit ist: sofort aktivieren und Seite neu laden
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
+              console.log('[SW] Neue Version erkannt, lade Seite neu …');
+              window.location.reload();
+            }
+          });
+        });
+      }).catch(console.error);
+      // Falls der Controller wechselt (neuer SW uebernimmt), Seite neu laden
+      let refreshing = false;
+      let hadController = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController) {
+          hadController = true;
+          return;
+        }
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
+    }
+  </script>
+
+  <!-- Öffentlicher QR-Code-Dialog -->
+  <dialog id="public-qr-dialog" class="dialog qr-dialog">
+    <form method="dialog" class="form">
+      <h3>📱 QR-Code</h3>
+      <img id="public-qr-img" alt="QR-Code dieser Seite" />
+      <div class="form-actions">
+        <button type="button" id="public-qr-download" class="btn primary">⬇ Herunterladen</button>
+        <button type="button" id="public-qr-close" class="btn ghost">Schließen</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

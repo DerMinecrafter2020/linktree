@@ -1,0 +1,109 @@
+-- =========================================================
+-- OpenWeb — Migration 003
+-- Erweiterte Link-Funktionen
+-- =========================================================
+
+-- Kategorien fuer Links
+CREATE TABLE IF NOT EXISTS link_categories (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       VARCHAR(80) NOT NULL,
+  position   INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TRIGGER trg_link_categories_updated_at
+BEFORE UPDATE ON link_categories
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Link-Erweiterungen
+ALTER TABLE links
+  ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES link_categories(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS slug VARCHAR(80) NULL UNIQUE,
+  ADD COLUMN IF NOT EXISTS meta_description VARCHAR(280) NULL,
+  ADD COLUMN IF NOT EXISTS admin_note VARCHAR(280) NULL,
+  ADD COLUMN IF NOT EXISTS visible_from TIMESTAMPTZ NULL,
+  ADD COLUMN IF NOT EXISTS visible_until TIMESTAMPTZ NULL,
+  ADD COLUMN IF NOT EXISTS visible_weekdays INTEGER[] NULL CHECK (visible_weekdays <@ ARRAY[0,1,2,3,4,5,6]);
+
+-- Klickstatistik
+CREATE TABLE IF NOT EXISTS link_clicks (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  link_id      UUID NOT NULL REFERENCES links(id) ON DELETE CASCADE,
+  clicked_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ip_hash      VARCHAR(64) NULL,
+  user_agent   VARCHAR(500) NULL,
+  referrer     VARCHAR(500) NULL,
+  utm_source   VARCHAR(120) NULL,
+  utm_medium   VARCHAR(120) NULL,
+  utm_campaign VARCHAR(120) NULL,
+  country_code CHAR(2) NULL,
+  device_type  VARCHAR(20) NULL,
+  browser      VARCHAR(40) NULL,
+  os           VARCHAR(40) NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_link_clicks_link_id ON link_clicks(link_id);
+CREATE INDEX IF NOT EXISTS idx_link_clicks_clicked_at ON link_clicks(clicked_at);
+
+-- Profil-Erweiterungen
+ALTER TABLE profile
+  ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS allow_visitor_theme BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS custom_css TEXT NULL;
+
+-- Weitere Link-Erweiterungen
+ALTER TABLE links
+  ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NULL,
+  ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NULL;
+
+-- Alert-Einstellungen (E-Mail/Webhook fuer kritische Ereignisse)
+CREATE TABLE IF NOT EXISTS alert_settings (
+  id                 INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  email_enabled      BOOLEAN NOT NULL DEFAULT false,
+  email_to           VARCHAR(254) NULL,
+  smtp_host          VARCHAR(255) NULL,
+  smtp_port          INTEGER NOT NULL DEFAULT 587,
+  smtp_user          VARCHAR(255) NULL,
+  smtp_password      VARCHAR(255) NULL,
+  smtp_secure        BOOLEAN NOT NULL DEFAULT true,
+  webhook_url        VARCHAR(500) NULL,
+  notify_login       BOOLEAN NOT NULL DEFAULT true,
+  notify_backup_fail BOOLEAN NOT NULL DEFAULT true,
+  notify_password    BOOLEAN NOT NULL DEFAULT true,
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TRIGGER trg_alert_settings_updated_at
+BEFORE UPDATE ON alert_settings
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- API-Keys für externe Lesezugriffe
+CREATE TABLE IF NOT EXISTS api_keys (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       VARCHAR(80) NOT NULL,
+  key_hash   VARCHAR(255) NOT NULL,
+  last_used_at TIMESTAMPTZ NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TRIGGER trg_api_keys_updated_at
+BEFORE UPDATE ON api_keys
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Audit-Log für Admin-Aktionen
+CREATE TABLE IF NOT EXISTS audit_log (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    INTEGER NULL,
+  action     VARCHAR(40) NOT NULL,
+  entity     VARCHAR(40) NULL,
+  entity_id  VARCHAR(80) NULL,
+  ip_address INET NULL,
+  user_agent VARCHAR(500) NULL,
+  details    JSONB NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);

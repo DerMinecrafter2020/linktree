@@ -1,0 +1,46 @@
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build / Editor
+.vscode/
+.idea/
+dist/
+build/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Datenbank-Dumps
+*.sql.bak
+*.dump
+
+# Lokale Test-/Debug-Skripte
+test-attack.bat
+final-check.bat
+retest.bat
+inspect-rls.ps1
+inspect2.bat
+check-policies.bat
+security-test.ps1
+
+# Screenshots (lokal)
+screenshots/
+screenshots/*.png
+screenshots/*.jpg
+screenshots/*.jpeg
+
+# Lokale Memory-Notizen
+.github/memory/
+
+# Logs
+*.log
+
+public/*.pdf
