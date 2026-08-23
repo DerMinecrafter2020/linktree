@@ -452,9 +452,10 @@
         return;
       }
       const formatHtml = data.format ? `<div class="np-format">${escapeHtml(data.format.toUpperCase())}</div>` : '';
-      const bitrateHtml = data.bitrate ? `<div class="np-bitrate">${escapeHtml(`${data.bitrate} kbps`)}</div>` : '';
+      const bitrateStr = typeof data.bitrate === 'number' ? `${data.bitrate} kbps` : data.bitrate;
+      const bitrateHtml = bitrateStr ? `<div class="np-bitrate">${escapeHtml(bitrateStr)}</div>` : '';
       extraEl.innerHTML = formatHtml + bitrateHtml;
-      extraEl.hidden = !data.bitrate && !data.format;
+      extraEl.hidden = !bitrateStr && !data.format;
 
       const progressEl = $('#np-progress');
       if (progressEl) {
