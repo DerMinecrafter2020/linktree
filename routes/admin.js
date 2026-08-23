@@ -210,6 +210,12 @@ router.get('/stats/links', async (req, res, next) => {
       GROUP BY country_code
       ORDER BY count DESC
     `, [days]);
+    const musicHistoryRes = await db.query(`
+      SELECT * FROM music_history 
+      WHERE played_at > NOW() - $1 * INTERVAL '1 day'
+      ORDER BY played_at DESC 
+      LIMIT 150
+    `, [days]);
     res.json({
       ok: true,
       data: {
@@ -222,6 +228,7 @@ router.get('/stats/links', async (req, res, next) => {
         browsers: browsersRes.rows,
         os: osRes.rows,
         countries: countriesRes.rows,
+        musicHistory: musicHistoryRes.rows,
       },
     });
   } catch (err) {

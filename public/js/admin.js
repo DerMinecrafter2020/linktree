@@ -880,7 +880,13 @@
         summary.innerHTML = `
           <div class="stat-card"><strong>${stats.total.toLocaleString('de-DE')}</strong><span>Gesamtklicks</span></div>
           <div class="stat-card"><strong>${stats.links.length}</strong><span>Links</span></div>
+          <div class="stat-card"><strong>${stats.musicHistory?.length || 0}</strong><span>Songs gehört</span></div>
         `;
+        
+        if (typeof renderMusicHistory === 'function') {
+          renderMusicHistory(stats.musicHistory || []);
+        }
+
         list.replaceChildren();
         stats.links.forEach(l => {
           const item = el('li', { class: 'stat-row' },
@@ -994,14 +1000,12 @@
     const observer = new MutationObserver(() => {
       if (!tab.hidden) {
         render(currentDays);
-        if (typeof loadMusicHistory === 'function') loadMusicHistory();
       }
     });
     if (tab) {
       observer.observe(tab, { attributes: true, attributeFilter: ['hidden'] });
       if (!tab.hidden) {
         render(currentDays);
-        if (typeof loadMusicHistory === 'function') loadMusicHistory();
       }
     }
   }
@@ -1618,11 +1622,9 @@
     }
   }
 
-  async function loadMusicHistory() {
-    try {
-      const historyRes = await window.api.getMusicHistory();
-      const list = $('#music-history-list');
-      if (!list) return;
+  function renderMusicHistory(historyRes) {
+    const list = $('#music-history-list');
+    if (!list) return;
       if (!historyRes || historyRes.length === 0) {
         list.innerHTML = '<li class="stats-item"><span class="stats-label">Noch keine Songs im Verlauf.</span></li>';
         return;
@@ -1693,10 +1695,7 @@
           );
           list.appendChild(details);
         }
-      });
-    } catch (err) {
-      console.warn('[admin] Music history error:', err.message);
-    }
+    });
   }
 
   function renderNavidromeForm() {

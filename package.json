@@ -1,6 +1,6 @@
 {
   "name": "openweb",
-  "version": "3.0.4",
+  "version": "3.0.5",
   "description": "Link-in-Bio Seite mit Node.js, Express und PostgreSQL",
   "main": "server.js",
   "scripts": {
