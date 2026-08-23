@@ -1623,18 +1623,40 @@
       }
       
       list.replaceChildren();
-      historyRes.forEach(item => {
+      
+      const renderItem = (item) => {
         const d = new Date(item.played_at);
-        const timeStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const li = el('li', { class: 'stats-item' },
-          el('span', { class: 'stats-label' }, 
-            el('strong', {}, item.title), 
-            ' von ', item.artist || 'Unbekannt'
+        const dateStr = d.toLocaleDateString('de-DE');
+        const timeStr = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        
+        return el('li', { class: 'history-item' },
+          el('div', { class: 'history-info' },
+            el('div', { class: 'history-title', title: item.title }, item.title),
+            el('div', { class: 'history-artist', title: item.artist || 'Unbekannt' }, item.artist || 'Unbekannt')
           ),
-          el('span', { class: 'stats-count' }, timeStr)
+          el('div', { class: 'history-time' },
+            el('span', {}, timeStr),
+            el('span', {}, dateStr)
+          )
         );
-        list.appendChild(li);
-      });
+      };
+
+      // Show top 10 items directly
+      const visibleItems = historyRes.slice(0, 10);
+      visibleItems.forEach(item => list.appendChild(renderItem(item)));
+
+      // If more items exist, show them in a <details> block
+      if (historyRes.length > 10) {
+        const remainingItems = historyRes.slice(10);
+        const expandedList = el('ul', { class: 'stats-list history-list-expanded' });
+        remainingItems.forEach(item => expandedList.appendChild(renderItem(item)));
+        
+        const details = el('details', { class: 'history-details' },
+          el('summary', {}, 'Ältere anzeigen...'),
+          expandedList
+        );
+        list.appendChild(details);
+      }
     } catch (err) {
       console.warn('[admin] Music history error:', err.message);
     }
