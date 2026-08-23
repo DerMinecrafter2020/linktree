@@ -20,7 +20,12 @@
     .changelog-entry ul { list-style: none; padding-left: 0; }
     .changelog-entry li { position: relative; padding-left: 18px; margin-bottom: 6px; color: var(--text-dim); font-size: 14px; line-height: 1.5; }
     .changelog-entry li::before { content: '•'; position: absolute; left: 0; color: var(--neon-pink); }
-    .back-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 32px; color: var(--neon-cyan); font-size: 14px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 32px; color: var(--neon-cyan); font-size: 14px; text-decoration: none; }
+    .back-link:hover { text-decoration: underline; }
+    .top-nav { margin-bottom: 24px; margin-top: 0; }
+    details { margin-top: 32px; padding-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+    summary { color: var(--neon-cyan); cursor: pointer; font-weight: 500; font-size: 15px; margin-bottom: 16px; }
+    summary:hover { opacity: 0.8; }
   </style>
 </head>
 <body>
@@ -31,6 +36,14 @@
   </div>
 
   <main class="card changelog">
+    <a href="/" class="back-link top-nav">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"></line>
+        <polyline points="12 19 5 12 12 5"></polyline>
+      </svg>
+      Zurück zur Startseite
+    </a>
+    
     <h1>Changelog</h1>
     <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
 
@@ -45,8 +58,11 @@
       </ul>
     </div>
 
-    <div class="changelog-entry">
-      <h2>2026-08-09 — OpenWeb Feature-Bundle v2.1</h2>
+    <details>
+      <summary>Ältere Änderungen anzeigen (v2.x und früher)</summary>
+
+      <div class="changelog-entry">
+        <h2>2026-08-09 — OpenWeb Feature-Bundle v2.1</h2>
       <ul>
         <li><strong>Public Frontend:</strong> Teilen-Button, QR-Code-Anzeige, Kategorie-Gruppierung, Theme-Switcher (System/Dunkel/Hell/Midnight/Sunset), Passwort-Dialog für geschützte Links, privates Profil-Hinweis, PWA-Registrierung.</li>
         <li><strong>Admin Panel:</strong> Link-Categories, Link-Suche, Link-Archiv, zeitgesteuerte Links, Ablaufdatum, interne Notizen, QR-Code-Dialog, Vorschau-Modus, Link-Erreichbarkeits-Check, Statistik-Dashboard mit Chart und Zeitraum-Filter, CSV-Export, API-Key-Verwaltung, Linktree-CSV-Import, Backup-Liste, Audit-Log, Server-Info, Alert-Einstellungen.</li>
@@ -134,6 +150,8 @@
         <li>Login-Session und Trust-Proxy-Konfiguration für HTTPS hinter nginx stabilisiert.</li>
       </ul>
     </div>
+
+    </details>
 
     <a href="/" class="back-link">← Zurück zur Startseite</a>
   </main>
