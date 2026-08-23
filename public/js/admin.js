@@ -883,8 +883,8 @@
           <div class="stat-card"><strong>${stats.musicHistory?.length || 0}</strong><span>Songs gehört</span></div>
         `;
         
-        if (typeof renderMusicHistory === 'function') {
-          renderMusicHistory(stats.musicHistory || []);
+        if (window.renderMusicHistory) {
+          window.renderMusicHistory(stats.musicHistory || []);
         }
 
         list.replaceChildren();
@@ -1622,7 +1622,7 @@
     }
   }
 
-  function renderMusicHistory(historyRes) {
+  window.renderMusicHistory = function renderMusicHistory(historyRes) {
     const list = $('#music-history-list');
     if (!list) return;
       if (!historyRes || historyRes.length === 0) {
@@ -1696,7 +1696,7 @@
           list.appendChild(details);
         }
     });
-  }
+  };
 
   function renderNavidromeForm() {
     const form = $('#navidrome-form');
