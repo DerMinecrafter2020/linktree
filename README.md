@@ -1,159 +1,123 @@
 # OpenWeb · Link in Bio
 
-Eine komplette Link-in-Bio-Seite (a la Linktree) im **Dark & Neon**-Stil mit eigener Admin-Oberfläche.
+Eine komplette Link-in-Bio-Seite (a la Linktree) im **Dark & Neon**-Stil mit eigener vollumfänglicher Admin-Oberfläche, tiefgehenden Statistiken und Musik-Integration.
 
 - **Backend:** Node.js 20 + Express 4
 - **Datenbank:** PostgreSQL 16
-- **Auth:** E-Mail/Passwort mit bcrypt + serverseitigen Sessions (connect-pg-simple)
-- **Frontend:** Statische HTML/JS/CSS, geserved aus `public/`
+- **Auth:** E-Mail/Passwort (bcrypt), **2FA (WebAuthn/Passkeys)**, serverseitige Sessions
+- **Frontend:** Statisches HTML/JS/CSS, komplett ohne Frontend-Frameworks (Vanilla)
 
 ---
 
-## 📂 Wichtige Dateien
+## ✨ Features
 
-| Datei / Ordner | Zweck |
-|---|---|
-| `server.js` | Express-Server-Einstieg |
-| `lib/db.js` | pg-Pool + Transaktionshelfer |
-| `lib/auth.js` | bcrypt, Session-Check |
-| `lib/crypto.js` | AES-256-GCM fuer Navidrome-Passwort |
-| `lib/validators.js` | `safeText`, `safeUrl`, `sanitizeIconField` |
-| `routes/public.js` | Oeffentliche API (`/api/profile`, `/api/links`, `/api/login`) |
-| `routes/admin.js` | Geschuetzte Admin-API |
-| `routes/navidrome.js` | Backend-Proxy fuer Navidrome/Subsonic |
-| `public/` | Frontend: `index.html`, `admin.html`, `login.html`, `setup.html`, JS, CSS |
-| `db/migrations/` | SQL-Migrationen |
-| `db/migrate.js` | Migration-Runner |
-| `db/seed.js` | Erzeugt Admin-User, Profil, Default-Links |
-| `db/reset.js` | Setzt alle Daten zurueck |
-| `lib/setup.js` | Initial-Setup-Logik |
-| `routes/setup.js` | Setup-API |
+### 🖥️ Frontend (Public Page)
+- Animierter **Aurora-Hintergrund** und Neon-Avatar mit rotierendem Ring
+- Hover-Effekte: Karten wachsen, URLs leuchten im Neon-Cyan auf
+- **Now Playing:** Live-Anzeige des aktuell gehörten Songs (über Navidrome/Subsonic API oder Music Assistant)
+- Integrierte Rechtstexte (Impressum, Datenschutz)
 
----
+### 📊 Umfangreiche Statistiken
+Die Admin-Oberfläche bietet ein dediziertes Statistik-Dashboard für wählbare Zeiträume (7, 30, 90 Tage):
+- Klick-Verlauf (Interaktives Balkendiagramm)
+- Breakdown nach **Geräten**, **Browsern**, **Betriebssystemen** und **Ländern**
+- Auswertung von **Top Quellen / UTM-Parametern** (Source & Medium)
+- Klicks & Unique Visitors pro einzelnem Link
+- **Musik-Verlauf (Scrobbles)**: Automatische Aufzeichnung und Anzeige der zuletzt gehörten Songs. Doppelte Tracks werden intelligent zusammengefasst.
+- **CSV-Export** aller generierten Statistiken
 
-## 🚀 Schnellstart (lokal)
-
-### Voraussetzungen
-- Node.js >= 18
-- PostgreSQL (lokal oder Docker)
-
-### Variante A: Web-basiertes Initial-Setup (empfohlen)
-
-```bash
-npm install
-npm start
-# Oeffne http://localhost:3000/setup.html
-```
-
-Beim ersten Start erkennt der Server automatisch, dass noch kein Admin-User
-existiert, und zeigt das Initial-Setup. Dort kannst du setzen:
-
-- PostgreSQL-Verbindung
-- Admin-E-Mail/Passwort
-- Profil-Daten
-- Erste Links
-- Navidrome-Credentials (optional)
-
-Nach dem Setup musst du den Server **einmal neu starten**, damit die
-Session-Konfiguration aktiv wird. Danach ist `/login` erreichbar.
-
-### Variante B: Manuell ueber `.env`
-
-```bash
-npm install
-cp .env.example .env
-# .env bearbeiten
-docker compose up -d postgres
-npm run db:migrate
-npm run db:seed
-npm run dev
-```
-
-Die Seite ist unter `http://localhost:3000` erreichbar, der Admin-Login unter `/login`.
+### 🛠️ Admin & Verwaltung
+- 🔐 **Hohe Sicherheit:** Echter Login mit 2FA (WebAuthn) Support für Passkeys / Security Keys.
+- 🔗 **Link-Verwaltung**: Hinzufügen, bearbeiten, deaktivieren, löschen und per **Drag & Drop** sortieren.
+- 🎨 **Icons**: Unterstützt einfache Emojis, direkte Bild-URLs oder über 2000 [Simple Icons](https://simpleicons.org/).
+- 👤 **Profil-Verwaltung**: Name, Handle, Bio, und Avatar (Bild-Upload oder Initialen).
+- 💾 **Backups**: Komplettes JSON-Export/Import der Links.
+- 🎵 **Navidrome- & Music Assistant-Einstellungen**: Bequem im UI verwaltbar (Passwörter werden sicher AES-256-GCM verschlüsselt in der DB abgelegt).
 
 ---
 
-## ☁️ Produktiv-Deployment
+## 🚀 Installation & Setup
 
-Fuer einen frischen Server empfohlen:
+### Variante A: Docker + Web-basiertes Setup (Empfohlen)
+
+Die einfachste Möglichkeit, OpenWeb zu starten. Es wird automatisch erkannt, wenn das System noch unkonfiguriert ist, und ein Setup-Assistent im Browser gestartet.
+
+1. Repository klonen und in den Ordner wechseln:
+   ```bash
+   git clone https://github.com/DerMinecrafter2020/linktree.git openweb
+   cd openweb
+   ```
+2. `.env` erstellen:
+   ```bash
+   cp .env.example .env
+   ```
+3. Docker Compose starten (startet Node.js Server + PostgreSQL DB):
+   ```bash
+   docker compose up -d
+   ```
+4. Setup im Browser abschließen:
+   Öffne `http://localhost:3000/setup.html` in deinem Browser. Der Assistent führt dich durch die Erstellung des Admin-Accounts, das initiale Profil und die Datenbankanbindung.
+
+### Variante B: Manuell über Install-Script (Linux Server)
+
+Für produktive Deployments direkt auf einem Linux-Server bietet das beiliegende Bash-Script einen komfortablen Weg, Systemd-Services, Nginx-Proxys und die Datenbank automatisch einzurichten.
 
 ```bash
 bash install.sh
 ```
 
 Das Script:
-- fragt nach Datenbank-Variante (Docker Postgres oder bestehende URL)
-- fragt Admin-E-Mail/Passwort ab
-- generiert `SESSION_SECRET` und `NAVIDROME_ENCRYPTION_KEY`
-- schreibt `.env`
-- installiert `npm`-Abhaengigkeiten
-- fuehrt Migrationen + Seeding aus
-- richtet optional einen systemd-Service und nginx ein
-- kann optional Navidrome-Credentials speichern
+- Fragt nach der gewünschten Datenbank-Variante (installiert via Docker oder nutzt bestehende URL)
+- Erfragt Admin-Zugangsdaten und generiert kryptografische Schlüssel
+- Installiert npm-Abhängigkeiten und führt SQL-Migrationen aus
+- Richtet auf Wunsch einen **systemd-Service** und einen **nginx Reverse Proxy** ein
 
-Weitere Befehle:
+Weitere Befehle des Install-Scripts:
 ```bash
-bash install.sh update           # Code aktualisieren
-bash install.sh change-password  # Admin-Passwort aendern
-bash install.sh change-navidrome # Navidrome-Credentials aendern
-bash install.sh reset-db         # DB zuruecksetzen
-bash install.sh logs             # systemd-Logs anzeigen
+bash install.sh update           # Holt neuen Code und führt Updates durch
+bash install.sh change-password  # Admin-Passwort neu setzen
+bash install.sh reset-db         # Datenbank komplett zurücksetzen
+bash install.sh logs             # systemd-Logs live anzeigen
 ```
 
 ---
 
-## ✨ Features
+## 🛠 Datenmodell / Architektur
 
-### Hauptseite
-- Animierter Aurora-Hintergrund, Neon-Avatar mit rotierendem Ring
-- Hover: Karte waechst auf 1.06, URL erscheint in Neon-Cyan
-- Navidrome-Player zeigt aktuellen Track an (optional)
-
-### Admin
-- 🔐 **Echter Login** mit E-Mail/Passwort + Session-Cookie
-- 🔗 **Links**: hinzufuegen, bearbeiten, loeschen, **drag & drop sortieren**
-- 👤 **Profil**: Name, Handle, Bio, Avatar-Buchstaben oder Avatar-Bild
-- 🎨 **Eigene Icons** pro Link (Emoji, Bild-URL oder Simple Icons)
-- 💾 **JSON-Export/Import** als Backup
-- 🗑 **Reset** auf Auslieferungszustand
-- 🎵 **Navidrome-Einstellungen** (verschluesselt in PostgreSQL)
+- `users` — Admin-Benutzer (E-Mail + Passwort-Hash)
+- `user_credentials` — WebAuthn 2FA Keys
+- `profile` — Singleton (`id = 1`) mit Name, Handle, Bio, Avatar
+- `links` — Link-Einträge mit Position, Aktiv-Status, Icon
+- `link_clicks` — Analytik-Rohdaten (IP-Hash, User-Agent Parses, UTM)
+- `music_history` — Lokales Scrobble-Tagebuch
+- `admin_settings` — Singleton mit Admin-Status
+- `navidrome_settings` & `musicassistant_settings` — Singleton, API-Keys verschlüsselt
+- `user_sessions` — Verwaltet von `connect-pg-simple`
 
 ---
 
 ## 🔒 Sicherheit
 
-| Schutz | Wie |
-|---|---|
-| **Admin-Login** | bcrypt-Hash + serverseitige Session in PostgreSQL (connect-pg-simple) |
-| **Navidrome-Credentials** | AES-256-GCM verschluesselt in `navidrome_settings`; Schluessel liegt nur in `.env`; Browser sieht Credentials nie |
-| **Session-Cookie** | `httpOnly`, `secure` in Production, `sameSite: lax` |
-| **Sicherheitsheader** | Helmet + CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` |
-| **Input-Validierung** | `safeText()`, `safeUrl()`, `sanitizeIconField()` auf Client und Server |
-| **Avatar-DataURL** | Nur `data:image/*`, max. 500 KB |
-| **SQL-Injection** | Parameterisierte Queries ueber `pg` |
+- **Passwörter & 2FA**: Bcrypt Hashing für Passwörter. 2FA wird nativ über WebAuthn (FIDO2) abgewickelt.
+- **Verschlüsselung**: API Keys / Passwörter für Navidrome & Music Assistant werden via AES-256-GCM verschlüsselt in der Datenbank abgelegt. Der nötige Schlüssel `NAVIDROME_ENCRYPTION_KEY` verbleibt ausschließlich in der `.env`-Datei auf dem Server.
+- **Datenschutz**: IP-Adressen in den Statistiken werden sofort als kryptografischer Hash gespeichert (Unique Visitors), Roh-IPs werden niemals gesichert.
+- **Absicherung**: Helmet + CSP, SameSite-Cookies, vorbereitete SQL-Statements (`pg` param queries) verhindern XSS und SQL-Injection.
 
 ---
 
-## 🛠 Datenmodell
+## 🔁 Updates durchführen
 
-- `users` — Admin-Benutzer (E-Mail + Passwort-Hash)
-- `profile` — Singleton (`id = 1`) mit Name, Handle, Bio, Avatar
-- `links` — Link-Eintraege mit Position, Aktiv-Status, Icon
-- `admin_settings` — Singleton mit Admin-Status + Discord-Webhook
-- `navidrome_settings` — Singleton, Passwort verschlüsselt
-- `user_sessions` — Wird von `connect-pg-simple` verwaltet
+Wenn die Anwendung läuft, kannst du Aktualisierungen jederzeit wie folgt einspielen:
 
----
-
-## 🔁 Updates
-
+**Bei Nutzung von `install.sh`:**
 ```bash
 bash install.sh update
 ```
 
-- Holt neuen Code
-- Behaelt `.env` und Datenbank bei
-- Fuehrt Migrationen aus
-- Startet den Service neu
-
-Viel Spass! 🎉
+**Bei manueller / Docker Nutzung:**
+```bash
+git pull
+docker compose build  # (Falls neue npm-Pakete hinzukamen)
+docker compose up -d
+docker compose exec app npm run db:migrate  # Führt evtl. neue SQL-Migrationen aus
+```
