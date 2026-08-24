@@ -1,0 +1,43 @@
+﻿# ==========================================================
+# OpenWeb - Nginx Load Balancer Konfiguration
+# ==========================================================
+# Diese Konfiguration verteilt eingehenden Traffic auf zwei
+# (oder mehr) Instanzen der App, z.B. eine native (Port 3000) 
+# und eine Docker-Instanz (Port 3001).
+
+upstream openweb_backend {
+    # 1. Native Instanz (via systemd gestartet)
+    server 127.0.0.1:3000;
+    
+    # 2. Docker Instanz (via docker-compose gestartet)
+    # WICHTIG: In der docker-compose.yml muss der Port auf 3001:3000 geaendert werden!
+    server 127.0.0.1:3001;
+
+    # Optional: Du kannst hier auch externe Server-IPs eintragen,
+    # wenn die zweite Instanz auf einem ganz anderen Server laeuft.
+    # server 192.168.1.150:3000;
+}
+
+server {
+    listen 80;
+    server_name deine-domain.de;
+
+    # Hier wuerde Let's Encrypt / SSL konfiguriert werden
+    # listen 443 ssl;
+    # ssl_certificate /etc/letsencrypt/...
+
+    location / {
+        # Anstatt direkt auf Port 3000 weiterzuleiten, leiten wir 
+        # auf den "upstream" (die Gruppe von Servern) um.
+        proxy_pass http://openweb_backend;
+        
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_addrs_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
