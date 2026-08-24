@@ -36,6 +36,7 @@
 
   const get = (path) => api('GET', path);
   const post = (path, body) => api('POST', path, body);
+  const put = (path, body) => api('PUT', path, body);
   const patch = (path, body) => api('PATCH', path, body);
   const del = (path) => api('DELETE', path);
 
