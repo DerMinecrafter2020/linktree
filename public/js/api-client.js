@@ -114,6 +114,7 @@
     getWebauthnRegisterOptions: () => post('/admin/settings/2fa/webauthn/register-options'),
     verifyWebauthnRegister: (res) => post('/admin/settings/2fa/webauthn/register-verify', res),
     deleteWebauthn: (id) => del(`/admin/settings/2fa/webauthn/${id}`),
+    renameWebauthn: (id, name) => put(`/admin/settings/2fa/webauthn/${id}`, { name }),
 
     loginTotp: (code) => post('/auth/login/totp', { code }),
     getWebauthnLoginOptions: () => post('/auth/login/webauthn/options'),

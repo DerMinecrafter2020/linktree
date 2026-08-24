@@ -1109,8 +1109,23 @@ router.post('/change-password', async (req, res, next) => {
     try {
       const db = require('../lib/db');
       const { rows } = await db.query('SELECT totp_enabled FROM users WHERE id = $1', [req.session.userId]);
-      const { rows: webauthn } = await db.query('SELECT id, created_at, last_used_at FROM webauthn_credentials WHERE user_id = $1', [req.session.userId]);
+      const { rows: webauthn } = await db.query('SELECT id, name, created_at, last_used_at FROM webauthn_credentials WHERE user_id = $1 ORDER BY created_at ASC', [req.session.userId]);
       res.json({ ok: true, data: { totp_enabled: rows[0]?.totp_enabled || false, webauthn_keys: webauthn } });
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+  });
+
+  router.put('/settings/2fa/webauthn/:id', async (req, res) => {
+    try {
+      const db = require('../lib/db');
+      const { name } = req.body;
+      const { id } = req.params;
+      
+      const safeName = require('../lib/validators').safeText(name, 100) || 'Security Key';
+      
+      const result = await db.query('UPDATE webauthn_credentials SET name = $1 WHERE id = $2 AND user_id = $3 RETURNING id, name', [safeName, id, req.session.userId]);
+      if (result.rowCount === 0) return res.status(404).json({ ok: false, error: 'Schluessel nicht gefunden' });
+      
+      res.json({ ok: true, data: result.rows[0] });
     } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
   });
 

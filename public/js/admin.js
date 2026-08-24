@@ -1486,8 +1486,11 @@
           webauthn_keys.forEach((k, idx) => {
             const li = document.createElement('li');
             li.innerHTML = `
-              <span>YubiKey / Security Key ${idx + 1} (Erstellt: ${new Date(k.created_at).toLocaleDateString()})</span>
-              <button class="btn danger sm delete-webauthn" data-id="${k.id}">Löschen</button>
+              <span><strong>${k.name || 'Security Key'}</strong> (Erstellt: ${new Date(k.created_at).toLocaleDateString()})</span>
+              <div>
+                <button class="btn ghost sm rename-webauthn" data-id="${k.id}" data-name="${k.name || ''}" style="margin-right: 8px;">Umbenennen</button>
+                <button class="btn danger sm delete-webauthn" data-id="${k.id}">Löschen</button>
+              </div>
             `;
             list.appendChild(li);
           });
@@ -1555,6 +1558,17 @@
           toast('Schlüssel gelöscht.');
           load2faStatus();
         } catch (err) { toast('Fehler: ' + err.message, true); }
+      } else if (e.target.classList.contains('rename-webauthn')) {
+        const id = e.target.dataset.id;
+        const currentName = e.target.dataset.name || 'Security Key';
+        const newName = prompt('Wie soll der Security Key heißen?', currentName);
+        if (newName !== null && newName.trim() !== '') {
+          try {
+            await window.api.renameWebauthn(id, newName.trim());
+            toast('Schlüssel umbenannt.');
+            load2faStatus();
+          } catch (err) { toast('Fehler: ' + err.message, true); }
+        }
       }
     });
     
@@ -1626,7 +1640,7 @@
     const list = $('#music-history-list');
     if (!list) return;
       if (!historyRes || historyRes.length === 0) {
-        list.innerHTML = '<li class="stats-item"><span class="stats-label">Noch keine Songs im Verlauf.</span></li>';
+        list.innerHTML = '<li class="hint" style="list-style: none;">Noch keine Songs im Verlauf.</li>';
         return;
       }
       
