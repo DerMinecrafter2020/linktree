@@ -211,13 +211,15 @@ router.get('/stats/links', async (req, res, next) => {
       ORDER BY count DESC
     `, [days]);
     const musicHistoryRes = await db.query(`
-      SELECT DISTINCT ON (title, artist) title, artist, album, played_at
-      FROM music_history 
-      WHERE played_at > NOW() - $1 * INTERVAL '1 day'
-      ORDER BY title, artist, played_at DESC
+      SELECT * FROM (
+        SELECT DISTINCT ON (title, artist) title, artist, album, played_at
+        FROM music_history 
+        WHERE played_at > NOW() - $1 * INTERVAL '1 day'
+        ORDER BY title, artist, played_at DESC
+      ) AS deduped
+      ORDER BY played_at DESC
+      LIMIT 150
     `, [days]);
-    // Re-sort by played_at after dedup
-    musicHistoryRes.rows.sort((a, b) => new Date(b.played_at) - new Date(a.played_at));
     res.json({
       ok: true,
       data: {
@@ -1199,11 +1201,21 @@ router.post('/change-password', async (req, res, next) => {
       if (!expectedChallenge) return res.status(400).json({ ok: false, error: 'Kein Challenge aktiv' });
       
       const { verifyRegistrationResponse } = require('@simplewebauthn/server');
+      const host = req.get('host');
+      const hostname = req.hostname;
+      const expectedOrigin = [
+        `${req.protocol}://${host}`,
+        `https://${host}`,
+        `http://${host}`,
+        `https://${hostname}`,
+        `http://${hostname}`
+      ];
+      
       const verification = await verifyRegistrationResponse({
         response: req.body,
         expectedChallenge,
-        expectedOrigin: `${req.protocol}://${req.get('host')}`,
-        expectedRPID: req.hostname,
+        expectedOrigin,
+        expectedRPID: hostname,
       });
       
       if (verification.verified) {

@@ -462,11 +462,21 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
       const authenticator = creds[0];
       if (!authenticator) return res.status(400).json({ ok: false, error: 'Key nicht gefunden' });
       
+      const host = req.get('host');
+      const hostname = req.hostname;
+      const expectedOrigin = [
+        `${req.protocol}://${host}`,
+        `https://${host}`,
+        `http://${host}`,
+        `https://${hostname}`,
+        `http://${hostname}`
+      ];
+      
       const verification = await verifyAuthenticationResponse({
         response: body,
         expectedChallenge,
-        expectedOrigin: `${req.protocol}://${req.get('host')}`,
-        expectedRPID: req.hostname,
+        expectedOrigin,
+        expectedRPID: hostname,
         credential: {
           id: authenticator.credential_id,
           publicKey: authenticator.public_key,
