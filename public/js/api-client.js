@@ -117,8 +117,8 @@
     deleteWebauthn: (id) => del(`/admin/settings/2fa/webauthn/${id}`),
     renameWebauthn: (id, name) => put(`/admin/settings/2fa/webauthn/${id}`, { name }),
 
-    loginTotp: (code) => post('/auth/login/totp', { code }),
-    getWebauthnLoginOptions: () => post('/auth/login/webauthn/options'),
-    verifyWebauthnLogin: (res) => post('/auth/login/webauthn/verify', res)
+    loginTotp: (code) => post('/login/totp', { code }),
+    getWebauthnLoginOptions: () => post('/login/webauthn/options'),
+    verifyWebauthnLogin: (res) => post('/login/webauthn/verify', res)
   };
 })();
