@@ -457,7 +457,7 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
         userVerification: 'preferred',
       });
       await db.query('UPDATE users SET webauthn_current_challenge = $1 WHERE id = $2', [options.challenge, req.session.pendingUserId]);
-      res.json(options);
+      res.json({ ok: true, data: options });
     } catch (err) { next(err); }
   });
 
