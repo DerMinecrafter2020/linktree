@@ -305,9 +305,9 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
   try {
     const email = v.validateEmail(req.body.email);
     const password = req.body.password;
-    if (!email || !password) {
+    if (!email) {
       req.loginRateLimit?.increment(true);
-      return res.status(400).json({ ok: false, error: 'E-Mail und Passwort erforderlich' });
+      return res.status(400).json({ ok: false, error: 'E-Mail erforderlich' });
     }
 
     const user = await auth.findUserByEmail(email);
@@ -316,31 +316,43 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
       return res.status(401).json({ ok: false, error: 'Ungueltige Anmeldedaten' });
     }
 
-    const valid = await auth.verifyPassword(password, user.password_hash);
-    if (!valid) {
+    const db = require('../lib/db');
+    const { rows } = await db.query('SELECT id FROM webauthn_credentials WHERE user_id = $1 LIMIT 1', [user.id]);
+    const hasWebAuthn = rows.length > 0;
+
+    let passwordValid = false;
+    if (password) {
+      passwordValid = await auth.verifyPassword(password, user.password_hash);
+      if (!passwordValid) {
+        req.loginRateLimit?.increment(true);
+        return res.status(401).json({ ok: false, error: 'Ungueltige Anmeldedaten' });
+      }
+    } else if (!hasWebAuthn) {
       req.loginRateLimit?.increment(true);
-      return res.status(401).json({ ok: false, error: 'Ungueltige Anmeldedaten' });
+      return res.status(400).json({ ok: false, error: 'Passwort erforderlich' });
     }
 
     req.loginRateLimit?.increment(false);
     
     // 2FA / WebAuthn Check
-    const db = require('../lib/db');
-    const { rows } = await db.query('SELECT id FROM webauthn_credentials WHERE user_id = $1 LIMIT 1', [user.id]);
-    const hasWebAuthn = rows.length > 0;
+    // If logged in WITHOUT password, ONLY WebAuthn is allowed.
+    // If logged in WITH password, TOTP is also allowed.
+    const allowedMethods = [];
+    if (hasWebAuthn) allowedMethods.push('webauthn');
+    if (passwordValid && user.totp_enabled) allowedMethods.push('totp');
     
-    if (user.totp_enabled || hasWebAuthn) {
+    if (allowedMethods.length > 0) {
       req.session.pendingUserId = user.id;
       if (req.body.remember === true) req.session.pendingRemember = true;
+      // If they didn't provide a password, we MUST enforce that they use WebAuthn to complete the login
+      req.session.pendingRequiresWebAuthn = !passwordValid;
+      
       await new Promise((resolve, reject) => req.session.save((err) => (err ? reject(err) : resolve())));
       return res.json({ 
         ok: true, 
         data: {
           requires_2fa: true, 
-          methods: [
-            ...(user.totp_enabled ? ['totp'] : []),
-            ...(hasWebAuthn ? ['webauthn'] : [])
-          ]
+          methods: allowedMethods
         }
       });
     }
@@ -387,6 +399,7 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
     req.session.email = user.email;
     delete req.session.pendingUserId;
     delete req.session.pendingRemember;
+    delete req.session.pendingRequiresWebAuthn;
     req.session.touch();
     await new Promise((resolve, reject) => req.session.save((err) => (err ? reject(err) : resolve())));
 
@@ -407,6 +420,8 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
   router.post('/login/totp', rateLimitLogin, async (req, res, next) => {
     try {
       if (!req.session.pendingUserId) return res.status(401).json({ ok: false, error: 'Session abgelaufen' });
+      if (req.session.pendingRequiresWebAuthn) return res.status(403).json({ ok: false, error: 'Passwort wurde nicht eingegeben. Diese Anmeldung erfordert einen Security Key.' });
+      
       const { code } = req.body;
       const db = require('../lib/db');
       const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [req.session.pendingUserId]);
