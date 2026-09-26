@@ -15,7 +15,7 @@ USER node
 COPY --chown=node:node package*.json ./
 
 # Abhängigkeiten installieren (ohne devDependencies)
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Quellcode kopieren
 COPY --chown=node:node . .
@@ -24,8 +24,8 @@ COPY --chown=node:node . .
 EXPOSE 3000
 
 # Healthcheck für den Container
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=45s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
 
 # Anwendung starten
 CMD ["node", "server.js"]

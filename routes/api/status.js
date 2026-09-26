@@ -32,7 +32,7 @@ router.get('/now-playing', async (req, res, next) => {
     res.json({ ok: true, data: { playing: false } });
   } catch (err) {
     console.error('[status] now-playing error:', err.message);
-    res.json({ ok: true, data: { playing: false, error: err.message } });
+    res.json({ ok: true, data: { playing: false } });
   }
 });
 

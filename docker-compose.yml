@@ -7,7 +7,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: openweb
-      POSTGRES_PASSWORD: openweb
+      # Aus .env (install.sh erzeugt ein zufaelliges Passwort); Fallback nur fuer Altinstallationen
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openweb}
       POSTGRES_DB: openweb
     volumes:
       - openweb-postgres-data:/var/lib/postgresql/data
@@ -28,7 +29,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://openweb:openweb@postgres:5432/openweb
+      DATABASE_URL: postgresql://openweb:${POSTGRES_PASSWORD:-openweb}@postgres:5432/openweb
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:

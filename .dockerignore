@@ -1,0 +1,25 @@
+# Secrets und lokale Konfiguration nie ins Image kopieren
+.env
+.env.*
+!.env.example
+
+# Wird im Container frisch installiert
+node_modules
+npm-debug.log*
+
+# Repository-/Editor-Daten und lokale Artefakte
+.git
+.github
+.claude
+.vscode
+.idea
+screenshots
+backups
+.last-track-id
+*.log
+
+# Nicht zur Laufzeit benoetigt
+Dockerfile
+docker-compose.yml
+install.sh
+nginx-lb.conf.example

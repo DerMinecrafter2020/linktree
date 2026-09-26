@@ -135,8 +135,18 @@ cmd_install() {
       err "$DOCKER_COMPOSE_FILE nicht gefunden."
       exit 1
     fi
-    DATABASE_URL="postgres://openweb:openweb@localhost:5432/openweb"
-    DB_PASSWORD="openweb"
+    # Neue Installation: zufaelliges DB-Passwort. Existiert das Postgres-Volume bereits,
+    # bleibt das dort gesetzte Passwort gueltig (Postgres liest POSTGRES_PASSWORD nur beim ersten Start).
+    if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+      DB_PASSWORD="$POSTGRES_PASSWORD"
+    elif [[ -n "$(docker volume ls -q --filter name=openweb-postgres-data)" ]]; then
+      DB_PASSWORD="openweb"
+      warn "Bestehendes Postgres-Volume gefunden – verwende bisheriges DB-Passwort. Aendern mit: ALTER USER openweb PASSWORD '...';"
+    else
+      DB_PASSWORD=$(generate_secret)
+    fi
+    POSTGRES_PASSWORD="$DB_PASSWORD"
+    DATABASE_URL="postgres://openweb:${DB_PASSWORD}@localhost:5432/openweb"
   else
     require_command psql "psql wird fuer bestehende Postgres-URL benoetigt."
     DATABASE_URL=$(prompt "PostgreSQL URL" "${DATABASE_URL:-postgres://user:pass@localhost:5432/openweb}")
@@ -189,7 +199,11 @@ cmd_install() {
   fi
 
   # --- .env schreiben -------------------------------------------------------
-  cat > "$ENV_FILE" <<EOF
+  # Nur fuer den Eigentuemer lesbar; Admin-/Navidrome-Passwort werden NICHT gespeichert
+  # (nur einmalig beim Seeding als Umgebungsvariable uebergeben).
+  (
+    umask 077
+    cat > "$ENV_FILE" <<EOF
 NODE_ENV=production
 PORT=${PORT}
 APP_URL=https://${DOMAIN:-localhost:${PORT}}
@@ -197,15 +211,18 @@ DATABASE_URL=${DATABASE_URL}
 SESSION_SECRET=${SESSION_SECRET}
 SESSION_MAX_AGE_MS=86400000
 ADMIN_EMAIL=${ADMIN_EMAIL}
-ADMIN_PASSWORD=${ADMIN_PASSWORD}
 NAVIDROME_ENCRYPTION_KEY=${NAVIDROME_ENCRYPTION_KEY}
 NAVIDROME_ENABLED=${NAVIDROME_ENABLED}
 NAVIDROME_URL=${NAVIDROME_URL}
 NAVIDROME_USERNAME=${NAVIDROME_USERNAME}
-NAVIDROME_PASSWORD=${NAVIDROME_PASSWORD}
 EOF
+    if [[ "$DB_CHOICE" == "1" ]]; then
+      echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}" >> "$ENV_FILE"
+    fi
+  )
+  chmod 600 "$ENV_FILE"
 
-  log ".env geschrieben."
+  log ".env geschrieben (Rechte 600)."
 
   # --- Datenbank starten (Docker) -------------------------------------------
   if [[ "$DB_CHOICE" == "1" ]]; then
@@ -222,7 +239,7 @@ EOF
   (cd "$APP_DIR" && npm run db:migrate)
 
   log "Seede Datenbank…"
-  (cd "$APP_DIR" && npm run db:seed)
+  (cd "$APP_DIR" && ADMIN_PASSWORD="$ADMIN_PASSWORD" NAVIDROME_PASSWORD="${NAVIDROME_PASSWORD:-}" npm run db:seed)
 
   # --- systemd-Service (nur wenn root) --------------------------------------
   if [[ "$EUID" -eq 0 ]]; then
@@ -366,9 +383,13 @@ cmd_reset_db() {
     exit 0
   fi
   ensure_env
+  local admin_password="${ADMIN_PASSWORD:-}"
+  while [[ ${#admin_password} -lt 8 ]]; do
+    admin_password=$(prompt_secret "Neues Admin Passwort (min. 8 Zeichen)")
+  done
   (cd "$APP_DIR" && npm run db:reset)
   (cd "$APP_DIR" && npm run db:migrate)
-  (cd "$APP_DIR" && npm run db:seed)
+  (cd "$APP_DIR" && ADMIN_PASSWORD="$admin_password" npm run db:seed)
   log "Datenbank wurde zurueckgesetzt und neu geseedet."
 }
 

@@ -1,0 +1,46 @@
+#!/bin/sh
+# =========================================================
+# OpenWeb — Pre-Commit-Hook: automatische Versionserhoehung
+# =========================================================
+# Erhoeht bei jedem Commit mit Code-Aenderungen die Patch-Version
+# (siehe scripts/bump-version.sh) und nimmt die Versionsdateien mit in den Commit.
+#
+# Aktivieren (einmalig pro Klon):   git config core.hooksPath .githooks
+# Einmalig ueberspringen:           SKIP_VERSION_BUMP=1 git commit ...
+#                                   (z. B. bei "git commit --amend")
+# Minor/Major statt Patch:          sh scripts/bump-version.sh minor  (vor dem Commit
+#                                   ausfuehren und stagen – dann erhoeht der Hook nicht erneut)
+
+[ "${SKIP_VERSION_BUMP:-}" = "1" ] && exit 0
+
+root=$(git rev-parse --show-toplevel) || exit 1
+cd "$root" || exit 1
+
+# Merge-Commits nicht anfassen
+[ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ] && exit 0
+
+staged=$(git diff --cached --name-only)
+[ -z "$staged" ] && exit 0
+
+# Nur Dokumentation / Screenshots geaendert -> keine neue Version
+code_changes=$(printf '%s\n' "$staged" | grep -vE '\.md$|^LICENSE$|^screenshots/|^\.github/' || true)
+[ -z "$code_changes" ] && exit 0
+
+# Version in diesem Commit bereits (manuell) geaendert -> nicht doppelt erhoehen
+if git diff --cached -U0 -- package.json | grep -qE '^\+[[:space:]]*"version":'; then
+  exit 0
+fi
+
+version_files="package.json package-lock.json public/sw.js public/index.html"
+
+# Nicht gestagte Aenderungen in den Versionsdateien wuerden sonst ungewollt mitcommittet
+for file in $version_files; do
+  if ! git diff --quiet -- "$file"; then
+    echo "[pre-commit] $file enthaelt nicht gestagte Aenderungen." >&2
+    echo "[pre-commit] Bitte erst stagen (git add $file) oder mit SKIP_VERSION_BUMP=1 committen." >&2
+    exit 1
+  fi
+done
+
+sh scripts/bump-version.sh patch || exit 1
+git add $version_files

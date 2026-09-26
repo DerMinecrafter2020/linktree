@@ -44,3 +44,7 @@ screenshots/*.jpeg
 *.log
 
 public/*.pdf
+
+# Laufzeitdaten (Backups enthalten Profildaten und Webhook-URLs)
+backups/
+.last-track-id

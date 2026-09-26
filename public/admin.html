@@ -654,32 +654,11 @@
   <!-- Toast -->
   <div id="toast" class="toast" hidden></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@simplewebauthn/browser@9.0.1/dist/bundle/index.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@simplewebauthn/browser@9.0.1/dist/bundle/index.umd.min.js" integrity="sha384-9+Bm5pUMP2324xMjhRahdomA9HaTxP6JcMhbl3tUAcV2+Jiohq8/T+dGj/rx/MaM" crossorigin="anonymous"></script>
   <script src="/js/api-client.js"></script>
   <script src="/js/icons.js"></script>
   <script src="/js/navidrome.js"></script>
   <script src="/js/admin.js"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').then(reg => {
-        setInterval(() => reg.update(), 5 * 60 * 1000);
-        reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing;
-          if (!newWorker) return;
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
-              window.location.reload();
-            }
-          });
-        });
-      }).catch(console.error);
-      let refreshing = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (refreshing) return;
-        refreshing = true;
-        window.location.reload();
-      });
-    }
-  </script>
+  <script src="/js/sw-register-admin.js"></script>
 </body>
 </html>

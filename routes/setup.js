@@ -25,7 +25,7 @@ router.get('/status', async (req, res) => {
     res.json({
       ok: true,
       data: {
-        setupRequired: true,
+        setupRequired: !(err instanceof setup.DatabaseUnavailableError),
         envFileExists: setup.envFileExists(),
         databaseUrl: 'unknown',
         error: err.message,
@@ -117,6 +117,12 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Admin-Passwort muss mindestens 8 Zeichen haben' });
     }
 
+    const portNum = parseInt(config.port || '3000', 10);
+    if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535 || !/^\d+$/.test(String(config.port || '3000'))) {
+      return res.status(400).json({ ok: false, error: 'Ungueltiger Port' });
+    }
+    const port = String(portNum);
+
     const profile = config.profile || {};
     const links = Array.isArray(config.links) ? config.links : [];
 
@@ -143,9 +149,9 @@ router.post('/', async (req, res) => {
       navidromeUsername: v.safeText(config.navidromeUsername, 120),
       navidromePassword: String(config.navidromePassword || ''),
       navidromePollIntervalSec: Math.min(600, Math.max(5, parseInt(config.navidromePollIntervalSec || '30', 10) || 30)),
-      port: String(config.port || '3000'),
-      appUrl: v.safeUrl(config.appUrl) || `http://localhost:${config.port || '3000'}`,
-      nodeEnv: config.nodeEnv || 'production',
+      port,
+      appUrl: v.safeUrl(config.appUrl) || `http://localhost:${port}`,
+      nodeEnv: ['production', 'development'].includes(config.nodeEnv) ? config.nodeEnv : 'production',
     });
 
     res.json({

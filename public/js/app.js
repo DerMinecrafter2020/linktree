@@ -227,7 +227,10 @@
       try {
         const res = await window.api.unlockLink(link.id, input.value);
         close();
-        window.open(res.url, link.open_new !== false ? '_blank' : '_self');
+        const target = safeUrl(res.url);
+        if (target === '#') return;
+        if (link.open_new !== false) window.open(target, '_blank', 'noopener,noreferrer');
+        else window.location.href = target;
         trackClick(link);
       } catch (err) {
         error.hidden = false;

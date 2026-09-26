@@ -11,6 +11,7 @@
 *.sh          text eol=lf
 *.bash        text eol=lf
 install.sh    text eol=lf
+.githooks/*   text eol=lf
 
 # Web-Quellcode: immer LF
 *.js          text eol=lf

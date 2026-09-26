@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const db = require('../lib/db');
-const { encrypt, decrypt } = require('../lib/crypto');
+const { encrypt, decrypt, isEncrypted } = require('../lib/crypto');
 const v = require('../lib/validators');
 const { hashPassword, verifyPassword, findUserByEmail, requireAdminSession } = require('../lib/auth');
 const bcrypt = require('bcrypt');
@@ -465,8 +465,11 @@ router.delete('/links/:id', async (req, res, next) => {
 router.post('/links/reorder', async (req, res, next) => {
   try {
     const orderedIds = req.body.orderedIds;
-    if (!Array.isArray(orderedIds)) {
+    if (!Array.isArray(orderedIds) || orderedIds.length > 1000) {
       return res.status(400).json({ ok: false, error: 'orderedIds muss ein Array sein' });
+    }
+    if (!orderedIds.every(id => /^\d+$/.test(String(id)) || /^[0-9a-fA-F-]{36}$/.test(String(id)))) {
+      return res.status(400).json({ ok: false, error: 'Ungültige ID' });
     }
 
     await db.transaction(async (client) => {
@@ -499,7 +502,9 @@ router.post('/settings', async (req, res, next) => {
     const adminEnabled = req.body.admin_enabled !== false;
     const discordEnabled = !!req.body.discord_webhook_enabled;
     const discordUrl = req.body.discord_webhook_url ? v.safeUrl(req.body.discord_webhook_url) : null;
-    const discordTemplate = req.body.discord_webhook_template || null;
+    const discordTemplate = req.body.discord_webhook_template
+      ? String(req.body.discord_webhook_template).slice(0, 2000)
+      : null;
 
     await db.query(`
       INSERT INTO admin_settings (id, admin_enabled, discord_webhook_enabled, discord_webhook_url, discord_webhook_template)
@@ -533,13 +538,30 @@ router.get('/alert-settings', async (req, res, next) => {
 router.post('/alert-settings', async (req, res, next) => {
   try {
     const s = req.body;
+    const emailTo = s.email_to ? v.validateEmail(s.email_to) : null;
+    if (s.email_to && !emailTo) {
+      return res.status(400).json({ ok: false, error: 'Ungueltige Empfaenger-E-Mail' });
+    }
+
+    // SMTP-Passwort verschluesselt speichern. Leeres Feld = bisheriges Passwort behalten
+    // (die Einstellungsseite bekommt es aus Sicherheitsgruenden nie zurueck).
+    let smtpPassword;
+    if (s.smtp_password) {
+      smtpPassword = encrypt(String(s.smtp_password).slice(0, 500));
+    } else {
+      const { rows: existing } = await db.query('SELECT smtp_password FROM alert_settings WHERE id = 1 LIMIT 1');
+      const current = existing[0]?.smtp_password || null;
+      smtpPassword = current && !isEncrypted(current) ? encrypt(current) : current;
+    }
+
+    const smtpPort = parseInt(s.smtp_port, 10);
     const values = [
       !!s.email_enabled,
-      s.email_to || null,
-      s.smtp_host || null,
-      parseInt(s.smtp_port, 10) || 587,
-      s.smtp_user || null,
-      s.smtp_password || null,
+      emailTo,
+      s.smtp_host ? v.safeText(String(s.smtp_host), 255) || null : null,
+      smtpPort >= 1 && smtpPort <= 65535 ? smtpPort : 587,
+      s.smtp_user ? v.safeText(String(s.smtp_user), 255) || null : null,
+      smtpPassword,
       s.smtp_secure !== false,
       s.webhook_url ? v.safeUrl(s.webhook_url) : null,
       s.notify_login !== false,
@@ -1091,6 +1113,12 @@ router.post('/change-password', async (req, res, next) => {
     const newHash = await hashPassword(newPassword);
     await db.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, user.id]);
 
+    // Alle anderen Sessions dieses Users beenden (z. B. gestohlene Session nach Passwortwechsel)
+    await db.query(
+      `DELETE FROM user_sessions WHERE sid <> $1 AND sess->>'userId' = $2`,
+      [req.sessionID, String(user.id)]
+    ).catch((err) => console.warn('[change-password] Sessions konnten nicht beendet werden:', err.message));
+
     await audit.log(req, 'change_password', 'user', user.id);
     alert.notify('password', 'Admin-Passwort wurde geändert', {
       email: user.email,
@@ -1129,51 +1157,73 @@ router.post('/change-password', async (req, res, next) => {
     } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
   });
 
+  // Sensible 2FA-Aenderungen erfordern das aktuelle Passwort (Schutz bei uebernommener Session)
+  async function checkCurrentPassword(req) {
+    const password = req.body?.password;
+    if (!password || typeof password !== 'string') return false;
+    const { rows } = await db.query('SELECT password_hash FROM users WHERE id = $1 AND is_active = true', [req.session.userId]);
+    if (!rows[0]) return false;
+    return verifyPassword(password, rows[0].password_hash);
+  }
+
   router.post('/settings/2fa/totp/setup', async (req, res) => {
     try {
-      const { authenticator } = require('otplib');
       const QRCode = require('qrcode');
-      const secret = authenticator.generateSecret();
-      
-      const db = require('../lib/db');
-      const { rows } = await db.query('SELECT email FROM users WHERE id = $1', [req.session.userId]);
+      const totp = require('../lib/totp');
+      const secret = totp.createSecret();
+
+      const { rows } = await db.query('SELECT email, totp_enabled FROM users WHERE id = $1', [req.session.userId]);
+      // Aktives TOTP nicht ersetzen lassen (sonst koennte eine uebernommene Session die
+      // Passwortpflicht beim Deaktivieren umgehen) -> erst deaktivieren, dann neu einrichten
+      if (rows[0]?.totp_enabled) {
+        return res.status(409).json({ ok: false, error: 'TOTP ist bereits aktiv. Bitte zuerst deaktivieren.' });
+      }
       const email = rows[0]?.email || 'admin@openweb';
-      
-      const otpauth = authenticator.keyuri(email, 'OpenWeb Admin', secret);
+
+      const otpauth = totp.buildOtpAuthUri(email, secret);
       const qrcodeUrl = await QRCode.toDataURL(otpauth);
-      
-      await db.query('UPDATE users SET totp_secret = $1 WHERE id = $2', [secret, req.session.userId]);
-      
+
+      // Erst nach erfolgreicher Code-Pruefung in der DB speichern -> ein aktives Secret
+      // wird nicht schon durch das blosse Starten der Einrichtung ueberschrieben
+      req.session.pendingTotpSecret = secret;
+
       res.json({ ok: true, data: { secret, qrcode: qrcodeUrl } });
     } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
   });
 
   router.post('/settings/2fa/totp/verify', async (req, res) => {
     try {
-      const { code } = req.body;
-      const db = require('../lib/db');
-      const { rows } = await db.query('SELECT totp_secret FROM users WHERE id = $1', [req.session.userId]);
-      const user = rows[0];
-      
-      if (!user || !user.totp_secret) {
+      const secret = req.session.pendingTotpSecret;
+      if (!secret) {
         return res.status(400).json({ ok: false, error: 'TOTP nicht eingerichtet' });
       }
-      
-      const { authenticator } = require('otplib');
-      const isValid = authenticator.check(code, user.totp_secret);
-      if (!isValid) {
+
+      const totp = require('../lib/totp');
+      const result = await totp.verifyCode(req.body.code, secret);
+      if (!result.valid) {
         return res.status(400).json({ ok: false, error: 'Ungueltiger Code' });
       }
-      
-      await db.query('UPDATE users SET totp_enabled = true WHERE id = $1', [req.session.userId]);
+
+      const { rowCount } = await db.query(
+        'UPDATE users SET totp_secret = $1, totp_enabled = true, totp_last_timestep = $2 WHERE id = $3 AND totp_enabled IS NOT TRUE',
+        [secret, result.timeStep, req.session.userId]
+      );
+      if (!rowCount) {
+        return res.status(409).json({ ok: false, error: 'TOTP ist bereits aktiv. Bitte zuerst deaktivieren.' });
+      }
+      delete req.session.pendingTotpSecret;
+      await audit.log(req, 'totp_enable', 'user', req.session.userId);
       res.json({ ok: true });
     } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
   });
-  
+
   router.post('/settings/2fa/totp/disable', async (req, res) => {
     try {
-      const db = require('../lib/db');
-      await db.query('UPDATE users SET totp_enabled = false, totp_secret = NULL WHERE id = $1', [req.session.userId]);
+      if (!(await checkCurrentPassword(req))) {
+        return res.status(401).json({ ok: false, error: 'Aktuelles Passwort falsch' });
+      }
+      await db.query('UPDATE users SET totp_enabled = false, totp_secret = NULL, totp_last_timestep = NULL WHERE id = $1', [req.session.userId]);
+      await audit.log(req, 'totp_disable', 'user', req.session.userId);
       res.json({ ok: true });
     } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
   });
@@ -1249,8 +1299,11 @@ router.post('/change-password', async (req, res, next) => {
   
   router.delete('/settings/2fa/webauthn/:id', async (req, res) => {
     try {
-      const db = require('../lib/db');
+      if (!(await checkCurrentPassword(req))) {
+        return res.status(401).json({ ok: false, error: 'Aktuelles Passwort falsch' });
+      }
       await db.query('DELETE FROM webauthn_credentials WHERE id = $1 AND user_id = $2', [req.params.id, req.session.userId]);
+      await audit.log(req, 'webauthn_delete', 'user', req.session.userId);
       res.json({ ok: true });
     } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
   });

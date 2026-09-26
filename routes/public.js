@@ -21,60 +21,88 @@ router.param('id', (req, res, next, id) => {
 });
 
 async function requireApiKey(req, res, next) {
-  const key = req.headers['x-api-key'];
-  if (!key) return res.status(401).json({ ok: false, error: 'API-Key erforderlich' });
-  const { rows } = await db.query('SELECT id, key_hash FROM api_keys');
-  let match = null;
-  for (const r of rows) {
-    if (await bcrypt.compare(key, r.key_hash)) { match = r; break; }
+  try {
+    const key = req.headers['x-api-key'];
+    if (!key || typeof key !== 'string' || key.length > 200) {
+      return res.status(401).json({ ok: false, error: 'API-Key erforderlich' });
+    }
+    const { rows } = await db.query('SELECT id, key_hash FROM api_keys');
+    let match = null;
+    for (const r of rows) {
+      if (await bcrypt.compare(key, r.key_hash)) { match = r; break; }
+    }
+    if (!match) return res.status(401).json({ ok: false, error: 'Ungueltiger API-Key' });
+    await db.query('UPDATE api_keys SET last_used_at = NOW() WHERE id = $1', [match.id]);
+    next();
+  } catch (err) {
+    next(err);
   }
-  if (!match) return res.status(401).json({ ok: false, error: 'Ungueltiger API-Key' });
-  await db.query('UPDATE api_keys SET last_used_at = NOW() WHERE id = $1', [match.id]);
-  next();
 }
 
-// Einfacher In-Memory Rate-Limiter fuer /api/login (Brute-Force-Schutz)
-const loginAttempts = new Map();
+// Einfacher In-Memory Rate-Limiter (Brute-Force-Schutz), getrennte Zaehler je Zweck
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 Minuten
 const LOGIN_MAX_ATTEMPTS = 10;
 
-function rateLimitLogin(req, res, next) {
-  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
-  const now = Date.now();
-  const record = loginAttempts.get(ip);
-  if (record && record.count >= LOGIN_MAX_ATTEMPTS) {
-    const retryAfter = Math.ceil((record.resetAt - now) / 1000);
-    if (now < record.resetAt) {
-      res.setHeader('Retry-After', retryAfter);
-      return res.status(429).json({ ok: false, error: `Zu viele Anmeldeversuche. Bitte in ${retryAfter} Sekunden erneut versuchen.` });
+function createAttemptLimiter(message) {
+  const attempts = new Map();
+
+  // Alte Eintraege regelmaessig aufraeumen
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, record] of attempts.entries()) {
+      if (now >= record.resetAt) attempts.delete(ip);
     }
-  }
-  req.loginRateLimit = {
-    ip,
-    record,
-    increment: (failed) => {
-      if (!failed) {
-        loginAttempts.delete(ip);
-        return;
-      }
-      const r = loginAttempts.get(ip);
-      if (r && now < r.resetAt) {
-        r.count += 1;
-      } else {
-        loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
-      }
-    },
+  }, 60 * 1000).unref();
+
+  return function limiter(req, res, next) {
+    const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+    const now = Date.now();
+    const record = attempts.get(ip);
+    if (record && record.count >= LOGIN_MAX_ATTEMPTS && now < record.resetAt) {
+      const retryAfter = Math.ceil((record.resetAt - now) / 1000);
+      res.setHeader('Retry-After', retryAfter);
+      return res.status(429).json({ ok: false, error: `${message} Bitte in ${retryAfter} Sekunden erneut versuchen.` });
+    }
+    req.loginRateLimit = {
+      ip,
+      record,
+      increment: (failed) => {
+        if (!failed) {
+          attempts.delete(ip);
+          return;
+        }
+        const r = attempts.get(ip);
+        if (r && now < r.resetAt) {
+          r.count += 1;
+        } else {
+          attempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+        }
+      },
+    };
+    next();
   };
-  next();
 }
 
-// Alte Eintraege regelmaessig aufraeumen
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, record] of loginAttempts.entries()) {
-    if (now >= record.resetAt) loginAttempts.delete(ip);
-  }
-}, 60 * 1000);
+// bcrypt-Hash fuer Vergleiche bei unbekannten E-Mail-Adressen (einmalig zur Laufzeit erzeugt)
+let dummyHashPromise = null;
+function getDummyHash() {
+  if (!dummyHashPromise) dummyHashPromise = auth.hashPassword(require('crypto').randomBytes(16).toString('hex'));
+  return dummyHashPromise;
+}
+
+const rateLimitLogin = createAttemptLimiter('Zu viele Anmeldeversuche.');
+const rateLimitUnlock = createAttemptLimiter('Zu viele Passwortversuche.');
+
+// Session-ID nach Login neu erzeugen (Schutz vor Session Fixation), Daten uebernehmen
+function regenerateSession(req, data) {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((err) => {
+      if (err) return reject(err);
+      Object.assign(req.session, data);
+      resolve();
+    });
+  });
+}
 
 router.get('/profile', async (req, res, next) => {
   try {
@@ -140,24 +168,31 @@ router.get('/links', async (req, res, next) => {
     `);
     const nowBerlin = getNowInBerlin();
     const visible = rows.filter(l => isLinkVisible(l, nowBerlin));
-    // Passwort-Hashes nie an Client senden
-    const safe = visible.map(l => ({ ...l, password_hash: undefined }));
+    // Passwort-Hashes nie an Client senden; Ziel-URL geschuetzter Links erst nach Entsperren
+    const safe = visible.map(l => ({
+      ...l,
+      password_hash: undefined,
+      url: l.is_password_protected ? null : l.url,
+    }));
     res.json({ ok: true, data: safe });
   } catch (err) {
     next(err);
   }
 });
 
-router.post('/links/:id/unlock', async (req, res, next) => {
+router.post('/links/:id/unlock', rateLimitUnlock, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { rows } = await db.query('SELECT id, url, password_hash FROM links WHERE id = $1 AND is_active = true LIMIT 1', [id]);
     if (!rows.length) return res.status(404).json({ ok: false, error: 'Link nicht gefunden' });
     const link = rows[0];
     if (!link.password_hash) return res.json({ ok: true, data: { url: link.url } });
-    const password = String(req.body.password || '');
+    const password = String(req.body.password || '').slice(0, 1000);
     const valid = await bcrypt.compare(password, link.password_hash);
-    if (!valid) return res.status(401).json({ ok: false, error: 'Falsches Passwort' });
+    if (!valid) {
+      req.loginRateLimit?.increment(true);
+      return res.status(401).json({ ok: false, error: 'Falsches Passwort' });
+    }
     res.json({ ok: true, data: { url: link.url } });
   } catch (err) {
     next(err);
@@ -228,6 +263,8 @@ router.get('/icon/simpleicon/:id.svg', async (req, res, next) => {
     const response = await fetch(`https://cdn.jsdelivr.net/npm/simple-icons@11/icons/${id}.svg`);
     if (!response.ok) return res.status(response.status).send('Not Found');
     res.setHeader('Content-Type', 'image/svg+xml');
+    // Fremd-SVGs duerfen bei Direktaufruf keine Skripte ausfuehren
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
     res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
     const text = await response.text();
     res.send(text);
@@ -240,14 +277,15 @@ router.get('/icon/dashboardicon/:name/:format?', async (req, res, next) => {
   try {
     const name = req.params.name;
     const format = req.params.format || 'png';
-    if (!/^[a-z0-9-]+$/.test(name) || !/^[a-z0-9]+$/.test(format)) {
+    if (!/^[a-z0-9-]+$/.test(name) || !['png', 'svg', 'webp'].includes(format)) {
       return res.status(400).send('Bad Request');
     }
     const url = `https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/${format}/${name}.${format}`;
     const response = await fetch(url);
     if (!response.ok) return res.status(response.status).send('Not Found');
-    
+
     res.setHeader('Content-Type', format === 'svg' ? 'image/svg+xml' : `image/${format}`);
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
     res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
     
     const buffer = await response.arrayBuffer();
@@ -312,6 +350,8 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
 
     const user = await auth.findUserByEmail(email);
     if (!user) {
+      // Gleiche Laufzeit wie bei existierendem User (erschwert User-Enumeration per Timing)
+      if (password) await auth.verifyPassword(password, await getDummyHash()).catch(() => {});
       req.loginRateLimit?.increment(true);
       return res.status(401).json({ ok: false, error: 'Ungueltige Anmeldedaten' });
     }
@@ -332,21 +372,23 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Passwort erforderlich' });
     }
 
-    req.loginRateLimit?.increment(false);
-    
     // 2FA / WebAuthn Check
     // If logged in WITHOUT password, ONLY WebAuthn is allowed.
     // If logged in WITH password, TOTP is also allowed.
     const allowedMethods = [];
     if (hasWebAuthn) allowedMethods.push('webauthn');
     if (passwordValid && user.totp_enabled) allowedMethods.push('totp');
-    
+
     if (allowedMethods.length > 0) {
-      req.session.pendingUserId = user.id;
-      if (req.body.remember === true) req.session.pendingRemember = true;
-      // If they didn't provide a password, we MUST enforce that they use WebAuthn to complete the login
-      req.session.pendingRequiresWebAuthn = !passwordValid;
-      
+      // Zaehler bewusst NICHT zuruecksetzen: sonst koennte man nach jedem
+      // Passwort-Login erneut 10 TOTP-Codes durchprobieren (Brute-Force).
+      await regenerateSession(req, {
+        pendingUserId: user.id,
+        pendingRemember: req.body.remember === true ? true : undefined,
+        // If they didn't provide a password, we MUST enforce that they use WebAuthn to complete the login
+        pendingRequiresWebAuthn: !passwordValid,
+      });
+
       await new Promise((resolve, reject) => req.session.save((err) => (err ? reject(err) : resolve())));
       return res.json({ 
         ok: true, 
@@ -357,6 +399,9 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
       });
     }
 
+    req.loginRateLimit?.increment(false);
+    await regenerateSession(req, { userId: user.id, email: user.email });
+
     // Eingeloggt bleiben: Session-Cookie auf 30 Tage verlängern
     if (req.body.remember === true) {
       const rememberMs = 30 * 24 * 60 * 60 * 1000;
@@ -365,8 +410,6 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
       req.session.cookie.expires = new Date(Date.now() + rememberMs);
     }
 
-    req.session.userId = user.id;
-    req.session.email = user.email;
     req.session.touch();
     await new Promise((resolve, reject) => req.session.save((err) => (err ? reject(err) : resolve())));
 
@@ -389,17 +432,14 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
   // ---------- 2FA Login Endpoints ----------
   
   async function completeLogin(req, res, user) {
-    if (req.session.pendingRemember) {
+    const remember = !!req.session.pendingRemember;
+    await regenerateSession(req, { userId: user.id, email: user.email });
+    if (remember) {
       const rememberMs = 30 * 24 * 60 * 60 * 1000;
       req.session.cookie.originalMaxAge = rememberMs;
       req.session.cookie.maxAge = rememberMs;
       req.session.cookie.expires = new Date(Date.now() + rememberMs);
     }
-    req.session.userId = user.id;
-    req.session.email = user.email;
-    delete req.session.pendingUserId;
-    delete req.session.pendingRemember;
-    delete req.session.pendingRequiresWebAuthn;
     req.session.touch();
     await new Promise((resolve, reject) => req.session.save((err) => (err ? reject(err) : resolve())));
 
@@ -422,16 +462,24 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
       if (!req.session.pendingUserId) return res.status(401).json({ ok: false, error: 'Session abgelaufen' });
       if (req.session.pendingRequiresWebAuthn) return res.status(403).json({ ok: false, error: 'Passwort wurde nicht eingegeben. Diese Anmeldung erfordert einen Security Key.' });
       
-      const { code } = req.body;
       const db = require('../lib/db');
-      const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [req.session.pendingUserId]);
+      const { rows } = await db.query('SELECT * FROM users WHERE id = $1 AND is_active = true', [req.session.pendingUserId]);
       const user = rows[0];
       if (!user || !user.totp_enabled || !user.totp_secret) {
         return res.status(400).json({ ok: false, error: 'TOTP nicht konfiguriert' });
       }
-      const { authenticator } = require('otplib');
-      const isValid = authenticator.check(code, user.totp_secret);
-      if (!isValid) {
+      const totp = require('../lib/totp');
+      const result = await totp.verifyCode(req.body.code, user.totp_secret, user.totp_last_timestep);
+      if (!result.valid) {
+        req.loginRateLimit?.increment(true);
+        return res.status(401).json({ ok: false, error: 'Ungueltiger Code' });
+      }
+      // Code als verbraucht markieren (atomar, falls zwei Anfragen gleichzeitig kommen)
+      const { rowCount } = await db.query(
+        'UPDATE users SET totp_last_timestep = $1 WHERE id = $2 AND (totp_last_timestep IS NULL OR totp_last_timestep < $1)',
+        [result.timeStep, user.id]
+      );
+      if (!rowCount) {
         req.loginRateLimit?.increment(true);
         return res.status(401).json({ ok: false, error: 'Ungueltiger Code' });
       }
@@ -465,17 +513,23 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
     try {
       if (!req.session.pendingUserId) return res.status(401).json({ ok: false, error: 'Session abgelaufen' });
       const db = require('../lib/db');
-      const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [req.session.pendingUserId]);
+      const { rows } = await db.query('SELECT * FROM users WHERE id = $1 AND is_active = true', [req.session.pendingUserId]);
       const user = rows[0];
       if (!user || !user.webauthn_current_challenge) return res.status(400).json({ ok: false, error: 'Kein aktiver Challenge' });
       
       const expectedChallenge = user.webauthn_current_challenge;
+      // Challenge ist nur einmal gueltig – auch bei fehlgeschlagener Pruefung
+      await db.query('UPDATE users SET webauthn_current_challenge = NULL WHERE id = $1', [user.id]);
       const { verifyAuthenticationResponse } = require('@simplewebauthn/server');
       
       const body = req.body;
+      if (!body || typeof body.id !== 'string') return res.status(400).json({ ok: false, error: 'Ungueltige Anfrage' });
       const { rows: creds } = await db.query('SELECT * FROM webauthn_credentials WHERE user_id = $1 AND credential_id = $2', [user.id, body.id]);
       const authenticator = creds[0];
-      if (!authenticator) return res.status(400).json({ ok: false, error: 'Key nicht gefunden' });
+      if (!authenticator) {
+        req.loginRateLimit?.increment(true);
+        return res.status(400).json({ ok: false, error: 'Key nicht gefunden' });
+      }
       
       const host = req.get('host');
       const hostname = req.hostname;
@@ -487,21 +541,27 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
         `http://${hostname}`
       ];
       
-      const verification = await verifyAuthenticationResponse({
-        response: body,
-        expectedChallenge,
-        expectedOrigin,
-        expectedRPID: hostname,
-        credential: {
-          id: authenticator.credential_id,
-          publicKey: authenticator.public_key,
-          counter: Number(authenticator.counter),
-        },
-      });
-      
+      let verification;
+      try {
+        verification = await verifyAuthenticationResponse({
+          response: body,
+          expectedChallenge,
+          expectedOrigin,
+          expectedRPID: hostname,
+          credential: {
+            id: authenticator.credential_id,
+            publicKey: authenticator.public_key,
+            counter: Number(authenticator.counter),
+          },
+        });
+      } catch (verifyErr) {
+        req.loginRateLimit?.increment(true);
+        console.warn('[login webauthn] Verifizierung fehlgeschlagen:', verifyErr.message);
+        return res.status(401).json({ ok: false, error: 'Verifizierung fehlgeschlagen' });
+      }
+
       if (verification.verified) {
         await db.query('UPDATE webauthn_credentials SET counter = $1, last_used_at = NOW() WHERE id = $2', [verification.authenticationInfo.newCounter, authenticator.id]);
-        await db.query('UPDATE users SET webauthn_current_challenge = NULL WHERE id = $1', [user.id]);
         req.loginRateLimit?.increment(false);
         await completeLogin(req, res, user);
       } else {

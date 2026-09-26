@@ -38,7 +38,7 @@
   const post = (path, body) => api('POST', path, body);
   const put = (path, body) => api('PUT', path, body);
   const patch = (path, body) => api('PATCH', path, body);
-  const del = (path) => api('DELETE', path);
+  const del = (path, body = null) => api('DELETE', path, body);
 
   window.api = {
     // Öffentlich
@@ -111,10 +111,10 @@
     get2faStatus: () => get('/admin/settings/2fa/status'),
     setupTotp: () => post('/admin/settings/2fa/totp/setup'),
     verifyTotp: (code) => post('/admin/settings/2fa/totp/verify', { code }),
-    disableTotp: () => post('/admin/settings/2fa/totp/disable'),
+    disableTotp: (password) => post('/admin/settings/2fa/totp/disable', { password }),
     getWebauthnRegisterOptions: () => post('/admin/settings/2fa/webauthn/register-options'),
     verifyWebauthnRegister: (res) => post('/admin/settings/2fa/webauthn/register-verify', res),
-    deleteWebauthn: (id) => del(`/admin/settings/2fa/webauthn/${id}`),
+    deleteWebauthn: (id, password) => del(`/admin/settings/2fa/webauthn/${encodeURIComponent(id)}`, { password }),
     renameWebauthn: (id, name) => put(`/admin/settings/2fa/webauthn/${id}`, { name }),
 
     loginTotp: (code) => post('/login/totp', { code }),

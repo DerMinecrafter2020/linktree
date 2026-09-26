@@ -1,6 +1,6 @@
 {
   "name": "openweb",
-  "version": "3.0.5",
+  "version": "3.0.6",
   "description": "Link-in-Bio Seite mit Node.js, Express und PostgreSQL",
   "main": "server.js",
   "scripts": {
@@ -9,6 +9,10 @@
     "db:migrate": "node db/migrate.js",
     "db:seed": "node db/seed.js",
     "db:reset": "node db/reset.js",
+    "version:patch": "sh scripts/bump-version.sh patch",
+    "version:minor": "sh scripts/bump-version.sh minor",
+    "version:major": "sh scripts/bump-version.sh major",
+    "hooks:install": "git config core.hooksPath .githooks",
     "test": "echo \"Tests noch nicht konfiguriert\" && exit 0"
   },
   "keywords": [
@@ -20,26 +24,22 @@
   "author": "Cornelius Ahner",
   "license": "MIT",
   "dependencies": {
-    "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.2",
-    "bcrypt": "^5.1.1",
-    "compression": "^1.8.1",
+    "bcrypt": "^6.0.0",
+    "compression": "^1.8.2",
     "connect-pg-simple": "^9.0.1",
-    "cookie-parser": "^1.4.7",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2",
+    "express": "^4.22.3",
     "express-rate-limit": "^7.5.1",
     "express-session": "^1.18.0",
     "helmet": "^7.1.0",
-    "nodemailer": "^9.0.5",
-    "otplib": "^13.4.1",
-    "pdf-parse": "^2.4.5",
-    "pg": "^8.12.0",
-    "puppeteer": "^25.8.0",
+    "nodemailer": "^9.1.1",
+    "otplib": "^13.5.0",
+    "pg": "^8.23.0",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "nodemon": "^3.1.14"
   },
   "engines": {
     "node": ">=18.0.0"

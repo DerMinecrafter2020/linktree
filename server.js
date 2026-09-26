@@ -8,13 +8,14 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const helmet = require('helmet');
-const cookieParser = require('cookie-parser');
 const compression = require('compression');
 const setup = require('./lib/setup');
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
-const NODE_ENV = process.env.NODE_ENV || 'development';
+// Sicherer Standard: ohne explizites NODE_ENV=development laeuft die App im Produktionsmodus
+// (keine internen Fehlermeldungen an Clients, Session-Cookie nur ueber HTTPS)
+const NODE_ENV = process.env.NODE_ENV || 'production';
 
 // Health-Check vor Setup, damit Load-Balancer / Uptime-Checker funktionieren
 app.get('/health', async (req, res) => {
@@ -23,7 +24,9 @@ app.get('/health', async (req, res) => {
     await db.query('SELECT 1');
     res.json({ ok: true, status: 'healthy', database: 'connected' });
   } catch (err) {
-    res.status(503).json({ ok: false, status: 'unhealthy', database: 'disconnected', error: err.message });
+    // Fehlerdetails (z. B. DB-Host) nicht oeffentlich preisgeben
+    if (NODE_ENV === 'production') console.error('[health] DB-Check fehlgeschlagen:', err.message);
+    res.status(503).json({ ok: false, status: 'unhealthy', database: 'disconnected', error: NODE_ENV === 'production' ? undefined : err.message });
   }
 });
 
@@ -31,7 +34,17 @@ function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-app.set('trust proxy', 1);
+// Anzahl vertrauenswuerdiger Reverse-Proxys (Standard: 1). Ohne Proxy TRUST_PROXY=0 setzen,
+// sonst koennen Clients ihre IP per X-Forwarded-For faelschen (Rate-Limits / IP-Allowlist).
+function parseTrustProxy(raw) {
+  if (raw === undefined || raw === '') return 1;
+  if (/^\d+$/.test(raw)) return parseInt(raw, 10);
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  return raw; // z. B. 'loopback' oder IP-/Subnetz-Liste
+}
+app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY));
+app.disable('x-powered-by');
 
 // =========================================================
 // Express-App konfigurieren
@@ -40,7 +53,9 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      // Kein 'unsafe-inline': eingeschleuste <script>-Tags werden vom Browser blockiert.
+      // jsdelivr nur fuer @simplewebauthn/browser (per SRI-Hash abgesichert)
+      scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:", "blob:"],
@@ -63,10 +78,37 @@ app.use((req, res, next) => {
   next();
 });
 
+// admin.html nicht direkt ausliefern (sonst wird die IP-Allowlist von /admin umgangen)
+app.get('/admin.html', (req, res) => res.redirect('/admin'));
+
+// CSRF-Schutz: zustandsaendernde API-Aufrufe aus dem Browser nur von der eigenen Origin
+// (ergaenzt SameSite=Lax, das Anfragen von Nachbar-Subdomains nicht abdeckt)
+function allowedHostnames(req) {
+  const hosts = new Set();
+  if (req.hostname) hosts.add(req.hostname.toLowerCase());
+  for (const raw of [process.env.APP_URL, process.env.PUBLIC_DOMAIN]) {
+    if (!raw) continue;
+    try {
+      hosts.add(new URL(raw.startsWith('http') ? raw : `https://${raw}`).hostname.toLowerCase());
+    } catch { /* ungueltige Konfiguration ignorieren */ }
+  }
+  return hosts;
+}
+
+app.use('/api', (req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  const origin = req.get('origin');
+  // Nicht-Browser-Clients (curl, Skripte) senden keinen Origin-Header
+  if (!origin) return next();
+  try {
+    if (origin !== 'null' && allowedHostnames(req).has(new URL(origin).hostname.toLowerCase())) return next();
+  } catch { /* ungueltiger Origin-Header */ }
+  return res.status(403).json({ ok: false, error: 'Ungueltige Herkunft der Anfrage' });
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
-app.use(cookieParser());
 app.use(compression());
 
 // Rate Limiting für die API
@@ -90,7 +132,18 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Login-Endpunkte: nur fehlgeschlagene Versuche zaehlen, damit normale Logins nicht blockiert werden
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  skipSuccessfulRequests: true,
+  message: { ok: false, error: 'Zu viele Anmeldeversuche. Bitte in 15 Minuten erneut versuchen.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use('/api/auth/login', authLimiter);
+app.use('/api/login', loginLimiter);
 app.use('/api/setup', authLimiter);
 app.use('/api', apiLimiter);
 
@@ -99,11 +152,21 @@ app.use('/api', apiLimiter);
 // =========================================================
 async function finalizeApp() {
   let setupRequired = false;
-  try {
-    setupRequired = await setup.isSetupRequired();
-  } catch (err) {
-    console.warn('[server] Setup-Status konnte nicht geprueft werden:', err.message);
-    setupRequired = true;
+  const MAX_DB_ATTEMPTS = 10;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      setupRequired = await setup.isSetupRequired();
+      break;
+    } catch (err) {
+      // Bei konfigurierter, aber nicht erreichbarer DB NICHT in den (oeffentlichen)
+      // Setup-Modus wechseln, sondern warten bzw. mit Fehler beenden.
+      console.warn(`[server] Setup-Status konnte nicht geprueft werden (Versuch ${attempt}/${MAX_DB_ATTEMPTS}):`, err.message);
+      if (attempt >= MAX_DB_ATTEMPTS) {
+        console.error('[FATAL] Datenbank nicht erreichbar. Server wird beendet (Neustart durch Prozessmanager).');
+        process.exit(1);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
   }
 
   if (setupRequired) {
@@ -179,6 +242,11 @@ async function finalizeApp() {
       handler: (req, res) => res.status(429).json({ ok: false, error: 'Zu viele Admin-Anfragen. Bitte warte einen Moment.' }),
     });
     app.use('/api/admin', adminLimiter);
+
+    // Admin- und Login-Antworten (Einstellungen, Exporte, Audit-Log) nie zwischenspeichern
+    const noStore = (req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); };
+    app.use('/api/admin', noStore);
+    app.use('/api/login', noStore);
 
     app.use('/api', publicRoutes);
     app.use('/api/admin', adminRoutes);
@@ -257,7 +325,7 @@ async function finalizeApp() {
         const publicDomain = process.env.PUBLIC_DOMAIN
           ? (process.env.PUBLIC_DOMAIN.startsWith('http') ? process.env.PUBLIC_DOMAIN : `${req.protocol}://${process.env.PUBLIC_DOMAIN}`)
           : `${req.protocol}://${req.get('host')}`;
-        const { rows: slugs } = await db.query('SELECT slug FROM links WHERE is_active = true AND slug IS NOT NULL');
+        const { rows: slugs } = await db.query('SELECT slug FROM links WHERE is_active = true AND slug IS NOT NULL AND password_hash IS NULL');
         const now = new Date().toISOString().slice(0, 10);
         const urls = [
           { loc: publicDomain, changefreq: 'daily', priority: '1.0' },
@@ -292,9 +360,12 @@ async function finalizeApp() {
         const slug = safeSlug(req.params.slug);
         if (!slug) return res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
         const { rows } = await db.query(`
-          SELECT id, url FROM links WHERE slug = $1 AND is_active = true LIMIT 1
+          SELECT id, url, password_hash IS NOT NULL AS is_password_protected
+          FROM links WHERE slug = $1 AND is_active = true LIMIT 1
         `, [slug]);
         if (!rows.length) return res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+        // Passwortgeschuetzte Links nicht per Kurzlink freigeben -> Entsperren auf der Startseite
+        if (rows[0].is_password_protected) return res.redirect('/');
         await db.query(`
           INSERT INTO link_clicks (link_id, ip_hash, user_agent, referrer)
           VALUES ($1, $2, $3, $4)
@@ -329,7 +400,7 @@ async function finalizeApp() {
         // Custom CSS injizieren
         if (profile.custom_css) {
           const safeCss = String(profile.custom_css).replace(/<\/style/gi, '<\\/style');
-          html = html.replace(/(<\/head>)/i, `\n<style>${safeCss}</style>\n$1`);
+          html = html.replace(/(<\/head>)/i, (m) => '\n<style>' + safeCss + '</style>\n' + m);
         }
 
         const pageTitle = escapeHtml(profile.handle || profile.name || 'OpenWeb');
@@ -342,15 +413,15 @@ async function finalizeApp() {
         const pkg = require('./package.json');
 
         html = html
-          .replace(/<meta property="og:site_name" content="[^"]*"\s*\/?>/, `<meta property="og:site_name" content="${escapeHtml(profile.name || profile.handle || 'OpenWeb')}">`)
-          .replace(/<meta property="og:title" content="[^"]*"\s*\/?>/, `<meta property="og:title" content="${escapeHtml(pageTitle)}">`)
-          .replace(/<meta property="og:description" content="[^"]*"\s*\/?>/, `<meta property="og:description" content="${escapeHtml(pageDescription)}">`)
-          .replace(/<meta property="og:image" content="[^"]*"\s*\/?>/, `<meta property="og:image" content="${escapeHtml(image)}">`)
-          .replace(/<meta property="og:url" content="[^"]*"\s*\/?>/, `<meta property="og:url" content="${escapeHtml(absUrl)}">`)
-          .replace(/<meta name="twitter:title" content="[^"]*"\s*\/?>/, `<meta name="twitter:title" content="${escapeHtml(pageTitle)}">`)
-          .replace(/<meta name="twitter:description" content="[^"]*"\s*\/?>/, `<meta name="twitter:description" content="${escapeHtml(pageDescription)}">`)
-          .replace(/<meta name="twitter:image" content="[^"]*"\s*\/?>/, `<meta name="twitter:image" content="${escapeHtml(image)}">`)
-          .replace(/<title>[^]*?<\/title>/, `<title>${escapeHtml(pageTitle)}</title>`)
+          .replace(/<meta property="og:site_name" content="[^"]*"\s*\/?>/, () => `<meta property="og:site_name" content="${escapeHtml(profile.name || profile.handle || 'OpenWeb')}">`)
+          .replace(/<meta property="og:title" content="[^"]*"\s*\/?>/, () => `<meta property="og:title" content="${escapeHtml(pageTitle)}">`)
+          .replace(/<meta property="og:description" content="[^"]*"\s*\/?>/, () => `<meta property="og:description" content="${escapeHtml(pageDescription)}">`)
+          .replace(/<meta property="og:image" content="[^"]*"\s*\/?>/, () => `<meta property="og:image" content="${escapeHtml(image)}">`)
+          .replace(/<meta property="og:url" content="[^"]*"\s*\/?>/, () => `<meta property="og:url" content="${escapeHtml(absUrl)}">`)
+          .replace(/<meta name="twitter:title" content="[^"]*"\s*\/?>/, () => `<meta name="twitter:title" content="${escapeHtml(pageTitle)}">`)
+          .replace(/<meta name="twitter:description" content="[^"]*"\s*\/?>/, () => `<meta name="twitter:description" content="${escapeHtml(pageDescription)}">`)
+          .replace(/<meta name="twitter:image" content="[^"]*"\s*\/?>/, () => `<meta name="twitter:image" content="${escapeHtml(image)}">`)
+          .replace(/<title>[^]*?<\/title>/, () => `<title>${escapeHtml(pageTitle)}</title>`)
           .replace('__APP_VERSION__', pkg.version);
 
         // JSON-LD strukturierte Daten
@@ -367,8 +438,12 @@ async function finalizeApp() {
             sameAs: [],
           },
         };
-        const ldScript = `\n<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`;
-        html = html.replace(/(<\/head>)/i, `${ldScript}\n$1`);
+        // "<" escapen, damit z. B. "</script>" in der Bio das Script-Tag nicht beenden kann (XSS)
+        const unsafeScriptChars = new RegExp('[<' + String.fromCharCode(0x2028, 0x2029) + ']', 'g');
+        const ldJson = JSON.stringify(jsonLd)
+          .replace(unsafeScriptChars, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+        const ldScript = `\n<script type="application/ld+json">${ldJson}</script>`;
+        html = html.replace(/(<\/head>)/i, (m) => ldScript + '\n' + m);
 
         res.send(html);
       } catch (err) {
@@ -381,8 +456,11 @@ async function finalizeApp() {
 
   // Globaler Error-Handler
   app.use((err, req, res, _next) => {
-    console.error('[server error]', err);
-    res.status(500).json({ ok: false, error: NODE_ENV === 'production' ? 'Internal Server Error' : err.message });
+    // Client-Fehler (z. B. ungueltiges JSON, zu grosser Body) nicht als 500 melden
+    const status = err.status >= 400 && err.status < 500 ? err.status : 500;
+    if (status === 500) console.error('[server error]', err);
+    const message = status < 500 && err.expose ? err.message : 'Internal Server Error';
+    res.status(status).json({ ok: false, error: NODE_ENV === 'production' ? message : err.message });
   });
 
   app.listen(PORT, () => {

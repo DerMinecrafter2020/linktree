@@ -1486,10 +1486,10 @@
           webauthn_keys.forEach((k, idx) => {
             const li = document.createElement('li');
             li.innerHTML = `
-              <span><strong>${k.name || 'Security Key'}</strong> (Erstellt: ${new Date(k.created_at).toLocaleDateString()})</span>
+              <span><strong>${escapeHtml(k.name || 'Security Key')}</strong> (Erstellt: ${escapeHtml(new Date(k.created_at).toLocaleDateString())})</span>
               <div>
-                <button class="btn ghost sm rename-webauthn" data-id="${k.id}" data-name="${k.name || ''}" style="margin-right: 8px;">Umbenennen</button>
-                <button class="btn danger sm delete-webauthn" data-id="${k.id}">Löschen</button>
+                <button class="btn ghost sm rename-webauthn" data-id="${escapeHtml(k.id)}" data-name="${escapeHtml(k.name || '')}" style="margin-right: 8px;">Umbenennen</button>
+                <button class="btn danger sm delete-webauthn" data-id="${escapeHtml(k.id)}">Löschen</button>
               </div>
             `;
             list.appendChild(li);
@@ -1528,8 +1528,10 @@
     
     $('#totp-disable-btn')?.addEventListener('click', async () => {
       if (!confirm('Sicher, dass du TOTP deaktivieren willst?')) return;
+      const password = prompt('Zur Bestätigung bitte dein aktuelles Passwort eingeben:');
+      if (!password) return;
       try {
-        await window.api.disableTotp();
+        await window.api.disableTotp(password);
         toast('TOTP deaktiviert.');
         load2faStatus();
       } catch (err) { toast('Fehler: ' + err.message, true); }
@@ -1553,8 +1555,10 @@
       if (e.target.classList.contains('delete-webauthn')) {
         const id = e.target.dataset.id;
         if (!confirm('Diesen Schlüssel wirklich löschen?')) return;
+        const password = prompt('Zur Bestätigung bitte dein aktuelles Passwort eingeben:');
+        if (!password) return;
         try {
-          await window.api.deleteWebauthn(id);
+          await window.api.deleteWebauthn(id, password);
           toast('Schlüssel gelöscht.');
           load2faStatus();
         } catch (err) { toast('Fehler: ' + err.message, true); }
@@ -1936,7 +1940,7 @@
       }
       const extra = [];
       if (track.isRadio) extra.push('<span class="admin-np-radio-badge">📡 LIVE</span>');
-      if (bitrate) extra.push(`Bitrate: <span class="admin-np-bitrate">${bitrate}</span>`);
+      if (bitrate) extra.push(`Bitrate: <span class="admin-np-bitrate">${escapeHtml(bitrate)}</span>`);
       const metaText = parts.join(' · ') + (extra.length ? ' | ' + extra.join(' | ') : '');
       applyMarquee(metaEl, metaText);
 

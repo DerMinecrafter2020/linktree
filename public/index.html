@@ -92,7 +92,7 @@
 
     <footer class="footer">
       <span class="dot"></span>
-      <span>made with <span class="heart">♥</span> · <span class="year"></span> · <a href="/changelog.html" class="footer-link">Changelog</a> · v3.0.5</span>
+      <span>made with <span class="heart">♥</span> · <span class="year"></span> · <a href="/changelog.html" class="footer-link">Changelog</a> · v3.0.6</span>
       <div style="margin-top: 10px; font-size: 0.85em; display: flex; gap: 15px; justify-content: center;">
         <a href="/impressum.html" class="footer-link">Impressum</a>
         <a href="/datenschutz.html" class="footer-link">Datenschutz</a>
@@ -104,37 +104,7 @@
   <script src="/js/icons.js"></script>
   <script src="/js/navidrome.js"></script>
   <script src="/js/app.js"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').then(reg => {
-        // Regelmaessig auf Updates pruefen (alle 5 Minuten)
-        setInterval(() => reg.update(), 5 * 60 * 1000);
-        // Wenn ein neuer SW bereit ist: sofort aktivieren und Seite neu laden
-        reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing;
-          if (!newWorker) return;
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
-              console.log('[SW] Neue Version erkannt, lade Seite neu …');
-              window.location.reload();
-            }
-          });
-        });
-      }).catch(console.error);
-      // Falls der Controller wechselt (neuer SW uebernimmt), Seite neu laden
-      let refreshing = false;
-      let hadController = !!navigator.serviceWorker.controller;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!hadController) {
-          hadController = true;
-          return;
-        }
-        if (refreshing) return;
-        refreshing = true;
-        window.location.reload();
-      });
-    }
-  </script>
+  <script src="/js/sw-register.js"></script>
 
   <!-- Öffentlicher QR-Code-Dialog -->
   <dialog id="public-qr-dialog" class="dialog qr-dialog">
