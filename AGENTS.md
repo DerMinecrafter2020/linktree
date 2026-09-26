@@ -23,6 +23,11 @@ oder Music Assistant, inkl. Discord-Webhook und Musik-Verlauf).
 
 Autor: Cornelius Ahner · Lizenz: MIT · Sprache der UI, Kommentare und Doku: **Deutsch**.
 
+**Produktivbetrieb:** Linux-Server, eingerichtet mit `install.sh` → **systemd-Service `openweb`**
+(`User=openweb`, `npm start`) hinter **nginx** (TLS via certbot). Updates ausschließlich mit
+`sudo bash install.sh update` (git pull → `npm ci --omit=dev` → Migrationen → Rechte → Neustart).
+Docker/Compose ist nur eine alternative Variante und wird produktiv nicht genutzt.
+
 ---
 
 ## 2. Verzeichnisstruktur
@@ -247,9 +252,9 @@ und der Footer in `public/index.html`.
 ## 10. Bekannte Einschränkungen & offene Punkte
 
 - Keine automatisierten Tests vorhanden.
-- **Docker + Web-Setup:** Der Setup-Assistent schreibt die `.env` in den Container (nicht
-  persistent), während `env_file: .env` Platzhalter aus `.env.example` mitliefert. Für Docker die
-  `.env` vorab vollständig ausfüllen (`SESSION_SECRET`, `NAVIDROME_ENCRYPTION_KEY`, …).
+- **Docker + Web-Setup (nicht produktiv genutzt):** Der Setup-Assistent schreibt die `.env` in den
+  Container (nicht persistent), während `env_file: .env` Platzhalter aus `.env.example` mitliefert.
+  Für Docker die `.env` vorab vollständig ausfüllen (`SESSION_SECRET`, `NAVIDROME_ENCRYPTION_KEY`, …).
 - Beim passwortlosen WebAuthn-Login verraten die Antworten, ob eine E-Mail existiert
   (bewusster Kompromiss des „nur E-Mail + Security Key“-Logins).
 - Admin-Zugang ist auf einen Benutzer ausgelegt (kein Rollenmodell).

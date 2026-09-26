@@ -87,6 +87,42 @@ prompt_confirm() {
   [[ "$value" =~ ^[JjYy]$ ]]
 }
 
+# Node.js-Version pruefen: otplib 13 laedt ESM-Module per require() -> erst ab Node 20.19 / 22.12
+require_node() {
+  require_command node "Node.js muss installiert sein (>= 20.19 bzw. >= 22.12)."
+  require_command npm "npm muss installiert sein."
+  local version major minor
+  version=$(node --version | sed 's/v//')
+  major=$(echo "$version" | cut -d. -f1)
+  minor=$(echo "$version" | cut -d. -f2)
+  if ! { [[ "$major" -ge 23 ]] || { [[ "$major" -eq 22 ]] && [[ "$minor" -ge 12 ]]; } || { [[ "$major" -eq 20 ]] && [[ "$minor" -ge 19 ]]; }; }; then
+    err "Node.js >= 20.19 (bzw. >= 22.12) erforderlich, gefunden: $version"
+    err "Update z. B. ueber NodeSource: https://github.com/nodesource/distributions"
+    exit 1
+  fi
+}
+
+# Rechte der .env/Backups nachziehen und Dateien dem Service-Benutzer geben (systemd: User=openweb)
+fix_permissions() {
+  [[ -f "$ENV_FILE" ]] && chmod 600 "$ENV_FILE"
+  [[ -d "$APP_DIR/backups" ]] && chmod 700 "$APP_DIR/backups" && find "$APP_DIR/backups" -type f -exec chmod 600 {} +
+  if [[ "$EUID" -eq 0 ]] && id -u openweb &>/dev/null; then
+    chown -R openweb:openweb "$APP_DIR"
+  fi
+}
+
+# Warnen, wenn Klartext-Passwoerter aus alten Installationen noch in der .env stehen
+warn_plaintext_secrets() {
+  [[ -f "$ENV_FILE" ]] || return 0
+  local key
+  for key in ADMIN_PASSWORD NAVIDROME_PASSWORD; do
+    if grep -qE "^${key}=.+" "$ENV_FILE"; then
+      warn "${key} steht noch im Klartext in der .env – wird nur fuer das Seeding gebraucht."
+      warn "  Entfernen mit: sed -i '/^${key}=/d' \"$ENV_FILE\""
+    fi
+  done
+}
+
 # =========================================================
 # Kommandos
 # =========================================================
@@ -94,17 +130,7 @@ cmd_install() {
   log "OpenWeb Installation/Setup starten"
 
   # --- System-Checks --------------------------------------------------------
-  require_command node "Node.js muss installiert sein (>= 20.19 bzw. >= 22.12)."
-  require_command npm "npm muss installiert sein."
-
-  # otplib 13 laedt ESM-Module per require() -> erst ab Node 20.19 / 22.12 moeglich
-  NODE_VERSION=$(node --version | sed 's/v//')
-  MAJOR=$(echo "$NODE_VERSION" | cut -d. -f1)
-  MINOR=$(echo "$NODE_VERSION" | cut -d. -f2)
-  if ! { [[ "$MAJOR" -ge 23 ]] || { [[ "$MAJOR" -eq 22 ]] && [[ "$MINOR" -ge 12 ]]; } || { [[ "$MAJOR" -eq 20 ]] && [[ "$MINOR" -ge 19 ]]; }; }; then
-    err "Node.js >= 20.19 (bzw. >= 22.12) erforderlich, gefunden: $NODE_VERSION"
-    exit 1
-  fi
+  require_node
 
   # --- .env vorbereiten -----------------------------------------------------
   OLD_POSTGRES_PASSWORD=""
@@ -279,6 +305,9 @@ ExecStart=/usr/bin/env npm start
 Restart=always
 RestartSec=5
 EnvironmentFile=${ENV_FILE}
+# Haertung: keine zusaetzlichen Rechte (setuid), eigenes /tmp
+NoNewPrivileges=true
+PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
@@ -333,10 +362,37 @@ EOF
 cmd_update() {
   log "Update: hole neuesten Code und behalte .env/DB bei"
   require_command git "git wird fuer update benoetigt."
-  (cd "$APP_DIR" && git pull)
-  (cd "$APP_DIR" && npm install)
+  require_node
+
+  # Frueher lief hier "npm install", das die package-lock.json lokal veraendert hat.
+  # Diese generierte Datei zuruecksetzen, damit "git pull" nicht an lokalen Aenderungen scheitert.
+  # Repo gehoert nach der Installation "openweb" -> als root sonst "dubious ownership"
+  local git_cmd=(git -c safe.directory="$APP_DIR" -C "$APP_DIR")
+  if ! "${git_cmd[@]}" diff --quiet -- package-lock.json; then
+    warn "Lokale Aenderungen an package-lock.json werden verworfen (generierte Datei)."
+    "${git_cmd[@]}" checkout -- package-lock.json
+  fi
+  "${git_cmd[@]}" pull --ff-only
+
+  # Exakt die Versionen aus package-lock.json, ohne Entwicklungs-Pakete
+  (cd "$APP_DIR" && npm ci --omit=dev)
   (cd "$APP_DIR" && npm run db:migrate)
-  log "Update abgeschlossen. Starte den Service neu: sudo systemctl restart ${SERVICE_NAME}"
+
+  fix_permissions
+  warn_plaintext_secrets
+
+  if [[ "$EUID" -eq 0 ]] && systemctl cat "$SERVICE_NAME" &>/dev/null      && prompt_confirm "Service ${SERVICE_NAME} jetzt neu starten" "j"; then
+    systemctl restart "$SERVICE_NAME"
+    sleep 3
+    if systemctl is-active --quiet "$SERVICE_NAME"; then
+      log "Update abgeschlossen, Service laeuft."
+    else
+      err "Service laeuft nicht – Logs: journalctl -u ${SERVICE_NAME} -n 50"
+      exit 1
+    fi
+  else
+    log "Update abgeschlossen. Starte den Service neu: sudo systemctl restart ${SERVICE_NAME}"
+  fi
 }
 
 cmd_change_password() {
@@ -466,4 +522,6 @@ main() {
   esac
 }
 
-main "$@"
+# "exit" in derselben Zeile: "install.sh update" aendert diese Datei per git pull waehrend
+# sie laeuft – Bash darf danach nicht an alter Position in der neuen Datei weiterlesen.
+main "$@"; exit $?
