@@ -242,8 +242,37 @@ und der Footer in `public/index.html`.
 - **Für KI-Agenten:** Version nie manuell in einzelnen Dateien ändern, sondern immer über
   `scripts/bump-version.sh`. Wird ohne Commit gearbeitet, nach Abschluss einer Code-Änderung
   `sh scripts/bump-version.sh patch` ausführen – aber nur einmal pro zusammenhängender Änderung.
-- Größere Releases zusätzlich in `public/changelog.html` eintragen (neuester Eintrag oben, Datum
-  + Version).
+- **Abschluss-Checkliste für KI-Agenten** (vor der Rückmeldung an den Nutzer):
+  1. Changelog-Eintrag in `public/changelog.html` angelegt bzw. erweitert (siehe unten)?
+  2. `AGENTS.md` angepasst, falls sich Aufbau, Regeln, Befehle oder Abläufe geändert haben?
+  3. Nach `package.json`-Änderungen `npm install` + `npm audit` ausgeführt?
+
+### Changelog (Pflicht)
+
+**Jede Änderung, die Nutzer, Admins oder den Betrieb betrifft** (Features, Fehlerbehebungen,
+Design, Sicherheit, Installation/Updates), wird im **selben Commit** in `public/changelog.html`
+eingetragen – nicht nur größere Releases. Ausgenommen sind nur reine interne Refactorings ohne
+sichtbare Wirkung und reine Doku-Änderungen.
+
+- Neuester Eintrag **ganz oben** (direkt unter `<p class="subtitle">`), ältere bleiben stehen.
+- Format:
+  ```html
+  <div class="changelog-entry">
+    <h2>JJJJ-MM-TT — OpenWeb vX.Y.Z (Kurztitel)</h2>
+    <ul>
+      <li><strong>Bereich:</strong> Was sich für Nutzer ändert – verständlich, ohne Code-Details.</li>
+    </ul>
+  </div>
+  ```
+- Versionsnummer = die Version **nach** dem Commit (der Hook erhöht die Patch-Version; aktuelle
+  Version + 1 bei der letzten Stelle). Mehrere zusammengehörige Commits dürfen einen gemeinsamen
+  Eintrag mit Versionsbereich haben (`v3.0.6 – v3.0.8`); dann den bestehenden Eintrag erweitern
+  statt einen neuen anzulegen.
+- Sprache Deutsch mit echten Umlauten, sachlich formulieren („funktioniert jetzt“ statt
+  „funktioniert wieder“, wenn es vorher nie funktioniert hat). Sicherheitslücken so beschreiben,
+  dass keine Anleitung zum Ausnutzen entsteht.
+- Einträge, die älter als die aktuelle Major-/Minor-Reihe sind, können in den
+  `<details>`-Block „Ältere Änderungen“ verschoben werden.
 
 ---
 

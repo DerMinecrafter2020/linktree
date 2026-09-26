@@ -48,6 +48,40 @@
     <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
 
     <div class="changelog-entry">
+      <h2>2026-09-27 — OpenWeb v3.0.9 – v3.0.10 (Material 3 Redesign)</h2>
+      <ul>
+        <li><strong>Neues Design:</strong> Startseite, Admin-Bereich, Login und Setup-Assistent im Material-3-Design (dunkel). Alle Elemente bleiben an ihrem gewohnten Platz – nur das Aussehen ist moderner.</li>
+        <li><strong>Themes:</strong> Die Besucher-Themes „Dunkel“ (violett), „Midnight“ (blau) und „Sunset“ (orange) nutzen jetzt vollständige Material-3-Farbpaletten.</li>
+        <li><strong>Startseite:</strong> Link-Karten mit ruhigem Hover-Effekt statt Neon, Teilen- und QR-Button als Material-Icons, Format/Bitrate im Player als kleine Chips.</li>
+        <li><strong>Admin:</strong> Navigation als Material-Seitenleiste, neue Buttons, Eingabefelder, Filter-Chips, Dialoge und Hinweis-Leisten (Snackbar); Favicon auch für Admin und Login.</li>
+        <li><strong>Behoben:</strong> Die Seite scrollt wieder im Browserfenster (vorher in einem inneren Bereich, mit weißer Fläche am Ende). Impressum und Datenschutz laden jetzt die richtige Schrift und Linkfarbe. Impressum/Datenschutz stehen im Footer jetzt auf allen Bildschirmgrößen in einer eigenen Zeile.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <h2>2026-09-26 — OpenWeb v3.0.6 – v3.0.8 (Sicherheits-Update)</h2>
+      <ul>
+        <li><strong>Geschützte Links:</strong> Das Link-Passwort ließ sich bisher umgehen – die Ziel-URL wird jetzt erst nach Eingabe des Passworts herausgegeben (auch nicht mehr per Kurzlink, Sitemap, API-Key oder Discord-Meldung).</li>
+        <li><strong>„Profil nicht öffentlich“</strong> wirkt jetzt wirklich: Startseite und Links sind dann nur noch für eingeloggte Admins sichtbar.</li>
+        <li><strong>Login & 2FA:</strong> TOTP (Authenticator-App) funktioniert jetzt – die Einrichtung brach vorher mit einem Fehler ab –, jeder Code ist nur einmal gültig, neue Sitzung nach jedem Login, strengere Begrenzung von Fehlversuchen. TOTP einrichten/abschalten und Security Keys hinzufügen/löschen verlangen das aktuelle Passwort.</li>
+        <li><strong>Konto:</strong> Passwortwechsel beendet alle anderen Sitzungen; deaktivierte Benutzer werden sofort abgemeldet.</li>
+        <li><strong>Schutz vor Angriffen:</strong> Strengere Content-Security-Policy ohne Inline-Skripte, Schutz gegen Cross-Site-Requests, mehrere XSS-Stellen behoben, SMTP-Passwort wird verschlüsselt gespeichert.</li>
+        <li><strong>Server:</strong> Bei kurzem Datenbankausfall startet nicht mehr der öffentliche Setup-Modus; Abhängigkeiten aktualisiert (0 bekannte Sicherheitslücken).</li>
+        <li><strong>Installation & Updates:</strong> <code>install.sh update</code> nutzt jetzt <code>npm ci</code>, prüft die Node-Version (mind. 20.19), setzt Dateirechte und startet den Dienst neu; Passwörter landen nicht mehr im Klartext in der <code>.env</code>.</li>
+        <li><strong>Versionierung:</strong> Die Versionsnummer wird bei jedem Commit automatisch erhöht.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <h2>2026-08-24 — OpenWeb v3.0.1 – v3.0.5 (2FA & Musik-Verlauf)</h2>
+      <ul>
+        <li><strong>Zwei-Faktor-Anmeldung:</strong> Login mit Security Key/Passkey (WebAuthn), auch passwortlos nur mit E-Mail und Key; Schlüssel lassen sich umbenennen.</li>
+        <li><strong>Musik-Verlauf:</strong> Die zuletzt gehörten Songs erscheinen in der Statistik, gruppiert nach Heute/Gestern/Woche; doppelte Titel werden zusammengefasst.</li>
+        <li><strong>Behoben:</strong> WebAuthn hinter Reverse-Proxys, Datumsvergleich im Klick-Diagramm, eine Datenbank-Migration mit unsichtbarem Sonderzeichen.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <h2>2026-08-23 — OpenWeb v3.0.0 (Music Assistant Update)</h2>
       <ul>
         <li><strong>Music Assistant:</strong> Vollständige Integration von Music Assistant (Standalone Server). Liest den aktuellen Song, die korrekte Laufzeit und Cover-Bilder direkt über die JSON-RPC API (bzw. Warteschlange) aus.</li>
