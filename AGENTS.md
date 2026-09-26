@@ -14,7 +14,7 @@ oder Music Assistant, inkl. Discord-Webhook und Musik-Verlauf).
 
 | Bereich   | Technik |
 |-----------|---------|
-| Backend   | Node.js ≥ 18 (Docker: Node 20), Express 4 |
+| Backend   | Node.js ≥ 20.19 bzw. ≥ 22.12 (otplib 13 lädt ESM per `require`), Docker: `node:20-alpine`, Express 4 |
 | Datenbank | PostgreSQL 16, Treiber `pg` (nur parametrisierte Queries) |
 | Sessions  | `express-session` + `connect-pg-simple` (Tabelle `user_sessions`) |
 | Auth      | E-Mail + Passwort (bcrypt, 12 Runden), 2FA per TOTP (`otplib` v13) und WebAuthn/Passkeys (`@simplewebauthn/server` v13, Browser-Bundle v9.0.1 per CDN mit SRI) |
@@ -81,11 +81,19 @@ Dockerfile, docker-compose.yml, .dockerignore, nginx-lb.conf.example
 | Seed / Reset | `npm run db:seed` / `npm run db:reset` |
 | Version erhöhen | `npm run version:patch` / `version:minor` / `version:major` |
 | Git-Hook aktivieren | `npm run hooks:install` (einmalig pro Klon) |
+| Sicherheits-Check der Pakete | `npm audit` (Ziel: 0 Funde) |
 | Docker | `docker compose up -d` |
 | Linux-Installation | `bash install.sh` (`update`, `change-password`, `reset-db`, `logs`) |
 
 **Tests:** Es gibt keine automatisierten Tests (`npm test` ist ein Platzhalter). Änderungen daher
 manuell im Browser prüfen – besonders Login (Passwort, TOTP, WebAuthn) und Admin-Funktionen.
+Ohne lokales PostgreSQL lässt sich der Server gegen **PGlite** testen (`@electric-sql/pglite` +
+`@electric-sql/pglite-socket` in einem separaten Ordner installieren, nicht ins Projekt).
+
+**Windows:** Die `version:*`-Skripte und der Git-Hook sind Shell-Skripte – in **Git Bash** ausführen
+(unter `cmd`/PowerShell ist `sh` meist nicht im PATH). Für lokale Entwicklung über http
+`NODE_ENV=development` in die `.env` schreiben, sonst ist das Session-Cookie `secure` und der Login
+klappt nur über https.
 
 ---
 
@@ -126,10 +134,14 @@ Vorlage: `.env.example`. Die `.env` enthält Secrets → **niemals committen, lo
    Wartung täglich 03:00, Musik-Verlauf alle 15 s, Discord-Polling alle 10 s).
 
 **Middleware-Reihenfolge (relevant für Sicherheit)**
-Health-Check → Helmet/CSP + Security-Header → `/admin.html`-Redirect → CSRF-Origin-Prüfung für
-`/api` (nicht GET/HEAD/OPTIONS) → `express.static(public)` → Body-Parser (1 MB) → Rate-Limits →
-(nach Setup-Prüfung) Session → Limits für Public/Admin → `Cache-Control: no-store` für
-`/api/admin` + `/api/login` → Router → 404 → Error-Handler.
+Health-Check → Helmet/CSP + Security-Header → Schutz vor direktem Abruf von `admin.html` /
+`index.html` (auch kodierte Varianten) → CSRF-Prüfung für `/api` (nicht GET/HEAD/OPTIONS; volle
+Origin inkl. Port) → Body-Parser (1 MB) → Rate-Limits → *(nach Setup-Prüfung)* `/sw.js`-Route →
+`express.static(public, { index: false })` → Session → Limits für Public/Admin →
+`Cache-Control: no-store` für `/api/admin` + `/api/login` → Router → dynamische Startseite `/` →
+404 → Error-Handler.
+**Wichtig:** Kein `express.static` vor den dynamischen Routen `/` und `/sw.js` einbinden, sonst
+greifen „Profil nicht öffentlich“, Custom CSS, OG-Tags und die Cache-Header des Service Workers nicht.
 
 **Login-Ablauf (`routes/public.js`)**
 `POST /api/login` → Passwort prüfen (oder passwortlos, wenn WebAuthn-Key vorhanden) → ist 2FA
@@ -141,9 +153,13 @@ Session-ID** mit `userId`. Der Fehlversuchszähler wird erst nach vollständigem
 IP erlaubt, Benutzer existiert und ist aktiv. Neue Admin-Endpunkte gehören **immer** in diesen
 Router.
 
-**Passwortgeschützte Links:** Die Ziel-URL wird öffentlich **nie** ausgeliefert (`url: null` in
-`/api/links`, kein Kurzlink `/go/:slug`, nicht in der Sitemap) – nur über
-`POST /api/links/:id/unlock` nach Passwortprüfung.
+**Passwortgeschützte Links:** Die Ziel-URL wird **nie** ohne Passwort ausgeliefert (`url: null` in
+`/api/links` und `/api/public/links`, kein Kurzlink `/go/:slug`, nicht in Sitemap oder
+Discord-Klickmeldung) – nur über `POST /api/links/:id/unlock` nach Passwortprüfung
+(eigenes Rate-Limit, Versuche werden sofort gezählt).
+
+**Profil nicht öffentlich (`profile.is_public = false`):** `/`, `/api/profile`, `/api/links` und
+`/api/links/categories` liefern dann nur für eingeloggte Admins (Vorschau) Inhalte.
 
 ---
 
@@ -163,8 +179,12 @@ Router.
 5. **Secrets:** Passwörter nur als bcrypt-Hash; API-Keys nur gehasht (Klartext wird einmalig
    angezeigt); Zugangsdaten zu Fremddiensten (Navidrome, Music Assistant, SMTP) nur mit
    `lib/crypto.encrypt()` speichern und **nie** an den Client zurückgeben. Keine Secrets loggen.
-6. **Auth-Änderungen:** Sensible Kontoänderungen (2FA deaktivieren, Schlüssel löschen) verlangen das
-   aktuelle Passwort (`checkCurrentPassword`). Nach Login immer `req.session.regenerate()`.
+6. **Auth-Änderungen:** Sensible Kontoänderungen (TOTP einrichten/deaktivieren, Security Key
+   hinzufügen/löschen) verlangen das aktuelle Passwort (`checkCurrentPassword`, im Frontend
+   `askPassword()` – nie `prompt()`). Ein aktives TOTP kann nicht ersetzt, nur deaktiviert werden.
+   WebAuthn-Registrierungs-Challenges liegen in der Session, nicht in
+   `users.webauthn_current_challenge` (die setzt der passwortlose Login ohne Anmeldung).
+   Nach Login immer `req.session.regenerate()`.
 7. **Fehlermeldungen:** Im Produktionsmodus keine internen Details (`err.message`, Stacktraces) an
    öffentliche Clients senden.
 8. **Neue öffentliche Endpunkte** brauchen eine Begründung, Eingabeprüfung und ggf. eigenes
@@ -226,12 +246,12 @@ und der Footer in `public/index.html`.
 
 ## 10. Bekannte Einschränkungen & offene Punkte
 
-- **Statische Auslieferung vor dynamischen Routen:** In `server.js` steht ein
-  `express.static(public)` (mit Standard-`index`) **vor** den Routen `GET /` und `GET /sw.js`.
-  Dadurch werden `public/index.html` und `public/sw.js` unverändert ausgeliefert, und
-  `is_public` („Profil nicht öffentlich“), Custom CSS, dynamische OG-Tags/JSON-LD sowie die
-  No-Cache-Header für den Service Worker greifen nicht. Vor Änderungen an diesen Routen beheben.
 - Keine automatisierten Tests vorhanden.
+- **Docker + Web-Setup:** Der Setup-Assistent schreibt die `.env` in den Container (nicht
+  persistent), während `env_file: .env` Platzhalter aus `.env.example` mitliefert. Für Docker die
+  `.env` vorab vollständig ausfüllen (`SESSION_SECRET`, `NAVIDROME_ENCRYPTION_KEY`, …).
+- Beim passwortlosen WebAuthn-Login verraten die Antworten, ob eine E-Mail existiert
+  (bewusster Kompromiss des „nur E-Mail + Security Key“-Logins).
 - Admin-Zugang ist auf einen Benutzer ausgelegt (kein Rollenmodell).
 - Größere Major-Updates von Abhängigkeiten (Express 5, Helmet 8, express-rate-limit 8,
   @simplewebauthn 14, dotenv 17+) sind bewusst noch nicht durchgeführt – jeweils mit Tests migrieren.

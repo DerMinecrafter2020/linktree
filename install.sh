@@ -68,9 +68,14 @@ prompt() {
 prompt_secret() {
   local msg="$1"
   local value
-  read -rsp "${msg}: " value
-  echo
-  echo "$value"
+  # Eingabe/Zeilenumbruch nur auf stderr, sonst landet das "\n" in $(prompt_secret ...)
+  if ! read -rsp "${msg}: " value; then
+    echo >&2
+    err "Keine Eingabe moeglich (kein Terminal?)."
+    exit 1
+  fi
+  echo >&2
+  printf '%s\n' "$value"
 }
 
 prompt_confirm() {
@@ -89,19 +94,24 @@ cmd_install() {
   log "OpenWeb Installation/Setup starten"
 
   # --- System-Checks --------------------------------------------------------
-  require_command node "Node.js muss installiert sein (>=18)."
+  require_command node "Node.js muss installiert sein (>= 20.19 bzw. >= 22.12)."
   require_command npm "npm muss installiert sein."
 
+  # otplib 13 laedt ESM-Module per require() -> erst ab Node 20.19 / 22.12 moeglich
   NODE_VERSION=$(node --version | sed 's/v//')
   MAJOR=$(echo "$NODE_VERSION" | cut -d. -f1)
-  if [[ "$MAJOR" -lt 18 ]]; then
-    err "Node.js >= 18 erforderlich, gefunden: $NODE_VERSION"
+  MINOR=$(echo "$NODE_VERSION" | cut -d. -f2)
+  if ! { [[ "$MAJOR" -ge 23 ]] || { [[ "$MAJOR" -eq 22 ]] && [[ "$MINOR" -ge 12 ]]; } || { [[ "$MAJOR" -eq 20 ]] && [[ "$MINOR" -ge 19 ]]; }; }; then
+    err "Node.js >= 20.19 (bzw. >= 22.12) erforderlich, gefunden: $NODE_VERSION"
     exit 1
   fi
 
   # --- .env vorbereiten -----------------------------------------------------
+  OLD_POSTGRES_PASSWORD=""
   if [[ -f "$ENV_FILE" ]]; then
     warn "Eine .env existiert bereits."
+    # DB-Passwort eines bestehenden Postgres-Volumes merken, auch wenn die .env ersetzt wird
+    OLD_POSTGRES_PASSWORD=$(sed -n 's/^POSTGRES_PASSWORD=//p' "$ENV_FILE" | tail -n 1)
     if ! prompt_confirm "Vorhandene .env behalten und nur fehlende Werte ergaenzen"; then
       mv "$ENV_FILE" "$ENV_FILE.bak.$(date +%Y%m%d%H%M%S)"
       log "Alte .env wurde gesichert."
@@ -140,8 +150,15 @@ cmd_install() {
     if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
       DB_PASSWORD="$POSTGRES_PASSWORD"
     elif [[ -n "$(docker volume ls -q --filter name=openweb-postgres-data)" ]]; then
-      DB_PASSWORD="openweb"
-      warn "Bestehendes Postgres-Volume gefunden – verwende bisheriges DB-Passwort. Aendern mit: ALTER USER openweb PASSWORD '...';"
+      # Postgres uebernimmt POSTGRES_PASSWORD nur beim ersten Start -> bisheriges Passwort weiterverwenden
+      warn "Bestehendes Postgres-Volume gefunden – es wird das bisherige DB-Passwort benoetigt."
+      if [[ -n "$OLD_POSTGRES_PASSWORD" ]]; then
+        DB_PASSWORD="$OLD_POSTGRES_PASSWORD"
+        info "Verwende POSTGRES_PASSWORD aus der bisherigen .env."
+      else
+        DB_PASSWORD=$(prompt_secret "Passwort der bestehenden Datenbank (leer = altes Standardpasswort 'openweb')")
+        DB_PASSWORD="${DB_PASSWORD:-openweb}"
+      fi
     else
       DB_PASSWORD=$(generate_secret)
     fi
@@ -221,6 +238,10 @@ EOF
     fi
   )
   chmod 600 "$ENV_FILE"
+  # Per sudo installiert: .env dem aufrufenden Benutzer geben (systemd-Variante setzt spaeter openweb)
+  if [[ "$EUID" -eq 0 && -n "${SUDO_USER:-}" ]]; then
+    chown "$SUDO_USER" "$ENV_FILE"
+  fi
 
   log ".env geschrieben (Rechte 600)."
 
@@ -353,9 +374,10 @@ cmd_change_navidrome() {
   fi
   url=$(prompt "Navidrome URL" "${NAVIDROME_URL:-}")
   username=$(prompt "Navidrome Username" "${NAVIDROME_USERNAME:-}")
-  password=$(prompt_secret "Navidrome Passwort")
+  password=$(prompt_secret "Navidrome Passwort (leer = unveraendert)")
   poll=$(prompt "Poll-Intervall in Sekunden" "30")
-  (cd "$APP_DIR" && node -e "
+  # Werte als Umgebungsvariablen VOR dem Befehl uebergeben (nach "node -e" waeren es nur Argumente)
+  (cd "$APP_DIR" && NAVIDROME_ENABLED="$enabled" NAVIDROME_URL="$url" NAVIDROME_USERNAME="$username" NAVIDROME_PASSWORD="$password" NAVIDROME_POLL="$poll" node -e "
 require('dotenv').config();
 const { encrypt } = require('./lib/crypto');
 const db = require('./lib/db');
@@ -368,14 +390,14 @@ const db = require('./lib/db');
       enabled = EXCLUDED.enabled,
       url = EXCLUDED.url,
       username = EXCLUDED.username,
-      password_encrypted = EXCLUDED.password_encrypted,
+      password_encrypted = COALESCE(EXCLUDED.password_encrypted, navidrome_settings.password_encrypted),
       poll_interval_sec = EXCLUDED.poll_interval_sec,
       updated_at = NOW()
   \`, [process.env.NAVIDROME_ENABLED === 'true', process.env.NAVIDROME_URL, process.env.NAVIDROME_USERNAME, enc, parseInt(process.env.NAVIDROME_POLL || '30', 10)]);
   console.log('Navidrome-Credentials aktualisiert.');
   process.exit(0);
 })().catch(e => { console.error(e); process.exit(1); });
-" NAVIDROME_ENABLED="$enabled" NAVIDROME_URL="$url" NAVIDROME_USERNAME="$username" NAVIDROME_PASSWORD="$password" NAVIDROME_POLL="$poll")
+")
 }
 
 cmd_reset_db() {

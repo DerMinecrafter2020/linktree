@@ -538,20 +538,32 @@ router.get('/alert-settings', async (req, res, next) => {
 router.post('/alert-settings', async (req, res, next) => {
   try {
     const s = req.body;
-    const emailTo = s.email_to ? v.validateEmail(s.email_to) : null;
-    if (s.email_to && !emailTo) {
+    // Wie <input type="email"> (erlaubt auch z. B. root@localhost), aber ohne Leer-/Steuerzeichen
+    const rawEmailTo = typeof s.email_to === 'string' ? s.email_to.trim() : '';
+    const emailTo = /^[^\s@<>",;]+@[^\s@<>",;]+$/.test(rawEmailTo) && rawEmailTo.length <= 254 ? rawEmailTo : null;
+    if (rawEmailTo && !emailTo) {
       return res.status(400).json({ ok: false, error: 'Ungueltige Empfaenger-E-Mail' });
     }
 
     // SMTP-Passwort verschluesselt speichern. Leeres Feld = bisheriges Passwort behalten
     // (die Einstellungsseite bekommt es aus Sicherheitsgruenden nie zurueck).
+    // Ohne gueltigen NAVIDROME_ENCRYPTION_KEY wie bisher im Klartext speichern (mit Warnung),
+    // statt jedes Speichern der Einstellungen scheitern zu lassen.
+    const tryEncrypt = (value) => {
+      try {
+        return encrypt(value);
+      } catch (err) {
+        console.warn('[alert-settings] SMTP-Passwort unverschluesselt gespeichert:', err.message);
+        return value;
+      }
+    };
     let smtpPassword;
     if (s.smtp_password) {
-      smtpPassword = encrypt(String(s.smtp_password).slice(0, 500));
+      smtpPassword = tryEncrypt(String(s.smtp_password).slice(0, 500));
     } else {
       const { rows: existing } = await db.query('SELECT smtp_password FROM alert_settings WHERE id = 1 LIMIT 1');
       const current = existing[0]?.smtp_password || null;
-      smtpPassword = current && !isEncrypted(current) ? encrypt(current) : current;
+      smtpPassword = current && !isEncrypted(current) ? tryEncrypt(current) : current;
     }
 
     const smtpPort = parseInt(s.smtp_port, 10);
@@ -1115,7 +1127,7 @@ router.post('/change-password', async (req, res, next) => {
 
     // Alle anderen Sessions dieses Users beenden (z. B. gestohlene Session nach Passwortwechsel)
     await db.query(
-      `DELETE FROM user_sessions WHERE sid <> $1 AND sess->>'userId' = $2`,
+      `DELETE FROM user_sessions WHERE sid <> $1 AND (sess->>'userId' = $2 OR sess->>'pendingUserId' = $2)`,
       [req.sessionID, String(user.id)]
     ).catch((err) => console.warn('[change-password] Sessions konnten nicht beendet werden:', err.message));
 
@@ -1168,6 +1180,9 @@ router.post('/change-password', async (req, res, next) => {
 
   router.post('/settings/2fa/totp/setup', async (req, res) => {
     try {
+      if (!(await checkCurrentPassword(req))) {
+        return res.status(401).json({ ok: false, error: 'Aktuelles Passwort falsch' });
+      }
       const QRCode = require('qrcode');
       const totp = require('../lib/totp');
       const secret = totp.createSecret();
@@ -1230,7 +1245,10 @@ router.post('/change-password', async (req, res, next) => {
 
   router.post('/settings/2fa/webauthn/register-options', async (req, res) => {
     try {
-      const db = require('../lib/db');
+      // Ein neuer Schluessel erlaubt passwortlosen Login -> nur mit aktuellem Passwort
+      if (!(await checkCurrentPassword(req))) {
+        return res.status(401).json({ ok: false, error: 'Aktuelles Passwort falsch' });
+      }
       const { rows } = await db.query('SELECT email FROM users WHERE id = $1', [req.session.userId]);
       const user = rows[0];
       
@@ -1253,16 +1271,18 @@ router.post('/change-password', async (req, res, next) => {
         }
       });
       
-      await db.query('UPDATE users SET webauthn_current_challenge = $1 WHERE id = $2', [options.challenge, req.session.userId]);
+      // Challenge in der Session (nicht in users.webauthn_current_challenge): diese Spalte kann der
+      // passwortlose Login-Ablauf ohne Anmeldung setzen und darf daher nicht fuer Registrierungen zaehlen
+      req.session.webauthnRegChallenge = options.challenge;
       res.json({ ok: true, data: options });
     } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
   });
 
   router.post('/settings/2fa/webauthn/register-verify', async (req, res) => {
     try {
-      const db = require('../lib/db');
-      const { rows } = await db.query('SELECT webauthn_current_challenge FROM users WHERE id = $1', [req.session.userId]);
-      const expectedChallenge = rows[0]?.webauthn_current_challenge;
+      const expectedChallenge = req.session.webauthnRegChallenge;
+      // Nur einmal verwendbar
+      delete req.session.webauthnRegChallenge;
       if (!expectedChallenge) return res.status(400).json({ ok: false, error: 'Kein Challenge aktiv' });
       
       const { verifyRegistrationResponse } = require('@simplewebauthn/server');
@@ -1289,7 +1309,7 @@ router.post('/change-password', async (req, res, next) => {
           'INSERT INTO webauthn_credentials (user_id, credential_id, public_key, counter) VALUES ($1, $2, $3, $4)',
           [req.session.userId, id, publicKey, counter]
         );
-        await db.query('UPDATE users SET webauthn_current_challenge = NULL WHERE id = $1', [req.session.userId]);
+        await audit.log(req, 'webauthn_register', 'user', req.session.userId);
         res.json({ ok: true });
       } else {
         res.status(400).json({ ok: false, error: 'Registrierung fehlgeschlagen' });

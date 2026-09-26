@@ -18,7 +18,11 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 const NODE_ENV = process.env.NODE_ENV || 'production';
 
 // Health-Check vor Setup, damit Load-Balancer / Uptime-Checker funktionieren
+let setupMode = false;
 app.get('/health', async (req, res) => {
+  // Im Setup-Modus lib/db NICHT laden: der Pool wuerde mit der noch leeren Konfiguration
+  // gecacht und das anschliessende Web-Setup (Migrationen/Seeding) daran scheitern.
+  if (setupMode) return res.json({ ok: true, status: 'setup' });
   try {
     const db = require('./lib/db');
     await db.query('SELECT 1');
@@ -55,7 +59,7 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       // Kein 'unsafe-inline': eingeschleuste <script>-Tags werden vom Browser blockiert.
       // jsdelivr nur fuer @simplewebauthn/browser (per SRI-Hash abgesichert)
-      scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
+      scriptSrc: ["'self'", "https://cdn.jsdelivr.net/npm/@simplewebauthn/browser@9.0.1/"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:", "blob:"],
@@ -78,21 +82,40 @@ app.use((req, res, next) => {
   next();
 });
 
-// admin.html nicht direkt ausliefern (sonst wird die IP-Allowlist von /admin umgangen)
-app.get('/admin.html', (req, res) => res.redirect('/admin'));
+// admin.html/index.html in keiner Schreibweise direkt ausliefern (z. B. /%61dmin.html, //admin.html,
+// /ADMIN.HTML), sonst werden IP-Allowlist bzw. Sichtbarkeitseinstellung umgangen
+app.use((req, res, next) => {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(req.path);
+  } catch {
+    return next();
+  }
+  const file = path.posix.basename(decoded.replace(/\\/g, '/')).replace(/[.\s]+$/, '').toLowerCase();
+  if (file === 'admin.html') return res.redirect('/admin');
+  // Startseite nur ueber die dynamische Route "/" (prueft u. a. "Profil nicht oeffentlich")
+  if (file === 'index.html') return res.redirect('/');
+  next();
+});
 
 // CSRF-Schutz: zustandsaendernde API-Aufrufe aus dem Browser nur von der eigenen Origin
-// (ergaenzt SameSite=Lax, das Anfragen von Nachbar-Subdomains nicht abdeckt)
-function allowedHostnames(req) {
-  const hosts = new Set();
-  if (req.hostname) hosts.add(req.hostname.toLowerCase());
+// (Schema + Host + Port). Ergaenzt SameSite=Lax, das Nachbar-Subdomains und andere Ports
+// desselben Hosts nicht abdeckt.
+function allowedOrigins(req) {
+  const origins = new Set();
+  const host = req.get('host');
+  if (host) {
+    origins.add(`${req.protocol}://${host}`.toLowerCase());
+    // TLS endet am Proxy, ohne X-Forwarded-Proto sieht Express nur http
+    origins.add(`https://${host}`.toLowerCase());
+  }
   for (const raw of [process.env.APP_URL, process.env.PUBLIC_DOMAIN]) {
     if (!raw) continue;
     try {
-      hosts.add(new URL(raw.startsWith('http') ? raw : `https://${raw}`).hostname.toLowerCase());
+      origins.add(new URL(raw.startsWith('http') ? raw : `https://${raw}`).origin.toLowerCase());
     } catch { /* ungueltige Konfiguration ignorieren */ }
   }
-  return hosts;
+  return origins;
 }
 
 app.use('/api', (req, res, next) => {
@@ -100,13 +123,13 @@ app.use('/api', (req, res, next) => {
   const origin = req.get('origin');
   // Nicht-Browser-Clients (curl, Skripte) senden keinen Origin-Header
   if (!origin) return next();
-  try {
-    if (origin !== 'null' && allowedHostnames(req).has(new URL(origin).hostname.toLowerCase())) return next();
-  } catch { /* ungueltiger Origin-Header */ }
+  if (origin !== 'null' && allowedOrigins(req).has(origin.toLowerCase())) return next();
   return res.status(403).json({ ok: false, error: 'Ungueltige Herkunft der Anfrage' });
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+// Hinweis: express.static wird erst in finalizeApp eingebunden. Ein globales static an dieser
+// Stelle wuerde "/" und "/sw.js" vor den dynamischen Routen beantworten (is_public, OG-Tags,
+// Custom CSS und die No-Cache-Header des Service Workers wuerden nie greifen).
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(compression());
@@ -142,7 +165,6 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-app.use('/api/auth/login', authLimiter);
 app.use('/api/login', loginLimiter);
 app.use('/api/setup', authLimiter);
 app.use('/api', apiLimiter);
@@ -170,6 +192,7 @@ async function finalizeApp() {
   }
 
   if (setupRequired) {
+    setupMode = true;
     console.log('[server] Initial-Setup-Modus aktiv. Rufe /setup.html auf, um die Anwendung zu konfigurieren.');
     const setupRoutes = require('./routes/setup');
     app.use('/api/setup', setupRoutes);
@@ -195,6 +218,30 @@ async function finalizeApp() {
     const navidromeRoutes = require('./routes/navidrome');
     const statusRoutes = require('./routes/api/status');
 
+    // Service Worker mit eingebetteter Versionsnummer ausliefern (kein Caching!).
+    // Wie die statischen Dateien VOR der Session, damit Assets keine Session-Abfrage ausloesen.
+    app.get('/sw.js', (req, res) => {
+      const pkg = require('./package.json');
+      const swContent = fs.readFileSync(path.join(__dirname, 'public', 'sw.js'), 'utf8')
+        .replace('__APP_VERSION__', pkg.version);
+      res.setHeader('Content-Type', 'application/javascript');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.send(swContent);
+    });
+
+    // Statische Dateien: kurzer Cache mit Revalidierung
+    app.use(express.static(path.join(__dirname, 'public'), {
+      index: false,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache');
+        } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+          res.setHeader('Cache-Control', 'public, max-age=60, must-revalidate');
+        } else {
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+        }
+      },
+    }));
     const sessionSecret = process.env.SESSION_SECRET;
     if (!sessionSecret || sessionSecret.startsWith('__SET_ME')) {
       console.error('[FATAL] SESSION_SECRET ist nicht konfiguriert. Bitte in .env setzen.');
@@ -255,30 +302,6 @@ async function finalizeApp() {
 
     app.get('/setup.html', (req, res) => res.redirect('/login'));
 
-    // Service Worker mit eingebetteter Versionsnummer ausliefern (kein Caching!)
-    app.get('/sw.js', (req, res) => {
-      const pkg = require('./package.json');
-      const swContent = fs.readFileSync(path.join(__dirname, 'public', 'sw.js'), 'utf8')
-        .replace('__APP_VERSION__', pkg.version);
-      res.setHeader('Content-Type', 'application/javascript');
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.send(swContent);
-    });
-
-    // Statische Dateien: kurzer Cache mit Revalidierung
-    app.use(express.static(path.join(__dirname, 'public'), {
-      index: false,
-      setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.html')) {
-          res.setHeader('Cache-Control', 'no-cache');
-        } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
-          res.setHeader('Cache-Control', 'public, max-age=60, must-revalidate');
-        } else {
-          res.setHeader('Cache-Control', 'public, max-age=86400');
-        }
-      },
-    }));
-    app.get('/admin.html', (req, res) => res.redirect('/admin'));
     app.get('/admin', (req, res, next) => {
       const { isIpAllowed } = require('./lib/auth');
       if (!isIpAllowed(req)) return res.status(403).send('Admin-Zugang von dieser IP nicht erlaubt');
@@ -385,7 +408,8 @@ async function finalizeApp() {
         const profileRes = await db.query('SELECT * FROM profile WHERE id = 1 LIMIT 1');
         const profile = profileRes.rows[0] || { name: '@corneliusahner', handle: 'Cornelius Ahner', is_public: true };
 
-        if (profile.is_public === false) {
+        // Nicht oeffentlich: nur eingeloggte Admins sehen die Seite (z. B. Vorschau im Admin)
+        if (profile.is_public === false && !req.session?.userId) {
           return res.status(403).sendFile(path.join(__dirname, 'public', 'login.html'));
         }
 

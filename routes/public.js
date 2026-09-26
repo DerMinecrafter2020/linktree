@@ -43,7 +43,10 @@ async function requireApiKey(req, res, next) {
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 Minuten
 const LOGIN_MAX_ATTEMPTS = 10;
 
-function createAttemptLimiter(message) {
+// resetOnSuccess: Erfolg setzt den Zaehler komplett zurueck (Login). Sonst wird nur der
+// eigene Versuch zurueckgebucht (Link-Entsperren: ein bekanntes Passwort darf nicht die
+// Sperre fuer andere Links aufheben).
+function createAttemptLimiter(message, { resetOnSuccess = true } = {}) {
   const attempts = new Map();
 
   // Alte Eintraege regelmaessig aufraeumen
@@ -57,26 +60,28 @@ function createAttemptLimiter(message) {
   return function limiter(req, res, next) {
     const ip = req.ip || req.socket?.remoteAddress || 'unknown';
     const now = Date.now();
-    const record = attempts.get(ip);
-    if (record && record.count >= LOGIN_MAX_ATTEMPTS && now < record.resetAt) {
+    let record = attempts.get(ip);
+    if (!record || now >= record.resetAt) {
+      record = { count: 0, resetAt: now + LOGIN_WINDOW_MS };
+      attempts.set(ip, record);
+    }
+    if (record.count >= LOGIN_MAX_ATTEMPTS) {
       const retryAfter = Math.ceil((record.resetAt - now) / 1000);
       res.setHeader('Retry-After', retryAfter);
       return res.status(429).json({ ok: false, error: `${message} Bitte in ${retryAfter} Sekunden erneut versuchen.` });
     }
+    // Versuch sofort (synchron) zaehlen: parallele Anfragen koennen das Limit so nicht
+    // umgehen, waehrend bcrypt noch rechnet. Erfolg bucht den Versuch wieder zurueck.
+    record.count += 1;
+    let settled = false;
     req.loginRateLimit = {
       ip,
-      record,
       increment: (failed) => {
-        if (!failed) {
-          attempts.delete(ip);
-          return;
-        }
-        const r = attempts.get(ip);
-        if (r && now < r.resetAt) {
-          r.count += 1;
-        } else {
-          attempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
-        }
+        if (settled) return;
+        settled = true;
+        if (failed) return; // bereits gezaehlt
+        if (resetOnSuccess) attempts.delete(ip);
+        else record.count = Math.max(0, record.count - 1);
       },
     };
     next();
@@ -91,7 +96,7 @@ function getDummyHash() {
 }
 
 const rateLimitLogin = createAttemptLimiter('Zu viele Anmeldeversuche.');
-const rateLimitUnlock = createAttemptLimiter('Zu viele Passwortversuche.');
+const rateLimitUnlock = createAttemptLimiter('Zu viele Passwortversuche.', { resetOnSuccess: false });
 
 // Session-ID nach Login neu erzeugen (Schutz vor Session Fixation), Daten uebernehmen
 function regenerateSession(req, data) {
@@ -104,7 +109,20 @@ function regenerateSession(req, data) {
   });
 }
 
-router.get('/profile', async (req, res, next) => {
+// "Profil nicht oeffentlich": Profil und Links nur fuer eingeloggte Admins (Vorschau)
+async function requirePublicProfile(req, res, next) {
+  try {
+    const { rows } = await db.query('SELECT is_public FROM profile WHERE id = 1 LIMIT 1');
+    if (rows[0]?.is_public === false && !req.session?.userId) {
+      return res.status(403).json({ ok: false, error: 'Dieses Profil ist nicht oeffentlich' });
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+router.get('/profile', requirePublicProfile, async (req, res, next) => {
   try {
     const { rows } = await db.query('SELECT * FROM profile WHERE id = 1 LIMIT 1');
     const profile = rows[0] || {
@@ -146,14 +164,14 @@ function isLinkVisible(link, nowBerlin) {
   return true;
 }
 
-router.get('/links/categories', async (req, res, next) => {
+router.get('/links/categories', requirePublicProfile, async (req, res, next) => {
   try {
     const { rows } = await db.query('SELECT id, name, position FROM link_categories ORDER BY position ASC, name ASC');
     res.json({ ok: true, data: rows });
   } catch (err) { next(err); }
 });
 
-router.get('/links', async (req, res, next) => {
+router.get('/links', requirePublicProfile, async (req, res, next) => {
   try {
     const { rows } = await db.query(`
       SELECT l.id, l.title, l.subtitle, l.url, l.display_url, l.icon, l.position,
@@ -184,15 +202,22 @@ router.post('/links/:id/unlock', rateLimitUnlock, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { rows } = await db.query('SELECT id, url, password_hash FROM links WHERE id = $1 AND is_active = true LIMIT 1', [id]);
-    if (!rows.length) return res.status(404).json({ ok: false, error: 'Link nicht gefunden' });
+    if (!rows.length) {
+      req.loginRateLimit?.increment(false);
+      return res.status(404).json({ ok: false, error: 'Link nicht gefunden' });
+    }
     const link = rows[0];
-    if (!link.password_hash) return res.json({ ok: true, data: { url: link.url } });
+    if (!link.password_hash) {
+      req.loginRateLimit?.increment(false);
+      return res.json({ ok: true, data: { url: link.url } });
+    }
     const password = String(req.body.password || '').slice(0, 1000);
     const valid = await bcrypt.compare(password, link.password_hash);
     if (!valid) {
       req.loginRateLimit?.increment(true);
       return res.status(401).json({ ok: false, error: 'Falsches Passwort' });
     }
+    req.loginRateLimit?.increment(false);
     res.json({ ok: true, data: { url: link.url } });
   } catch (err) {
     next(err);
@@ -246,9 +271,12 @@ router.post('/links/:id/click', async (req, res, next) => {
       os,
     ]);
     // Asynchroner Discord-Webhook ohne Antwort zu blockieren
-    const linkRes = await db.query('SELECT title, url FROM links WHERE id = $1 LIMIT 1', [id]);
+    const linkRes = await db.query('SELECT title, url, password_hash IS NOT NULL AS is_password_protected FROM links WHERE id = $1 LIMIT 1', [id]);
     if (linkRes.rows[0]) {
-      sendDiscordWebhook(linkRes.rows[0]).catch(() => {});
+      const link = linkRes.rows[0];
+      // Ziel geschuetzter Links nicht in den (evtl. geteilten) Discord-Kanal posten
+      const payload = { title: link.title, url: link.is_password_protected ? '(passwortgeschuetzt)' : link.url };
+      sendDiscordWebhook(payload).catch(() => {});
     }
     res.json({ ok: true });
   } catch (err) {
@@ -327,7 +355,8 @@ router.get('/public/links', requireApiKey, async (req, res, next) => {
       SELECT l.id, l.title, l.subtitle, l.url, l.display_url, l.icon, l.position,
              l.is_active, l.open_new, l.meta_description, l.slug,
              l.visible_from, l.visible_until, l.visible_weekdays,
-             l.category_id, c.name AS category_name
+             l.category_id, c.name AS category_name,
+             l.password_hash IS NOT NULL AS is_password_protected
       FROM links l
       LEFT JOIN link_categories c ON c.id = l.category_id
       WHERE l.is_active = true
@@ -335,7 +364,9 @@ router.get('/public/links', requireApiKey, async (req, res, next) => {
     `);
     const nowBerlin = getNowInBerlin();
     const visible = rows.filter(l => isLinkVisible(l, nowBerlin));
-    res.json({ ok: true, data: visible });
+    // Wie /api/links: Ziel geschuetzter Links auch per API-Key nur ueber /links/:id/unlock
+    const safe = visible.map(l => ({ ...l, url: l.is_password_protected ? null : l.url }));
+    res.json({ ok: true, data: safe });
   } catch (err) { next(err); }
 });
 

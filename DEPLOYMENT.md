@@ -34,7 +34,7 @@ laeuft auf einem einzelnen Server (eigenstaendig oder mit Docker Compose).
 
 ## Schnellstart mit `install.sh`
 
-Auf einem frischen Debian/Ubuntu-Server mit Node.js >= 18:
+Auf einem frischen Debian/Ubuntu-Server mit Node.js >= 20.19 (bzw. >= 22.12):
 
 ```bash
 cd /opt
@@ -90,7 +90,7 @@ generierten `SESSION_SECRET` aktiviert wird.
 
 ### 1. Systemvoraussetzungen
 
-- Node.js >= 18
+- Node.js >= 20.19 (bzw. >= 22.12) – aeltere Versionen koennen die TOTP-Bibliothek nicht laden
 - PostgreSQL >= 14
 - npm
 

@@ -2,7 +2,7 @@
 
 Eine komplette Link-in-Bio-Seite (a la Linktree) im **Dark & Neon**-Stil mit eigener vollumfänglicher Admin-Oberfläche, tiefgehenden Statistiken und Musik-Integration.
 
-- **Backend:** Node.js 20 + Express 4
+- **Backend:** Node.js 20.19+ / 22.12+ + Express 4
 - **Datenbank:** PostgreSQL 16
 - **Auth:** E-Mail/Passwort (bcrypt), **2FA (WebAuthn/Passkeys)**, serverseitige Sessions
 - **Frontend:** Statisches HTML/JS/CSS, komplett ohne Frontend-Frameworks (Vanilla)

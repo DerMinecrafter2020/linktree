@@ -44,3 +44,12 @@ done
 
 sh scripts/bump-version.sh patch || exit 1
 git add $version_files
+
+# Teil-Commit ("git commit <pfade>", "--only"): Git committet aus einem temporaeren Index.
+# Die Versionsdateien auch im echten Index (index.lock) eintragen, sonst wuerde der naechste
+# normale Commit die Erhoehung wieder rueckgaengig machen.
+case "${GIT_INDEX_FILE:-}" in
+  *next-index-*.lock)
+    GIT_INDEX_FILE="$(git rev-parse --git-dir)/index.lock" git add $version_files || exit 1
+    ;;
+esac

@@ -637,6 +637,22 @@
     </form>
   </dialog>
 
+  <!-- Passwort-Bestaetigung fuer sensible 2FA-Aenderungen -->
+  <dialog id="confirm-password-dialog" class="dialog">
+    <form id="confirm-password-form" method="dialog" class="form">
+      <h3>Passwort bestätigen</h3>
+      <p id="confirm-password-text" class="hint">Zur Bestätigung bitte dein aktuelles Passwort eingeben.</p>
+      <label>
+        <span>Aktuelles Passwort</span>
+        <input name="password" type="password" autocomplete="current-password" required />
+      </label>
+      <div class="form-actions">
+        <button type="submit" class="btn primary">Bestätigen</button>
+        <button type="button" id="confirm-password-cancel" class="btn ghost">Abbrechen</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Vorschau Dialog -->
   <dialog id="preview-dialog" class="dialog preview-dialog">
     <form method="dialog" class="form">
@@ -659,6 +675,6 @@
   <script src="/js/icons.js"></script>
   <script src="/js/navidrome.js"></script>
   <script src="/js/admin.js"></script>
-  <script src="/js/sw-register-admin.js"></script>
+  <script src="/js/sw-register.js"></script>
 </body>
 </html>

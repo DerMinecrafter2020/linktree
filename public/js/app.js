@@ -219,27 +219,41 @@
     else dlg.setAttribute('open', '');
     input.focus();
 
-    const close = () => { if (typeof dlg.close === 'function') dlg.close(); else dlg.removeAttribute('open'); };
-    cancel?.addEventListener('click', close, { once: true });
+    // Alle Listener dieser Dialog-Oeffnung gemeinsam entfernen (Abbrechen, Escape, Erfolg),
+    // sonst wuerden alte Handler beim naechsten Absenden fuer andere Links mitfeuern
+    unlockListeners?.abort();
+    const listeners = new AbortController();
+    unlockListeners = listeners;
+    const { signal } = listeners;
 
-    const onSubmit = async (e) => {
+    const close = () => {
+      listeners.abort();
+      if (typeof dlg.close === 'function') dlg.close(); else dlg.removeAttribute('open');
+    };
+    cancel?.addEventListener('click', close, { signal });
+    dlg.addEventListener('close', () => listeners.abort(), { signal });
+
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
         const res = await window.api.unlockLink(link.id, input.value);
         close();
         const target = safeUrl(res.url);
         if (target === '#') return;
+        trackClick(link);
         if (link.open_new !== false) window.open(target, '_blank', 'noopener,noreferrer');
         else window.location.href = target;
-        trackClick(link);
       } catch (err) {
+        // 429 (zu viele Versuche) nicht als "Falsches Passwort" anzeigen
+        const defaultText = error.dataset.defaultText || (error.dataset.defaultText = error.textContent);
+        error.textContent = err.status === 429 ? err.message : defaultText;
         error.hidden = false;
         input.value = '';
         input.focus();
       }
-    };
-    form.addEventListener('submit', onSubmit, { once: true });
+    }, { signal });
   }
+  let unlockListeners = null;
 
   function buildLinkRow(link) {
     const href = safeUrl(link.url);

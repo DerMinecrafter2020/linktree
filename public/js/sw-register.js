@@ -1,5 +1,13 @@
-// Ausgelagert aus index.html (CSP ohne 'unsafe-inline')
-if ('serviceWorker' in navigator) {
+// =========================================================
+// Service-Worker-Registrierung (oeffentliche Seite + Admin)
+// =========================================================
+// Eigene Datei statt Inline-Skript, damit die CSP ohne 'unsafe-inline' auskommt.
+
+(() => {
+  'use strict';
+
+  if (!('serviceWorker' in navigator)) return;
+
   navigator.serviceWorker.register('/sw.js').then(reg => {
     // Regelmaessig auf Updates pruefen (alle 5 Minuten)
     setInterval(() => reg.update(), 5 * 60 * 1000);
@@ -15,7 +23,9 @@ if ('serviceWorker' in navigator) {
       });
     });
   }).catch(console.error);
-  // Falls der Controller wechselt (neuer SW uebernimmt), Seite neu laden
+
+  // Falls der Controller wechselt (neuer SW uebernimmt), Seite neu laden –
+  // aber nicht beim allerersten Aktivieren (dann gab es vorher keinen Controller)
   let refreshing = false;
   let hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -27,4 +37,4 @@ if ('serviceWorker' in navigator) {
     refreshing = true;
     window.location.reload();
   });
-}
+})();

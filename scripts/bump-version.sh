@@ -52,12 +52,23 @@ replace package-lock.json "1,12s/\"version\": \"$old_re\",/\"version\": \"$new\"
 replace public/sw.js "s/openweb-cache-v$old_re'/openweb-cache-v$new'/"
 replace public/index.html "s#</a> · v$old_re</span>#</a> · v$new</span>#"
 
-# Pruefen, dass wirklich ueberall ersetzt wurde
-for file in package.json package-lock.json public/sw.js public/index.html; do
-  if ! grep -q "$new" "$file"; then
-    echo "[bump-version] Version in $file nicht aktualisiert – bitte manuell pruefen." >&2
+# Pruefen, dass wirklich ueberall genau die erwartete Stelle ersetzt wurde
+new_re=$(printf '%s' "$new" | sed 's/\./\\./g')
+check() {
+  file=$1
+  pattern=$2
+  expected=$3
+  # Nur Kopfbereich pruefen (in package-lock.json koennen Pakete dieselbe Versionsnummer haben)
+  count=$(sed -n '1,12p' "$file" | grep -c "$pattern" || true)
+  [ "$file" = "package-lock.json" ] || count=$(grep -c "$pattern" "$file" || true)
+  if [ "$count" -ne "$expected" ]; then
+    echo "[bump-version] $file: $count statt $expected Treffer fuer die neue Version – bitte manuell pruefen." >&2
     exit 1
   fi
-done
+}
+check package.json "^  \"version\": \"$new_re\",\$" 1
+check package-lock.json "\"version\": \"$new_re\"," 2
+check public/sw.js "openweb-cache-v$new_re'" 1
+check public/index.html "</a> · v$new_re</span>" 1
 
 echo "[bump-version] $old -> $new"

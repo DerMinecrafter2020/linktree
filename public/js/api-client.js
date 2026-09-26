@@ -109,10 +109,10 @@
 
     // 2FA & WebAuthn
     get2faStatus: () => get('/admin/settings/2fa/status'),
-    setupTotp: () => post('/admin/settings/2fa/totp/setup'),
+    setupTotp: (password) => post('/admin/settings/2fa/totp/setup', { password }),
     verifyTotp: (code) => post('/admin/settings/2fa/totp/verify', { code }),
     disableTotp: (password) => post('/admin/settings/2fa/totp/disable', { password }),
-    getWebauthnRegisterOptions: () => post('/admin/settings/2fa/webauthn/register-options'),
+    getWebauthnRegisterOptions: (password) => post('/admin/settings/2fa/webauthn/register-options', { password }),
     verifyWebauthnRegister: (res) => post('/admin/settings/2fa/webauthn/register-verify', res),
     deleteWebauthn: (id, password) => del(`/admin/settings/2fa/webauthn/${encodeURIComponent(id)}`, { password }),
     renameWebauthn: (id, name) => put(`/admin/settings/2fa/webauthn/${id}`, { name }),

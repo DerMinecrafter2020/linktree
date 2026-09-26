@@ -1500,9 +1500,38 @@
       }
     }
     
+    // Fragt das aktuelle Passwort in einem Dialog ab (maskiert, anders als prompt()).
+    // Liefert das Passwort oder null bei Abbruch.
+    function askPassword(text) {
+      const dlg = $('#confirm-password-dialog');
+      const form = $('#confirm-password-form');
+      if (!dlg || !form) return Promise.resolve(null);
+      $('#confirm-password-text').textContent = text;
+      form.password.value = '';
+      return new Promise((resolve) => {
+        const listeners = new AbortController();
+        const finish = (value) => {
+          listeners.abort();
+          form.password.value = '';
+          if (dlg.open) dlg.close();
+          resolve(value);
+        };
+        form.addEventListener('submit', (e) => {
+          e.preventDefault();
+          finish(form.password.value || null);
+        }, { signal: listeners.signal });
+        $('#confirm-password-cancel')?.addEventListener('click', () => finish(null), { signal: listeners.signal });
+        dlg.addEventListener('close', () => finish(null), { signal: listeners.signal });
+        dlg.showModal();
+        form.password.focus();
+      });
+    }
+
     $('#totp-setup-btn')?.addEventListener('click', async () => {
+      const password = await askPassword('Zum Einrichten von TOTP bitte dein aktuelles Passwort eingeben.');
+      if (!password) return;
       try {
-        const data = await window.api.setupTotp();
+        const data = await window.api.setupTotp(password);
         $('#totp-qrcode').src = data.qrcode;
         $('#totp-secret-text').textContent = data.secret;
         $('#totp-setup-container').hidden = false;
@@ -1528,7 +1557,7 @@
     
     $('#totp-disable-btn')?.addEventListener('click', async () => {
       if (!confirm('Sicher, dass du TOTP deaktivieren willst?')) return;
-      const password = prompt('Zur Bestätigung bitte dein aktuelles Passwort eingeben:');
+      const password = await askPassword('Zum Deaktivieren von TOTP bitte dein aktuelles Passwort eingeben.');
       if (!password) return;
       try {
         await window.api.disableTotp(password);
@@ -1538,8 +1567,10 @@
     });
     
     $('#webauthn-register-btn')?.addEventListener('click', async () => {
+      const password = await askPassword('Zum Hinzufügen eines Security Keys bitte dein aktuelles Passwort eingeben.');
+      if (!password) return;
       try {
-        const options = await window.api.getWebauthnRegisterOptions();
+        const options = await window.api.getWebauthnRegisterOptions(password);
         const { startRegistration } = window.SimpleWebAuthnBrowser;
         const authResp = await startRegistration(options);
         await window.api.verifyWebauthnRegister(authResp);
@@ -1555,7 +1586,7 @@
       if (e.target.classList.contains('delete-webauthn')) {
         const id = e.target.dataset.id;
         if (!confirm('Diesen Schlüssel wirklich löschen?')) return;
-        const password = prompt('Zur Bestätigung bitte dein aktuelles Passwort eingeben:');
+        const password = await askPassword('Zum Löschen des Schlüssels bitte dein aktuelles Passwort eingeben.');
         if (!password) return;
         try {
           await window.api.deleteWebauthn(id, password);
