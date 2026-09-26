@@ -594,8 +594,9 @@
       }
       try {
         await navigator.clipboard.writeText(url);
-        shareBtn.textContent = '✅';
-        setTimeout(() => shareBtn.textContent = '📤', 1500);
+        // Icon kurz gegen einen Haken tauschen (Icons stehen als SVG im HTML)
+        shareBtn.classList.add('copied');
+        setTimeout(() => shareBtn.classList.remove('copied'), 1500);
       } catch { /* noop */ }
     });
 
