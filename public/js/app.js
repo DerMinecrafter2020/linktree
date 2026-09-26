@@ -71,41 +71,10 @@
     return img;
   }
 
-  function sanitizeIconText(icon) {
-    return icon.toString().slice(0, 8).replace(/[<>"']/g, '');
-  }
-
-  function renderIcon(icon) {
-    if (!icon) return '🔗';
-
-    if (icon.startsWith('simpleicon:') && window.icons) {
-      const id = icon.slice('simpleicon:'.length);
-      if (!/^[a-z0-9-]{1,32}$/.test(id) || !window.icons.getInfo(id)) return '🔗';
-      return createIconImg(window.icons.url(id));
-    }
-
-    if (icon.startsWith('dashboardicon:') && window.icons) {
-      const parsed = window.icons.parse(icon);
-      if (!parsed.url) return '🔗';
-      return createIconImg(parsed.url, '', 'link-icon-img no-filter');
-    }
-
-    if (/^https?:\/\//i.test(icon)) {
-      try {
-        const u = new URL(icon);
-        if (!['http:', 'https:'].includes(u.protocol)) return '🔗';
-      } catch { return '🔗'; }
-      return createIconImg(icon, '', 'link-icon-img no-filter');
-    }
-
-    return document.createTextNode(sanitizeIconText(icon));
-  }
-
-  function autoIcon(link) {
-    if (link.icon && link.icon !== '🔗') return link.icon;
-    if (!window.icons) return '🔗';
-    const detected = window.icons.detectFromUrl(link.url, link.title);
-    return detected ? `simpleicon:${detected}` : '🔗';
+  // Link-Icons kommen einheitlich aus Dashboard Icons (vom Server aufgeloest: icon_resolved)
+  function renderIcon(link) {
+    if (!window.icons?.createResolved) return document.createTextNode('');
+    return window.icons.createResolved(link.icon_resolved, 'link-icon-img');
   }
 
   function el(tag, cls, text) {
@@ -274,9 +243,7 @@
     const text = el('span', 'link-text');
 
     const badge = el('span', 'link-icon');
-    const iconEl = renderIcon(autoIcon(link));
-    if (iconEl instanceof Node) badge.appendChild(iconEl);
-    else badge.textContent = String(iconEl || '🔗');
+    badge.appendChild(renderIcon(link));
 
     const main = el('span', 'link-text-main');
     main.appendChild(el('span', 'link-title', link.title));
@@ -350,6 +317,7 @@
         window.api.getLinkCategories().catch(() => []),
       ]);
       state.categories = categories || [];
+      window.icons?.applyStyle?.(profile?.icon_style);
       renderProfile(profile);
       buildThemeSwitcher(profile?.allow_visitor_theme !== false);
       if (profile?.is_public === false) {

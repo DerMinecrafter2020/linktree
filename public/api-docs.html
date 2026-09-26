@@ -75,7 +75,9 @@
       "subtitle": "Code und Projekte",
       "url": "https://github.com/corneliusahner",
       "display_url": "github.com/corneliusahner",
-      "icon": "simpleicon:github",
+      "icon": "dashboardicon:github",
+      "icon_resolved": { "type": "dashboard", "name": "github", "format": "svg" },
+      "is_password_protected": false,
       "position": 0,
       "is_active": true,
       "open_new": true,
@@ -89,6 +91,7 @@
     }
   ]
 }</pre>
+      <p><code>icon_resolved</code> ist das tatsächlich angezeigte Icon: <code>dashboard</code> (Logo aus <a href="https://github.com/homarr-labs/dashboard-icons" target="_blank" rel="noopener noreferrer">Dashboard Icons</a>, abrufbar unter <code>/api/icon/dashboardicon/&lt;name&gt;/&lt;format&gt;</code>), <code>image</code> (eigene Bild-URL) oder <code>generic</code> (Symbol <code>link</code>, <code>mail</code> oder <code>phone</code>). Bei passwortgeschützten Links ist <code>url</code> immer <code>null</code>.</p>
     </div>
 
     <div class="endpoint">

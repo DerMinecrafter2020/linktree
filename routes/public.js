@@ -10,6 +10,7 @@ const v = require('../lib/validators');
 const { parseUserAgent, parseCountryCode } = require('../lib/analytics');
 const audit = require('../lib/audit');
 const alert = require('../lib/alert');
+const icons = require('../lib/icons');
 
 const router = express.Router();
 
@@ -187,9 +188,11 @@ router.get('/links', requirePublicProfile, async (req, res, next) => {
     const nowBerlin = getNowInBerlin();
     const visible = rows.filter(l => isLinkVisible(l, nowBerlin));
     // Passwort-Hashes nie an Client senden; Ziel-URL geschuetzter Links erst nach Entsperren
+    // Icon-Aufloesung braucht die echte URL (auch bei geschuetzten Links), ausgeliefert wird sie nicht
     const safe = visible.map(l => ({
       ...l,
       password_hash: undefined,
+      icon_resolved: icons.resolveIcon(l),
       url: l.is_password_protected ? null : l.url,
     }));
     res.json({ ok: true, data: safe });
@@ -344,7 +347,7 @@ router.get('/qr-code', async (req, res, next) => {
 
 router.get('/public/profile', requireApiKey, async (req, res, next) => {
   try {
-    const { rows } = await db.query('SELECT name, handle, bio, avatar, avatar_url, theme, is_public, allow_visitor_theme FROM profile WHERE id = 1 LIMIT 1');
+    const { rows } = await db.query('SELECT name, handle, bio, avatar, avatar_url, theme, is_public, allow_visitor_theme, icon_style FROM profile WHERE id = 1 LIMIT 1');
     res.json({ ok: true, data: rows[0] || null });
   } catch (err) { next(err); }
 });
@@ -365,7 +368,11 @@ router.get('/public/links', requireApiKey, async (req, res, next) => {
     const nowBerlin = getNowInBerlin();
     const visible = rows.filter(l => isLinkVisible(l, nowBerlin));
     // Wie /api/links: Ziel geschuetzter Links auch per API-Key nur ueber /links/:id/unlock
-    const safe = visible.map(l => ({ ...l, url: l.is_password_protected ? null : l.url }));
+    const safe = visible.map(l => ({
+      ...l,
+      icon_resolved: icons.resolveIcon(l),
+      url: l.is_password_protected ? null : l.url,
+    }));
     res.json({ ok: true, data: safe });
   } catch (err) { next(err); }
 });

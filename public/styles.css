@@ -33,6 +33,8 @@
   --md-on-surface-variant: #cac4d0;
   --md-outline: #938f99;
   --md-outline-variant: #49454f;
+  --md-inverse-surface: #e6e0e9;
+  --md-inverse-primary: #6750a4;
   --md-scrim: #000000;
 
   /* M3-Formen */
@@ -108,6 +110,8 @@
   --md-on-surface-variant: #c3c7cf;
   --md-outline: #8d9199;
   --md-outline-variant: #43474e;
+  --md-inverse-surface: #e1e2e8;
+  --md-inverse-primary: #0061a4;
 }
 
 /* ---------- Theme "Sunset" (oranger Seed) ---------- */
@@ -136,6 +140,8 @@
   --md-on-surface-variant: #d6c3b7;
   --md-outline: #9f8d83;
   --md-outline-variant: #52443b;
+  --md-inverse-surface: #f0dfd7;
+  --md-inverse-primary: #8e4e14;
 }
 
 /* ---------- Basis ---------- */
@@ -438,8 +444,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: clamp(84px, 25vw, 112px);
-  height: clamp(84px, 25vw, 112px);
+  width: clamp(85px, 25vw, 120px);
+  height: clamp(85px, 25vw, 120px);
 }
 
 /* Plattenspieler: flacher, in Surface-Farben */
@@ -454,10 +460,10 @@ body {
 
 .np-cover {
   position: absolute;
-  top: 6%;
-  left: 6%;
-  width: 88%;
-  height: 88%;
+  top: 5%;
+  left: 5%;
+  width: 90%;
+  height: 90%;
   border-radius: 50%;
   background:
     radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.10), transparent 45%),
@@ -499,11 +505,12 @@ body {
 .np-cover::after {
   content: '';
   position: absolute;
-  width: 16%;
-  height: 16%;
+  width: 15%;
+  height: 15%;
   border-radius: 50%;
-  background: var(--md-primary);
-  box-shadow: 0 0 0 3px var(--md-primary-container);
+  /* kleine Spindel wie vorher, nur in Theme-Farben: verdeckt das Cover kaum */
+  background: radial-gradient(circle at 35% 35%, var(--md-on-surface), var(--md-outline));
+  box-shadow: inset 0 0 3px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.4);
   pointer-events: none;
   z-index: 2;
 }
@@ -826,26 +833,31 @@ body {
   color: var(--md-on-secondary-container);
   flex-shrink: 0;
   padding: 8px;
-  transition: border-radius var(--md-dur-medium) var(--md-ease);
+  transition: border-radius var(--md-dur-medium) var(--md-ease), background-color var(--md-dur-medium) var(--md-ease);
 }
 
 .link:hover .link-icon { border-radius: 20px; }
 
-.link-icon-img {
+/* Einheitlicher Icon-Stil (Admin > Profil > Icon-Stil).
+   Standard "weiss": jedes Logo als weisse Silhouette, Symbole ebenfalls weiss. */
+.link-icon-img,
+.link-icon .icon-generic {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  border-radius: 4px;
-  filter: brightness(0) invert(1);
-  opacity: 0.9;
-  flex-shrink: 0;
   display: block;
+  flex-shrink: 0;
+  opacity: 0.92;
 }
+.link-icon-img {
+  object-fit: contain;
+  filter: url(#icon-mono-white);
+}
+.link-icon .icon-generic { fill: #fff; }
 
-.link-icon-img.no-filter {
-  filter: none;
-  opacity: 1;
-}
+/* "bunt": Originalfarben auf heller Kachel (so bleiben auch dunkle Logos wie GitHub sichtbar) */
+body.icons-color .link-icon { background: var(--md-inverse-surface); }
+body.icons-color .link-icon-img { filter: none; opacity: 1; }
+body.icons-color .link-icon .icon-generic { fill: var(--md-inverse-primary); opacity: 1; }
 
 /* M3 Title Medium */
 .link-title {
@@ -1213,6 +1225,9 @@ body {
 @media (min-width: 768px) {
   body { align-items: center; }
   .card { width: min(460px, 100%); margin: auto; }
+  /* Songinfos auf dem Desktop zentriert (wie vor dem Redesign) */
+  .np-info { text-align: center; }
+  .np-extra { justify-content: center; }
 }
 
 /* ---------- Querformat / niedrige Bildschirme ---------- */
@@ -1239,3 +1254,6 @@ body {
   .blob, .avatar-ring, .dot, .np-cover, .np-radio-badge { animation: none; }
   .link, .link-icon, .link-arrow, .dialog[open] { transition: none; animation: none; }
 }
+
+/* Unsichtbarer Container fuer SVG-Filter-Definitionen */
+.svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }

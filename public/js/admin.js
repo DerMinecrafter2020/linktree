@@ -8,8 +8,8 @@
   const AVATAR_MAX_PX = 512;
   const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
   const AVATAR_TARGET_BYTES = 80 * 1024;
-  const POPULAR_IDS = ['instagram','tiktok','youtube','github','discord','twitch','spotify','x','linkedin','whatsapp','telegram','snapchat','reddit','facebook','figma','notion'];
-  const DASHBOARD_ICON_IDS = ['plex','jellyfin','emby','navidrome','spotify','youtube','netflix','disneyplus','primevideo','protonmail','nextcloud','homeassistant','pihole','adguard','traefik','nginx','portainer','docker','github','gitlab','discord','telegram','whatsapp','reddit','twitch','instagram','tiktok'];
+  // Haeufige Dashboard Icons als Schnellauswahl im Link-Dialog
+  const DASHBOARD_ICON_IDS = ['instagram','youtube','github','discord','spotify','tiktok','x','linkedin','whatsapp','telegram','twitch','reddit','navidrome','jellyfin','plex','nextcloud'];
   const TAB_TITLES = { links: 'Links', stats: 'Statistik', apikeys: 'API-Keys', profile: 'Profil', music: 'Musik', data: 'Daten', settings: 'Einstellungen', audit: 'Audit-Log' };
 
   const state = { profile: null, links: [], navidrome: null };
@@ -69,6 +69,8 @@
       return `dashboardicon:${cleanName}:${format}:${variant}`.replace(/:$/, '');
     }
     if (/^https?:\/\//i.test(t)) return safeUrl(t) || '🔗';
+    // Klartext-Name wie "instagram" -> Dashboard Icon
+    if (/^[a-z0-9][a-z0-9-]{1,63}$/i.test(t)) return `dashboardicon:${t.toLowerCase()}`;
     return t.slice(0, 8).replace(/[<>"']/g, '');
   }
 
@@ -82,48 +84,36 @@
     toastTimer = setTimeout(() => (elToast.hidden = true), 2500);
   }
 
-  function renderIcon(value, size = 40) {
-    const span = el('span', { class: 'icon', style: `width:${size}px;height:${size}px;font-size:${Math.round(size * 0.55)}px` });
-    if (!value) { span.textContent = '🔗'; return span; }
-    if (/^https?:\/\//.test(value)) {
-      const img = el('img', { src: value, alt: '', referrerpolicy: 'no-referrer' });
-      img.onerror = () => { span.textContent = '🔗'; };
-      span.appendChild(img);
-    } else if (value.startsWith('simpleicon:')) {
-      const id = value.slice(11);
-      if (window.icons?.getInfo?.(id)) {
-        const img = el('img', { src: window.icons.url(id), alt: '' });
-        img.onerror = () => { span.textContent = '🔗'; };
-        span.appendChild(img);
-      } else {
-        span.textContent = '🔗';
-      }
-    } else if (value.startsWith('dashboardicon:')) {
-      const parsed = window.icons?.parse?.(value);
-      if (parsed?.url) {
-        const img = el('img', { src: parsed.url, alt: '', referrerpolicy: 'no-referrer' });
-        img.onerror = () => { span.textContent = '🔗'; };
-        span.appendChild(img);
-      } else {
-        span.textContent = '🔗';
-      }
-    } else {
-      span.textContent = value.toString().slice(0, 8);
-    }
+  // Link-Icons einheitlich aus Dashboard Icons (vom Server aufgeloest: icon_resolved)
+  function renderIcon(resolved, size = 40) {
+    const span = el('span', { class: 'icon', style: `width:${size}px;height:${size}px` });
+    span.appendChild(window.icons.createResolved(resolved, 'icon-img'));
     return span;
   }
 
+  // Vorschau im Link-Dialog: Server loest Icon-Feld + URL + Titel auf (entprellt)
+  let previewTimer;
   function refreshIconPreview() {
-    const input = $('#link-form [name="icon"]');
-    const preview = $('#icon-preview-target');
-    const previewName = $('#icon-preview-name');
-    if (!input || !preview) return;
-    const value = input.value;
-    preview.replaceChildren(renderIcon(value, 32));
-    previewName.textContent = value.startsWith('simpleicon:') ? `simpleicon: ${value.slice(11)}`
-      : value.startsWith('dashboardicon:') ? value
-      : /^https?:\/\//.test(value) ? value
-      : value || 'Emoji / Text';
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(async () => {
+      const form = $('#link-form');
+      const preview = $('#icon-preview-target');
+      const previewName = $('#icon-preview-name');
+      if (!form || !preview) return;
+      try {
+        const resolved = await window.api.resolveIcon({
+          icon: sanitizeIconField(form.icon.value),
+          url: form.url.value,
+          title: form.title.value,
+        });
+        preview.replaceChildren(renderIcon(resolved, 32));
+        previewName.textContent = resolved.type === 'dashboard' ? `Dashboard Icon: ${resolved.name}`
+          : resolved.type === 'image' ? 'Eigene Bild-URL'
+          : `Symbol: ${resolved.name} (kein passendes Logo gefunden)`;
+      } catch {
+        previewName.textContent = '—';
+      }
+    }, 200);
   }
 
   function switchTab(name) {
@@ -273,6 +263,7 @@
         avatar: String(fd.get('avatar') || '').trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 2) || 'CA',
         is_public: fd.get('is_public') === 'on',
         allow_visitor_theme: fd.get('allow_visitor_theme') === 'on',
+        icon_style: fd.get('icon_style') === 'color' ? 'color' : 'white',
         custom_css: safeText(fd.get('custom_css'), 5000),
       };
       const av = state.profile?.avatar_url;
@@ -286,6 +277,8 @@
       try {
         await window.api.saveAdminProfile(profile);
         state.profile = await window.api.getAdminProfile();
+        window.icons.applyStyle(state.profile?.icon_style);
+        renderLinks();
         toast('✅ Profil gespeichert');
       } catch (err) { toast('Fehler: ' + err.message, true); }
     });
@@ -322,6 +315,7 @@
       f.avatar.value = state.profile.avatar || '';
       f.is_public.checked = state.profile.is_public !== false;
       f.allow_visitor_theme.checked = state.profile.allow_visitor_theme !== false;
+      if (f.icon_style) f.icon_style.value = state.profile.icon_style === 'color' ? 'color' : 'white';
       f.custom_css.value = state.profile.custom_css || '';
       updateAvatarPreview(state.profile.avatar_url || null);
     }
@@ -354,7 +348,7 @@
     ].filter(Boolean).join(' · ');
     return el('li', { class: 'link-row', draggable: true, 'data-id': link.id },
       el('span', { class: 'link-handle', title: 'Ziehen zum Sortieren', text: '⠿' }),
-      renderIcon(link.icon, 40),
+      renderIcon(link.icon_resolved, 40),
       el('div', { class: 'link-info' },
         el('div', { class: 'title' },
           el('span', { text: link.title || '' }),
@@ -408,7 +402,7 @@
 
   function buildArchiveRow(link) {
     return el('li', { class: 'link-row archive' },
-      renderIcon(link.icon, 40),
+      renderIcon(link.icon_resolved, 40),
       el('div', { class: 'link-info' },
         el('div', { class: 'title' }, el('span', { text: link.title || '' })),
         el('div', { class: 'sub', text: link.url || '' })
@@ -514,6 +508,8 @@
     const suggested = $('#icon-suggested-list');
     if (!panel || !toggle) return;
 
+    const dashImg = (name) => el('img', { src: window.icons.dashboardUrl(name), alt: '', loading: 'lazy', class: 'icon-img' });
+
     const selectIcon = (value) => {
       input.value = value;
       refreshIconPreview();
@@ -521,96 +517,87 @@
       toggle.classList.remove('active');
     };
 
-    const renderSuggested = () => {
-      suggested.replaceChildren(...POPULAR_IDS.map(id => {
-        const info = window.ICON_LIBRARY?.[id];
-        const btn = el('button', { 'data-icon': `simpleicon:${id}`, title: info?.title || id },
-          el('img', { src: window.icons.url(id), alt: '' }),
-          ' ' + (info?.title || id)
-        );
-        btn.addEventListener('click', () => selectIcon(`simpleicon:${id}`));
-        return btn;
-      }));
-      // Dashboardicons-Vorschläge als separate Gruppe
-      const dashGroup = el('div', { class: 'icon-dash-group' });
-      DASHBOARD_ICON_IDS.slice(0, 8).forEach(name => {
-        const url = window.icons.dashboardUrl(name);
-        const btn = el('button', { 'data-icon': `dashboardicon:${name}`, title: name },
-          el('img', { src: url, alt: '', loading: 'lazy', onerror: function() { this.style.display='none'; } }),
-          ' ' + name
-        );
-        btn.addEventListener('click', () => selectIcon(`dashboardicon:${name}`));
-        dashGroup.appendChild(btn);
-      });
-      if (dashGroup.children.length) {
-        suggested.appendChild(el('div', { class: 'icon-group-label', text: 'Dashboardicons (PNG):' }));
-        suggested.appendChild(dashGroup);
-      }
+    const chip = (name, label = name) => {
+      const btn = el('button', { type: 'button', 'data-icon': `dashboardicon:${name}`, title: name }, dashImg(name), ' ' + label);
+      return btn;
     };
 
-    const renderGrid = (query = '') => {
-      const q = query.toLowerCase();
-      const entries = window.icons?.allEntries?.() || [];
-      let matched = q
-        ? entries.filter(e => e.id.includes(q) || e.title?.toLowerCase().includes(q) || e.matchAlias?.includes(q))
-        : entries.filter(e => !e.matchAlias);
-      const seen = new Set();
-      matched = matched.filter(e => { if (seen.has(e.id)) return false; seen.add(e.id); return true; });
-      if (!matched.length) {
-        grid.replaceChildren(el('div', { class: 'icon-empty', text: `Keine Treffer für „${query}"` }));
+    const renderSuggested = () => {
+      const auto = el('button', { type: 'button', 'data-icon': '', title: 'Icon automatisch anhand von URL und Titel wählen' }, '✨ Automatisch');
+      suggested.replaceChildren(auto, ...DASHBOARD_ICON_IDS.slice(0, 12).map(name => chip(name)));
+    };
+
+    // Suche in allen Dashboard Icons (serverseitig, max. 120 Treffer)
+    let gridRequest = 0;
+    const renderGrid = async (query = '') => {
+      const requestId = ++gridRequest;
+      if (!query) {
+        grid.replaceChildren(el('div', { class: 'icon-empty', text: 'Tippe oben, um in allen Dashboard Icons zu suchen …' }));
         return;
       }
-      grid.replaceChildren(...matched.slice(0, 200).map(e => {
-        const cell = el('div', { class: 'icon-cell', 'data-id': e.id, 'data-tip': e.title },
-          el('img', { src: window.icons.url(e.id), alt: e.title, loading: 'lazy' })
-        );
-        cell.addEventListener('click', () => selectIcon(`simpleicon:${e.id}`));
-        return cell;
-      }));
-      const current = (input.value || '').startsWith('simpleicon:') ? input.value.slice(11) : null;
-      if (current) grid.querySelector(`[data-id="${current}"]`)?.classList.add('selected');
+      try {
+        const { names, total } = await window.api.getDashboardIcons(query);
+        if (requestId !== gridRequest) return; // veraltete Antwort
+        if (!names.length) {
+          grid.replaceChildren(el('div', { class: 'icon-empty', text: `Keine Treffer für „${query}“` }));
+          return;
+        }
+        const current = (input.value || '').startsWith('dashboardicon:') ? input.value.slice(14).split(':')[0] : null;
+        grid.replaceChildren(...names.map(name => {
+          const cell = el('div', { class: 'icon-cell', 'data-id': name, 'data-tip': name }, dashImg(name));
+          if (name === current) cell.classList.add('selected');
+          return cell;
+        }));
+        if (total > names.length) {
+          grid.appendChild(el('div', { class: 'icon-empty', text: `${total - names.length} weitere – Suche genauer eingrenzen` }));
+        }
+      } catch (err) {
+        grid.replaceChildren(el('div', { class: 'icon-empty', text: 'Icons konnten nicht geladen werden.' }));
+      }
     };
 
-    const suggestForCurrent = () => {
-      const guess = window.icons?.detectFromUrl?.($('#link-form [name="url"]').value || '', $('#link-form [name="title"]').value || '');
-      if (!guess || input.value) return;
-      const info = window.ICON_LIBRARY?.[guess];
-      const btn = el('button', { 'data-icon': `simpleicon:${guess}`, style: 'border-color:var(--md-primary);color:var(--md-primary)' },
-        el('img', { src: window.icons.url(guess), alt: '' }),
-        ' ✨ Empfohlen: ' + (info?.title || guess)
-      );
-      btn.addEventListener('click', () => selectIcon(`simpleicon:${guess}`));
-      suggested.insertBefore(btn, suggested.firstChild);
+    // Empfehlung anhand von URL und Titel (gleiche Logik wie auf der Startseite)
+    const suggestForCurrent = async () => {
+      suggested.querySelector('.icon-recommended')?.remove();
+      try {
+        const form = $('#link-form');
+        const resolved = await window.api.resolveIcon({ icon: '', url: form.url.value, title: form.title.value });
+        if (resolved.type !== 'dashboard') return;
+        const btn = chip(resolved.name, `Empfohlen: ${resolved.name}`);
+        btn.classList.add('icon-recommended');
+        suggested.insertBefore(btn, suggested.firstChild);
+      } catch { /* keine Empfehlung */ }
     };
 
     toggle.addEventListener('click', () => {
       panel.hidden = !panel.hidden;
       toggle.classList.toggle('active', !panel.hidden);
-      if (!panel.hidden) { renderGrid(''); refreshIconPreview(); suggestForCurrent(); setTimeout(() => search.focus(), 50); }
-    });
-
-    input.addEventListener('input', () => {
-      refreshIconPreview();
-      const raw = input.value.trim();
-      if (raw && !/^https?:\/\//.test(raw) && !raw.startsWith('simpleicon:') && !raw.startsWith('dashboardicon:') && window.icons?.getInfo?.(raw)) {
-        input.value = `simpleicon:${raw}`;
+      if (!panel.hidden) {
+        renderGrid(search.value.trim().toLowerCase());
         refreshIconPreview();
+        suggestForCurrent();
+        setTimeout(() => search.focus(), 50);
       }
     });
+
+    input.addEventListener('input', refreshIconPreview);
+    // Vorschau aktualisieren, wenn sich URL oder Titel aendern (automatische Erkennung)
+    $('#link-form [name="url"]')?.addEventListener('input', refreshIconPreview);
+    $('#link-form [name="title"]')?.addEventListener('input', refreshIconPreview);
 
     let searchTimer;
     search.addEventListener('input', () => {
       clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => renderGrid(search.value.trim().toLowerCase()), 120);
+      searchTimer = setTimeout(() => renderGrid(search.value.trim().toLowerCase()), 200);
     });
 
     grid.addEventListener('click', e => {
       const id = e.target.closest('.icon-cell')?.dataset?.id;
-      if (id) selectIcon(`simpleicon:${id}`);
+      if (id) selectIcon(`dashboardicon:${id}`);
     });
     suggested.addEventListener('click', e => {
-      const icon = e.target.closest('button[data-icon]')?.dataset?.icon;
-      if (icon) selectIcon(icon);
+      const btn = e.target.closest('button[data-icon]');
+      if (btn) selectIcon(btn.dataset.icon);
     });
 
     renderSuggested();
@@ -1885,6 +1872,7 @@
       window.api.getAdminLinks(),
       window.api.getAdminLinkCategories(),
     ]);
+    window.icons.applyStyle(state.profile?.icon_style);
     renderProfile();
     renderLinks();
   }

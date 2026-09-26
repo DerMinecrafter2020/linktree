@@ -19,6 +19,14 @@
   <link rel="stylesheet" href="/admin.css" />
 </head>
 <body>
+  <!-- SVG-Filter fuer den weissen Icon-Stil: farbige/dunkle Teile -> weiss, weisse Teile -> durchsichtig
+       (so bleiben Motive in Logos wie Instagram als Aussparung erkennbar) -->
+  <svg class="svg-defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <filter id="icon-mono-white" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  -0.3333 -0.3333 -0.3333 1 0" />
+      <feComponentTransfer><feFuncA type="linear" slope="4" intercept="0" /></feComponentTransfer>
+    </filter>
+  </svg>
 
   <div id="app" class="app">
     <aside class="sidebar">
@@ -147,6 +155,13 @@
           <label class="row">
             <input name="allow_visitor_theme" type="checkbox" checked />
             <span>Besucher dürfen Theme wechseln</span>
+          </label>
+          <label>
+            <span>Icon-Stil der Links</span>
+            <select name="icon_style">
+              <option value="white">Weiß – alle Logos einheitlich weiß</option>
+              <option value="color">Bunt – Logos in Originalfarben</option>
+            </select>
           </label>
           <label>
             <span>Custom CSS (optional, max. 5000 Zeichen)</span>
@@ -539,20 +554,20 @@
         <input name="display_url" type="text" placeholder="cornyriegel.de/Appname" />
       </label>
       <label>
-        <span>Icon (Emoji, Bild-URL oder Marken-Name)</span>
+        <span>Icon (leer = automatisch passend zur URL, Dashboard-Icon-Name oder Bild-URL)</span>
         <div class="icon-picker">
-          <input name="icon" type="text" placeholder="🔗 / https://… / instagram" autocomplete="off" />
+          <input name="icon" type="text" placeholder="leer = automatisch · instagram · https://…" autocomplete="off" />
           <button type="button" id="icon-picker-toggle" class="icon-picker-btn" title="Icon auswählen">🎨</button>
         </div>
         <div id="icon-picker-panel" class="icon-picker-panel" hidden>
-          <input type="text" id="icon-search" class="icon-search" placeholder="Suche: instagram, github, youtube …" />
+          <input type="text" id="icon-search" class="icon-search" placeholder="In Dashboard Icons suchen: instagram, jellyfin …" />
           <div class="icon-preview">
             <span class="icon-preview-label">Vorschau:</span>
             <span id="icon-preview-target" class="icon-preview-target"></span>
             <code id="icon-preview-name" class="icon-preview-name">—</code>
           </div>
           <div id="icon-grid" class="icon-grid">
-            <div class="icon-empty">Tippe oben, um Icons zu suchen …</div>
+            <div class="icon-empty">Tippe oben, um in allen Dashboard Icons zu suchen …</div>
           </div>
           <div class="icon-suggested">
             <span>Vorschläge:</span>

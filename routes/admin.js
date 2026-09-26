@@ -14,6 +14,7 @@ const bcrypt = require('bcrypt');
 const backup = require('../lib/backup');
 const audit = require('../lib/audit');
 const alert = require('../lib/alert');
+const icons = require('../lib/icons');
 
 function generateApiKey() {
   return require('crypto').randomBytes(32).toString('hex');
@@ -74,6 +75,7 @@ router.post('/profile', async (req, res, next) => {
     const customCss = req.body.custom_css !== undefined ? String(req.body.custom_css || '').slice(0, 5000) : undefined;
     const impressumText = req.body.impressum_text !== undefined ? String(req.body.impressum_text || '').slice(0, 10000) : undefined;
     const datenschutzText = req.body.datenschutz_text !== undefined ? String(req.body.datenschutz_text || '').slice(0, 10000) : undefined;
+    const iconStyle = ['white', 'color'].includes(req.body.icon_style) ? req.body.icon_style : undefined;
 
     const updates = [
       'name = EXCLUDED.name',
@@ -112,6 +114,13 @@ router.post('/profile', async (req, res, next) => {
       extraCols.push('datenschutz_text');
       extraVals.push('$' + idx++);
     }
+
+    if (iconStyle !== undefined) {
+      updates.splice(-1, 0, `icon_style = EXCLUDED.icon_style`);
+      values.push(iconStyle);
+      extraCols.push('icon_style');
+      extraVals.push('$' + idx++);
+    }
     
     const extraColsStr = extraCols.length ? ', ' + extraCols.join(', ') : '';
     const extraValsStr = extraVals.length ? ', ' + extraVals.join(', ') : '';
@@ -141,11 +150,39 @@ router.get('/links', async (req, res, next) => {
       LEFT JOIN link_categories c ON c.id = l.category_id
       ORDER BY c.position ASC NULLS FIRST, c.name ASC, l.position ASC, l.created_at ASC
     `);
-    const safe = rows.map(r => ({ ...r, password_hash: undefined }));
+    const safe = rows.map(r => ({ ...r, password_hash: undefined, icon_resolved: icons.resolveIcon(r) }));
     res.json({ ok: true, data: safe });
   } catch (err) {
     next(err);
   }
+});
+
+// ---------- Icons (Dashboard Icons) ----------
+// Namenssuche fuer die Icon-Auswahl im Link-Dialog
+router.get('/icons/dashboard', async (req, res, next) => {
+  try {
+    await icons.ensureLoaded();
+    const q = String(req.query.q || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40);
+    const all = icons.listNames();
+    const matches = q ? all.filter(n => n.includes(q)) : all;
+    // exakter Treffer zuerst, dann Treffer am Wortanfang, dann alphabetisch
+    const rank = (n) => (n === q ? 0 : n.startsWith(q) ? 1 : 2);
+    matches.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+    res.json({ ok: true, data: { total: matches.length, names: matches.slice(0, 120) } });
+  } catch (err) { next(err); }
+});
+
+// Vorschau: welches Icon ergibt sich aus Icon-Feld, URL und Titel?
+router.get('/icons/resolve', async (req, res, next) => {
+  try {
+    await icons.ensureLoaded();
+    const link = {
+      icon: v.sanitizeIconField(String(req.query.icon || '')),
+      url: String(req.query.url || '').slice(0, 500),
+      title: v.safeText(String(req.query.title || ''), 80),
+    };
+    res.json({ ok: true, data: icons.resolveIcon(link) });
+  } catch (err) { next(err); }
 });
 
 // ---------- QR-Codes ----------

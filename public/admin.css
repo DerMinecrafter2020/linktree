@@ -521,7 +521,24 @@ body.admin-locked #admin-status-block * {
   overflow: hidden;
   flex-shrink: 0;
 }
-.link-row .icon img { width: 70%; height: 70%; object-fit: contain; }
+.link-row .icon img,
+.link-row .icon .icon-generic { width: 60%; height: 60%; object-fit: contain; }
+.icon-preview-target .icon { width: 40px !important; height: 40px !important; }
+.icon-preview-target .icon img,
+.icon-preview-target .icon .icon-generic { width: 60%; height: 60%; }
+
+/* Einheitlicher Icon-Stil wie auf der Startseite (Profil > Icon-Stil):
+   "weiss" = alle Logos als weisse Silhouette, "bunt" = Originalfarben auf heller Kachel */
+.icon-img { object-fit: contain; filter: url(#icon-mono-white); opacity: 0.92; }
+.icon-generic { fill: #fff; opacity: 0.92; }
+.link-row .icon,
+.icon-preview-target .icon { display: inline-flex; align-items: center; justify-content: center; border-radius: var(--md-shape-md); background: var(--md-secondary-container); }
+body.icons-color .icon-img { filter: none; opacity: 1; }
+body.icons-color .icon-generic { fill: var(--md-inverse-primary); opacity: 1; }
+body.icons-color .link-row .icon,
+body.icons-color .icon-preview-target .icon,
+body.icons-color .icon-cell { background: var(--md-inverse-surface); }
+.icon-recommended { border-color: var(--md-primary) !important; color: var(--md-primary) !important; }
 
 .link-info { min-width: 0; }
 /* M3 Title Medium */
@@ -1144,8 +1161,8 @@ input[type="checkbox"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: clamp(84px, 25vw, 112px);
-  height: clamp(84px, 25vw, 112px);
+  width: clamp(85px, 25vw, 120px);
+  height: clamp(85px, 25vw, 120px);
 }
 
 .np-turntable-base {
@@ -1159,10 +1176,10 @@ input[type="checkbox"] {
 
 .np-cover {
   position: absolute;
-  top: 6%;
-  left: 6%;
-  width: 88%;
-  height: 88%;
+  top: 5%;
+  left: 5%;
+  width: 90%;
+  height: 90%;
   border-radius: 50%;
   background:
     radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.10), transparent 45%),
@@ -1196,11 +1213,12 @@ input[type="checkbox"] {
 .np-cover::after {
   content: '';
   position: absolute;
-  width: 16%;
-  height: 16%;
+  width: 15%;
+  height: 15%;
   border-radius: 50%;
-  background: var(--md-primary);
-  box-shadow: 0 0 0 3px var(--md-primary-container);
+  /* kleine Spindel wie vorher, nur in Theme-Farben: verdeckt das Cover kaum */
+  background: radial-gradient(circle at 35% 35%, var(--md-on-surface), var(--md-outline));
+  box-shadow: inset 0 0 3px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.4);
   pointer-events: none;
   z-index: 2;
 }
@@ -1511,6 +1529,45 @@ input[type="checkbox"] {
 }
 
 /* ---------- Admin-Now-Playing ---------- */
+/* Live-Vorschau im Admin: alle Infos immer sichtbar (auf der Startseite erscheinen
+   Album/Extras erst beim Hovern – hier nicht, damit man alles auf einen Blick sieht) */
+#admin-np-player .np-album,
+#admin-np-player .np-extra {
+  max-height: none;
+  opacity: 1;
+  margin-top: 4px;
+  pointer-events: auto;
+}
+#admin-np-player .np-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+/* Status als kleiner Chip (Element hat die Klasse np-badge) */
+#admin-np-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  margin-bottom: 4px;
+  padding: 0 10px;
+  border-radius: var(--md-shape-sm);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+}
+#admin-np-player.playing #admin-np-badge {
+  background: var(--md-success-container);
+  color: var(--md-on-success-container);
+}
+#admin-np-player.paused #admin-np-badge {
+  background: var(--md-warning-container);
+  color: var(--md-on-warning-container);
+}
+
 .admin-np-info {
   display: flex;
   flex-direction: column;
@@ -1588,3 +1645,6 @@ input[type="checkbox"] {
 @media (prefers-reduced-motion: reduce) {
   .brand-dot, .np-cover, .admin-np-radio-badge, .toast, .dialog[open] { animation: none; }
 }
+
+/* Unsichtbarer Container fuer SVG-Filter-Definitionen */
+.svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }

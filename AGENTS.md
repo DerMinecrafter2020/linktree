@@ -45,6 +45,7 @@ lib/
   crypto.js               AES-256-GCM encrypt/decrypt/isEncrypted (Key: NAVIDROME_ENCRYPTION_KEY)
   totp.js                 TOTP-Helfer (otplib v13, ±30 s, Replay-Schutz über afterTimeStep)
   validators.js           Serverseitige Eingabeprüfung (safeText, safeUrl, validateEmail, …)
+  icons.js                Link-Icons: Dashboard-Icons-Namensliste (Cache), Erkennung, icon_resolved
   db.js                   pg-Pool, query(), transaction()
   setup.js                Erkennung/Durchführung des Initial-Setups, schreibt .env
   audit.js                Audit-Log für Admin-Aktionen
@@ -63,6 +64,7 @@ public/                   Statische Dateien (werden 1:1 ausgeliefert!)
   index.html, admin.html, login.html, setup.html, changelog.html, impressum.html, datenschutz.html …
   js/api-client.js        window.api – einziger Weg, wie das Frontend das Backend aufruft
   js/app.js               Öffentliche Seite
+  js/icons.js             Icon-Darstellung (createResolved, Material-Symbole, Stil weiß/bunt)
   js/admin.js             Admin-Oberfläche (eine große IIFE)
   js/login.js             Login-Seite inkl. TOTP/WebAuthn
   js/sw-register*.js      Service-Worker-Registrierung
@@ -142,11 +144,19 @@ Vorlage: `.env.example`. Die `.env` enthält Secrets → **niemals committen, lo
 Health-Check → Helmet/CSP + Security-Header → Schutz vor direktem Abruf von `admin.html` /
 `index.html` (auch kodierte Varianten) → CSRF-Prüfung für `/api` (nicht GET/HEAD/OPTIONS; volle
 Origin inkl. Port) → Body-Parser (1 MB) → Rate-Limits → *(nach Setup-Prüfung)* `/sw.js`-Route →
-`express.static(public, { index: false })` → Session → Limits für Public/Admin →
+`express.static(public, { index: false })` → Session → Limits für Public (120/min je IP für `/api`) und
+Admin (600 je 15 min) →
 `Cache-Control: no-store` für `/api/admin` + `/api/login` → Router → dynamische Startseite `/` →
 404 → Error-Handler.
 **Wichtig:** Kein `express.static` vor den dynamischen Routen `/` und `/sw.js` einbinden, sonst
 greifen „Profil nicht öffentlich“, Custom CSS, OG-Tags und die Cache-Header des Service Workers nicht.
+Ein Aufruf des Admin-Bereichs erzeugt ~18 API-Anfragen – Limits nicht unter diese Größenordnung
+senken (bei 60/15 min wurde man nach wenigen Klicks ausgesperrt). Der Brute-Force-Schutz liegt bei
+den Login-Endpunkten, nicht beim Admin-Limit.
+
+**Service Worker (`public/js/sw-register.js`):** Die Seite lädt nur bei einem **Update** neu (es gab
+beim Laden schon einen aktiven Service Worker), nicht beim ersten Installieren – sonst wird jede Seite
+beim ersten Besuch doppelt geladen.
 
 **Login-Ablauf (`routes/public.js`)**
 `POST /api/login` → Passwort prüfen (oder passwortlos, wenn WebAuthn-Key vorhanden) → ist 2FA
@@ -162,6 +172,21 @@ Router.
 `/api/links` und `/api/public/links`, kein Kurzlink `/go/:slug`, nicht in Sitemap oder
 Discord-Klickmeldung) – nur über `POST /api/links/:id/unlock` nach Passwortprüfung
 (eigenes Rate-Limit, Versuche werden sofort gezählt).
+
+**Link-Icons (`lib/icons.js`):** Alle Logos kommen aus
+[Dashboard Icons](https://github.com/homarr-labs/dashboard-icons), ausgeliefert über den eigenen
+Proxy `/api/icon/dashboardicon/<name>/<format>`. Die Namensliste (`tree.json`) wird beim Start im
+Hintergrund geladen und 24 h gecacht. Die API liefert zu jedem Link `icon_resolved`:
+`dashboard` (Logo), `image` (eigene Bild-URL) oder `generic` (Material-Symbol `link`/`mail`/`phone`).
+Reihenfolge: gewähltes `dashboardicon:…` → altes `simpleicon:…` (gleichnamiges Dashboard Icon) →
+Bild-URL → Erkennung aus Hostname/Titel → Symbol. `mailto:`/`tel:` bekommen immer das Symbol.
+Gespeicherte Icon-Werte werden **nie** umgeschrieben, nur bei der Ausgabe aufgelöst.
+Stil pro Seite über `profile.icon_style` (`white`|`color`) → Klasse `icons-white`/`icons-color` am
+`<body>`. „Weiß“ nutzt den SVG-Filter `#icon-mono-white` (in `index.html` und `admin.html`):
+farbige/dunkle Pixel → weiß, weiße Pixel → transparent. Logos mit farbigem Motiv auf dunkler
+Kachel (z. B. Plex) werden sonst zur weißen Fläche – dafür in `WHITE_STYLE_VARIANTS`
+(`lib/icons.js`) die `-light`-Variante eintragen und im weißen Stil per Screenshot prüfen.
+Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
 
 **Profil nicht öffentlich (`profile.is_public = false`):** `/`, `/api/profile`, `/api/links` und
 `/api/links/categories` liefern dann nur für eingeloggte Admins (Vorschau) Inhalte.

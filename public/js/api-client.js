@@ -71,6 +71,10 @@
     updateLinkCategory: (id, cat) => patch(`/admin/link-categories/${id}`, cat),
     deleteLinkCategory: (id) => del(`/admin/link-categories/${id}`),
 
+    getDashboardIcons: (q = '') => get(`/admin/icons/dashboard?q=${encodeURIComponent(q)}`),
+    resolveIcon: ({ icon = '', url = '', title = '' }) =>
+      get(`/admin/icons/resolve?icon=${encodeURIComponent(icon)}&url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`),
+
     getAdminProfile: () => get('/admin/profile'),
     saveAdminProfile: (profile) => post('/admin/profile', profile),
 

@@ -279,10 +279,12 @@ async function finalizeApp() {
     });
     app.use('/api', publicLimiter);
 
-    // Admin-Rate-Limiting (strenger Brute-Force-Schutz)
+    // Admin-Rate-Limiting (bremst automatisierten Missbrauch, z. B. mit uebernommener Session)
+    // Admin-API ist nur mit Login erreichbar; der Schutz gegen Passwort-Raten liegt bei /api/login.
+    // Ein Seitenaufruf des Admins braucht ~18 Anfragen – 60 waren nach wenigen Klicks aufgebraucht.
     const adminLimiter = rateLimit({
       windowMs: 15 * 60 * 1000,
-      max: 60,
+      max: 600,
       standardHeaders: true,
       legacyHeaders: false,
       keyGenerator: (req) => req.ip || req.socket?.remoteAddress || 'unknown',
@@ -571,6 +573,9 @@ async function finalizeApp() {
     // Discord Webhook initialisieren
     const { initDiscordWebhook } = require('./lib/discord');
     initDiscordWebhook();
+
+    // Namensliste der Dashboard Icons im Hintergrund laden (Icon-Erkennung fuer Links)
+    require('./lib/icons').ensureLoaded();
   }
 }
 
