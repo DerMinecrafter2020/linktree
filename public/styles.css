@@ -1063,6 +1063,8 @@ body {
   border: 2px solid var(--md-primary);
   padding: 0 15px;
 }
+/* Textfelder zeigen den Fokus ueber ihren Rahmen – kein zusaetzlicher Fokusring */
+.form input:focus-visible { outline: none; }
 .form-actions {
   display: flex;
   gap: 8px;

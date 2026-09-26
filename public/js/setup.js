@@ -40,7 +40,7 @@
       const pct = (score / 5) * 100;
       strengthBar.style.width = pct + '%';
       strengthBar.style.background =
-        score <= 2 ? '#ff4d6d' : score === 3 ? '#ffcc00' : score === 4 ? '#00f0ff' : '#00ff88';
+        score <= 2 ? 'var(--md-error)' : score === 3 ? 'var(--md-warning)' : score === 4 ? 'var(--md-primary)' : 'var(--md-success)';
     }
   }
   passwordInput?.addEventListener('input', updatePasswordStrength);

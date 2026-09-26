@@ -575,7 +575,7 @@
       const guess = window.icons?.detectFromUrl?.($('#link-form [name="url"]').value || '', $('#link-form [name="title"]').value || '');
       if (!guess || input.value) return;
       const info = window.ICON_LIBRARY?.[guess];
-      const btn = el('button', { 'data-icon': `simpleicon:${guess}`, style: 'border-color:var(--neon-cyan);color:var(--neon-cyan)' },
+      const btn = el('button', { 'data-icon': `simpleicon:${guess}`, style: 'border-color:var(--md-primary);color:var(--md-primary)' },
         el('img', { src: window.icons.url(guess), alt: '' }),
         ' ✨ Empfohlen: ' + (info?.title || guess)
       );
@@ -835,8 +835,14 @@
       }
       const max = Math.max(1, ...counts);
 
+      // Farben aus den M3-Farbrollen (admin.css) lesen
+      const css = getComputedStyle(document.documentElement);
+      const color = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
+      const primary = color('--md-primary', '#d0bcff');
+      const primaryContainer = color('--md-primary-container', '#4f378b');
+
       // Gitter
-      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.strokeStyle = color('--md-outline-variant', '#49454f');
       ctx.lineWidth = 1;
       for (let i = 0; i <= 4; i++) {
         const y = h - 30 - (h - 50) * (i / 4);
@@ -855,14 +861,14 @@
         const barH = (c / max) * (h - 50);
         const y = h - 30 - barH;
         const grad = ctx.createLinearGradient(0, y, 0, h - 30);
-        grad.addColorStop(0, 'rgba(0, 240, 255, 0.9)');
-        grad.addColorStop(1, 'rgba(138, 92, 255, 0.4)');
+        grad.addColorStop(0, primary);
+        grad.addColorStop(1, primaryContainer);
         ctx.fillStyle = grad;
         ctx.fillRect(x, y, Math.max(1, barW), barH);
       });
 
       // Achsenbeschriftung
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fillStyle = color('--md-on-surface-variant', '#cac4d0');
       ctx.font = '10px "JetBrains Mono", monospace';
       ctx.textAlign = 'center';
       const step = days > 14 ? Math.ceil(days / 7) : 1;
@@ -1468,12 +1474,14 @@
         
         if (totp_enabled) {
           badge.textContent = 'Aktiv';
-          badge.style.background = 'var(--accent)';
+          badge.classList.remove('off');
+          badge.classList.add('on');
           setupBtn.hidden = true;
           disableBtn.hidden = false;
         } else {
           badge.textContent = 'Inaktiv';
-          badge.style.background = '#666';
+          badge.classList.remove('on');
+          badge.classList.add('off');
           setupBtn.hidden = false;
           disableBtn.hidden = true;
         }
@@ -2065,7 +2073,7 @@
 
   let appInitialized = false;
   document.addEventListener('DOMContentLoaded', async () => {
-    if (location.protocol === 'file:') console.warn('%c[Security]%c App läuft lokal über file://. Für Produktion über HTTPS hosten.', 'color:#ff2bd6;font-weight:bold', 'color:inherit');
+    if (location.protocol === 'file:') console.warn('%c[Security]%c App läuft lokal über file://. Für Produktion über HTTPS hosten.', 'color:#f2b8b5;font-weight:bold', 'color:inherit');
 
     const ok = await checkSession();
     if (!ok) return;

@@ -8,7 +8,7 @@ KI-Coding-Agenten (Claude Code, Codex, Cursor, Copilot …) und an Menschen, die
 
 ## 1. Projektüberblick
 
-OpenWeb ist eine selbst gehostete **Link-in-Bio-Seite** (à la Linktree) im Dark-&-Neon-Stil mit
+OpenWeb ist eine selbst gehostete **Link-in-Bio-Seite** (à la Linktree) im **Material-3-Design** (dunkel) mit
 Admin-Oberfläche, Klick-Statistiken und Musik-Integration („Now Playing“ über Navidrome/Subsonic
 oder Music Assistant, inkl. Discord-Webhook und Musik-Verlauf).
 
@@ -208,6 +208,13 @@ Discord-Klickmeldung) – nur über `POST /api/links/:id/unlock` nach Passwortpr
   CommonJS (`require`) im Backend, API-Antworten immer `{ ok: true, data }` bzw.
   `{ ok: false, error }`.
 - Frontend ruft das Backend **nur** über `window.api` (`public/js/api-client.js`) auf.
+- **Design: Material 3 (Dark).** Farben nur über die M3-Farbrollen (`--md-primary`,
+  `--md-surface-container-*`, `--md-on-surface-variant`, `--md-outline` …) – keine festen Hex-Werte
+  in Komponenten oder JavaScript. Definiert in `public/styles.css` (öffentliche Seite inkl. der
+  Themes Dunkel/Midnight/Sunset), `public/admin.css` (Admin + Login) und inline in `setup.html`.
+  Formen über `--md-shape-*`, Hover/Pressed über State Layer (`::before`, 8 %/12 %), Bewegung über
+  `--md-ease*`/`--md-dur-*`. Die alten Variablen (`--neon-*`, `--text-dim`, `--bg-*` …) sind nur
+  noch Aliase für ältere Unterseiten und sollen in neuem Code nicht mehr verwendet werden.
 - Zeilenenden: LF (per `.gitattributes` erzwungen). Keine BOMs (haben schon Migrationen zerstört).
 - **Migrationen:** neue Datei `db/migrations/NNN_beschreibung.sql` mit nächster freier Nummer,
   idempotent schreiben (`IF NOT EXISTS`), bestehende Migrationen nie ändern.
