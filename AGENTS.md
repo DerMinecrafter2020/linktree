@@ -46,6 +46,8 @@ lib/
   totp.js                 TOTP-Helfer (otplib v13, ±30 s, Replay-Schutz über afterTimeStep)
   validators.js           Serverseitige Eingabeprüfung (safeText, safeUrl, validateEmail, …)
   icons.js                Link-Icons: Dashboard-Icons-Namensliste (Cache), Erkennung, icon_resolved
+  metrics.js              Ressourcenmonitor: CPU, RAM, Event-Loop, Anfragen, DB-Pool (Verlauf 1 h im RAM)
+  shortcache.js           Kurzzeit-Cache mit geteilten Abrufen (z. B. Now Playing, 2,5 s)
   db.js                   pg-Pool, query(), transaction()
   setup.js                Erkennung/Durchführung des Initial-Setups, schreibt .env
   audit.js                Audit-Log für Admin-Aktionen
@@ -141,7 +143,7 @@ Vorlage: `.env.example`. Die `.env` enthält Secrets → **niemals committen, lo
    Wartung täglich 03:00, Musik-Verlauf alle 15 s, Discord-Polling alle 10 s).
 
 **Middleware-Reihenfolge (relevant für Sicherheit)**
-Health-Check → Helmet/CSP + Security-Header → Schutz vor direktem Abruf von `admin.html` /
+Health-Check → Metrik-Middleware → Helmet/CSP + Security-Header → Schutz vor direktem Abruf von `admin.html` /
 `index.html` (auch kodierte Varianten) → CSRF-Prüfung für `/api` (nicht GET/HEAD/OPTIONS; volle
 Origin inkl. Port) → Body-Parser (1 MB) → Rate-Limits → *(nach Setup-Prüfung)* `/sw.js`-Route →
 `express.static(public, { index: false })` → Session → Limits für Public (120/min je IP für `/api`) und
@@ -187,6 +189,21 @@ farbige/dunkle Pixel → weiß, weiße Pixel → transparent. Logos mit farbigem
 Kachel (z. B. Plex) werden sonst zur weißen Fläche – dafür in `WHITE_STYLE_VARIANTS`
 (`lib/icons.js`) die `-light`-Variante eintragen und im weißen Stil per Screenshot prüfen.
 Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
+
+**Performance & Caching (nicht aushebeln):**
+- HTML-Seiten mit eigenen CSS/JS-Verweisen über `sendHtml()` (bzw. `versionAssets()` beim
+  Startseiten-Template) ausliefern: hängt `?v=<Version>` an, solche Dateien bekommen
+  `Cache-Control: max-age=1 Jahr, immutable`. Neue Seiten also **nicht** per `res.sendFile`.
+- „Now Playing“ (`lib/navidrome.js`, `lib/musicassistant.js`) ist per `shortCache` 2,5 s gecacht
+  und wird von allen Besuchern geteilt; das Frontend fragt nur bei sichtbarem Tab alle 3 s nach.
+- Icon-Proxy `/api/icon/dashboardicon` cacht Logos 7 Tage im Speicher (max. 400) und zählt
+  nicht zum API-Limit (eigenes Limit 600/min) – sonst verbrauchen viele Links das Kontingent.
+- Admin: Daten erst laden, wenn sie gebraucht werden (Vorschau-iframe, Icon-Vorschläge,
+  Musik-Vorschau und Monitor nur bei offenem Tab).
+
+**Ressourcenmonitor (`lib/metrics.js`, Admin-Tab „Monitor“):** Messpunkt alle 10 s, 360 Punkte
+(1 h) nur im Arbeitsspeicher; `GET /api/admin/metrics?since=<ts>` liefert nur neue Punkte. Die
+Middleware zählt jede Anfrage (Dauer, 5xx) – sie muss vor allen Routen stehen.
 
 **Profil nicht öffentlich (`profile.is_public = false`):** `/`, `/api/profile`, `/api/links` und
 `/api/links/categories` liefern dann nur für eingeloggte Admins (Vorschau) Inhalte.

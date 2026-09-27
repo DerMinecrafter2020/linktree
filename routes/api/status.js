@@ -7,8 +7,7 @@ const router = express.Router();
 router.get('/now-playing', async (req, res, next) => {
   try {
     // 1. Fetch from both
-    const maTrack = await getMAPlaying();
-    const ndTrack = await getNavidromePlaying();
+    const [maTrack, ndTrack] = await Promise.all([getMAPlaying(), getNavidromePlaying()]);
 
     // 2. Determine which one is actively playing
     if (maTrack && maTrack.playing && !maTrack.paused) {

@@ -311,6 +311,10 @@ code {
 .side-link:hover { color: var(--md-on-surface); text-decoration: none; }
 
 .content { padding: clamp(18px, 3vw, 32px) clamp(16px, 4vw, 40px); max-width: 1000px; width: 100%; }
+/* Grosse Bildschirme: mehr Breite nutzen statt leerer Flaeche rechts */
+@media (min-width: 1400px) {
+  .content { max-width: 1320px; }
+}
 
 .content-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -1648,3 +1652,36 @@ input[type="checkbox"] {
 
 /* Unsichtbarer Container fuer SVG-Filter-Definitionen */
 .svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* ---------- Ressourcenmonitor ---------- */
+.monitor-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.monitor-head .badge { flex-shrink: 0; margin-top: 4px; }
+.monitor-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr));
+  gap: 12px;
+}
+.monitor-card { min-width: 0; }
+/* Handy: zwei Kacheln nebeneinander statt einer langen Liste */
+@media (max-width: 540px) {
+  .monitor-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .monitor-card { padding: 12px; }
+  .monitor-card strong { font-size: 20px !important; line-height: 28px !important; }
+}
+.monitor-card strong { font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums; }
+.monitor-card small { display: block; margin-top: 2px; overflow-wrap: anywhere; }
+.monitor-card.warn { background: color-mix(in srgb, var(--md-warning-container) 45%, var(--md-surface-container)); }
+.monitor-card.warn strong { color: var(--md-warning); }
+.monitor-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.monitor-charts .card-block { margin-bottom: 0; }
+.monitor-chart h4 { font-size: 14px; font-weight: 500; letter-spacing: 0.1px; margin-bottom: 8px; color: var(--md-on-surface); }
+.monitor-chart canvas { display: block; width: 100%; height: 140px; }
+.monitor-details { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 8px 24px; }
+.monitor-details li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--md-outline-variant); font-size: 14px; }
+.monitor-details li span { color: var(--md-on-surface-variant); }
+.monitor-details li strong { font-weight: 500; text-align: right; overflow-wrap: anywhere; }

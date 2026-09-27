@@ -24,6 +24,10 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" id="favicon" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icons/icon.svg" />
+  <!-- Hauptschrift (Space Grotesk 400/500/600, lateinisch) sofort laden statt erst nach fonts.css -->
+  <link rel="preload" href="/fonts/font-14.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/font-17.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/font-20.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/fonts.css" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
@@ -105,7 +109,7 @@
 
     <footer class="footer">
       <span class="dot"></span>
-      <span>made with <span class="heart">♥</span> · <span class="year"></span> · <a href="/changelog.html" class="footer-link">Changelog</a> · v3.0.12</span>
+      <span>made with <span class="heart">♥</span> · <span class="year"></span> · <a href="/changelog.html" class="footer-link">Changelog</a> · v3.1.0</span>
       <div style="margin-top: 10px; font-size: 0.85em; display: flex; gap: 15px; justify-content: center;">
         <a href="/impressum.html" class="footer-link">Impressum</a>
         <a href="/datenschutz.html" class="footer-link">Datenschutz</a>

@@ -71,6 +71,7 @@
     updateLinkCategory: (id, cat) => patch(`/admin/link-categories/${id}`, cat),
     deleteLinkCategory: (id) => del(`/admin/link-categories/${id}`),
 
+    getMetrics: (since = 0) => get(`/admin/metrics${since ? `?since=${encodeURIComponent(since)}` : ''}`),
     getDashboardIcons: (q = '') => get(`/admin/icons/dashboard?q=${encodeURIComponent(q)}`),
     resolveIcon: ({ icon = '', url = '', title = '' }) =>
       get(`/admin/icons/resolve?icon=${encodeURIComponent(icon)}&url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`),

@@ -10,7 +10,7 @@
   const AVATAR_TARGET_BYTES = 80 * 1024;
   // Haeufige Dashboard Icons als Schnellauswahl im Link-Dialog
   const DASHBOARD_ICON_IDS = ['instagram','youtube','github','discord','spotify','tiktok','x','linkedin','whatsapp','telegram','twitch','reddit','navidrome','jellyfin','plex','nextcloud'];
-  const TAB_TITLES = { links: 'Links', stats: 'Statistik', apikeys: 'API-Keys', profile: 'Profil', music: 'Musik', data: 'Daten', settings: 'Einstellungen', audit: 'Audit-Log' };
+  const TAB_TITLES = { links: 'Links', stats: 'Statistik', apikeys: 'API-Keys', profile: 'Profil', music: 'Musik', data: 'Daten', settings: 'Einstellungen', audit: 'Audit-Log', monitor: 'Monitor' };
 
   const state = { profile: null, links: [], navidrome: null };
   const TAB_STORAGE_KEY = 'openweb-admin-active-tab';
@@ -122,6 +122,7 @@
     $$('.tab').forEach(t => t.hidden = t.dataset.tab !== name);
     $('#tab-title').textContent = TAB_TITLES[name];
     sessionStorage.setItem(TAB_STORAGE_KEY, name);
+    document.dispatchEvent(new CustomEvent('admin-tab-change', { detail: name }));
   }
 
   function bindTabs() {
@@ -569,10 +570,13 @@
       } catch { /* keine Empfehlung */ }
     };
 
+    let suggestionsRendered = false;
     toggle.addEventListener('click', () => {
       panel.hidden = !panel.hidden;
       toggle.classList.toggle('active', !panel.hidden);
       if (!panel.hidden) {
+        // Vorschlags-Logos erst beim ersten Oeffnen laden (nicht schon beim Seitenstart)
+        if (!suggestionsRendered) { renderSuggested(); suggestionsRendered = true; }
         renderGrid(search.value.trim().toLowerCase());
         refreshIconPreview();
         suggestForCurrent();
@@ -599,8 +603,6 @@
       const btn = e.target.closest('button[data-icon]');
       if (btn) selectIcon(btn.dataset.icon);
     });
-
-    renderSuggested();
   }
 
   function setMultiSelectValues(select, values) {
@@ -1176,10 +1178,10 @@
   };
 
   function formatBytes(bytes) {
-    if (bytes === 0) return '0 B';
+    if (!bytes) return '0 B';
     const k = 1024;
-    const sizes = ['B', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.min(sizes.length - 1, Math.floor(Math.log(bytes) / Math.log(k)));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
 
@@ -2042,11 +2044,16 @@
       isPolling = false;
     }
 
-    tick();
+    // Nur abfragen, solange der Musik-Tab offen und das Fenster sichtbar ist
+    // (sonst liefen dauerhaft 20 Anfragen pro Minute, nur weil der Admin offen ist)
+    const musicVisible = () => !document.hidden && !$('.tab[data-tab="music"]')?.hidden;
+    if (musicVisible()) tick();
     if (progressTimer) clearInterval(progressTimer);
     progressTimer = setInterval(updateProgress, 1000);
     if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(tick, 3000);
+    pollTimer = setInterval(() => { if (musicVisible()) tick(); }, 3000);
+    document.addEventListener('admin-tab-change', (e) => { if (e.detail === 'music') tick(); });
+    document.addEventListener('visibilitychange', () => { if (musicVisible()) tick(); });
   }
 
   async function initApp() {
@@ -2056,6 +2063,197 @@
     } catch (err) {
       setConnection('err');
       toast('Verbindung fehlgeschlagen: ' + err.message, true);
+    }
+  }
+
+  // ---------- Ressourcenmonitor ----------
+  function bindMonitor() {
+    const cards = $('#monitor-cards');
+    if (!cards) return;
+    const live = $('#monitor-live');
+    let history = [];
+    let info = null;
+    let storage = null;
+    let timer = null;
+    let active = false;
+
+    // Farben aus den M3-Farbrollen (passen sich an das Stylesheet an)
+    const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+    const fmtUptime = (sec) => {
+      const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
+      return d ? `${d} T ${h} h` : h ? `${h} h ${m} min` : `${m} min`;
+    };
+
+    // Einfaches Liniendiagramm (mehrere Reihen, gefuellte Flaeche fuer die erste)
+    function drawChart(canvas, series, { unit = '', min = 0 } = {}) {
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth || 300;
+      const h = canvas.clientHeight || 140;
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, w, h);
+
+      const pad = { l: 48, r: 8, t: 8, b: 20 };
+      const all = series.flatMap(sr => sr.values);
+      const rawMax = Math.max(...all, 0);
+      const max = rawMax <= 0 ? 1 : rawMax * 1.15;
+      const n = Math.max(...series.map(sr => sr.values.length), 2);
+      const x = (i) => pad.l + (i / (n - 1)) * (w - pad.l - pad.r);
+      const y = (v) => pad.t + (1 - (v - min) / (max - min || 1)) * (h - pad.t - pad.b);
+
+      // Hilfslinien + Beschriftung
+      ctx.strokeStyle = css('--md-outline-variant');
+      ctx.fillStyle = css('--md-on-surface-variant');
+      ctx.font = '11px ' + (css('--md-font') || 'sans-serif');
+      ctx.lineWidth = 1;
+      for (let g = 0; g <= 2; g++) {
+        const v = min + ((max - min) * g) / 2;
+        const gy = y(v);
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(w - pad.r, gy); ctx.stroke();
+        ctx.globalAlpha = 1;
+        const label = v >= 100 ? Math.round(v) : Math.round(v * 10) / 10;
+        ctx.fillText(`${label}${unit}`, 4, gy + 4);
+      }
+      ctx.fillText(`vor ${Math.max(1, Math.round((n * 10) / 60))} min`, pad.l, h - 4);
+      const nowLabel = 'jetzt';
+      ctx.fillText(nowLabel, w - pad.r - ctx.measureText(nowLabel).width, h - 4);
+
+      series.forEach((sr, idx) => {
+        const vals = sr.values;
+        if (!vals.length) return;
+        const offset = n - vals.length;
+        ctx.beginPath();
+        vals.forEach((v, i) => { const px = x(i + offset), py = y(v); if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); });
+        ctx.strokeStyle = sr.color;
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+        if (idx === 0) {
+          ctx.lineTo(x(n - 1), y(min));
+          ctx.lineTo(x(offset), y(min));
+          ctx.closePath();
+          ctx.globalAlpha = 0.18;
+          ctx.fillStyle = sr.color;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+      });
+    }
+
+    function card(label, value, sub = '', level = '') {
+      return el('div', { class: `stat-card monitor-card ${level}`.trim() },
+        el('strong', { text: value }),
+        el('span', { text: label }),
+        sub ? el('small', { class: 'hint', text: sub }) : null
+      );
+    }
+
+    function render() {
+      const last = history[history.length - 1];
+      if (!info) return;
+      if (!last) {
+        cards.replaceChildren(el('p', { class: 'hint', text: 'Erste Messung läuft – die Werte erscheinen in wenigen Sekunden.' }));
+        return;
+      }
+      cards.replaceChildren(
+        card('CPU-Last', `${last.cpu.toFixed(1)} %`, `100 % = 1 Kern · ${info.cpuCores} Kerne`, last.cpu > 80 ? 'warn' : ''),
+        card('Arbeitsspeicher', formatBytes(last.rss), `Heap ${formatBytes(last.heapUsed)} von ${formatBytes(info.heapLimit)}`,
+          last.heapUsed / info.heapLimit > 0.8 ? 'warn' : ''),
+        card('Event-Loop', `${last.loopP99Ms.toFixed(1)} ms`, `Verzögerung (99 %), Ø ${last.loopMeanMs.toFixed(1)} ms`, last.loopP99Ms > 100 ? 'warn' : ''),
+        card('Anfragen', `${Math.round(last.reqPerMin)}/min`, `seit Start: ${info.totalsRequests.toLocaleString('de-DE')}`),
+        card('Antwortzeit', `${Math.round(last.respAvgMs)} ms`, `95 % unter ${Math.round(last.respP95Ms)} ms`, last.respP95Ms > 1000 ? 'warn' : ''),
+        card('Serverfehler', `${last.errPerMin}/min`, `seit Start: ${info.totalsErrors}`, last.errPerMin > 0 ? 'warn' : ''),
+        card('DB-Verbindungen', `${last.dbTotal - last.dbIdle} aktiv`, `${last.dbIdle} frei${last.dbWaiting ? ` · ${last.dbWaiting} wartend` : ''}`, last.dbWaiting > 0 ? 'warn' : ''),
+        card('Laufzeit', fmtUptime(info.uptimeSec), `Node ${info.node}`)
+      );
+
+      const primary = css('--md-primary');
+      const tertiary = css('--md-tertiary');
+      drawChart($('#monitor-chart-cpu'), [{ values: history.map(s => s.cpu), color: primary }], { unit: ' %' });
+      drawChart($('#monitor-chart-mem'), [
+        { values: history.map(s => s.rss / 1048576), color: primary },
+        { values: history.map(s => s.heapUsed / 1048576), color: tertiary },
+      ], { unit: ' MB' });
+      drawChart($('#monitor-chart-req'), [
+        { values: history.map(s => s.reqPerMin), color: primary },
+        { values: history.map(s => s.errPerMin), color: css('--md-error') },
+      ]);
+      drawChart($('#monitor-chart-resp'), [
+        { values: history.map(s => s.respAvgMs), color: primary },
+        { values: history.map(s => s.respP95Ms), color: tertiary },
+      ], { unit: ' ms' });
+
+      const details = [
+        ['Prozess', `PID ${info.pid} · ${info.platform}`],
+        ['Node.js', info.node],
+        ['Arbeitsspeicher des Servers', formatBytes(info.systemMemTotal)],
+        ['Heap-Grenze', formatBytes(info.heapLimit)],
+      ];
+      if (storage) {
+        details.push(
+          ['Datenbankgröße', formatBytes(storage.dbBytes)],
+          ['Aktive Sitzungen', String(storage.sessions)],
+          ['Gespeicherte Klicks', storage.clicks.toLocaleString('de-DE')],
+          ['Backups', `${storage.backupCount} Dateien · ${formatBytes(storage.backupBytes)}`]
+        );
+      }
+      $('#monitor-details').replaceChildren(...details.map(([k, v]) =>
+        el('li', {}, el('span', { text: k }), el('strong', { text: v }))
+      ));
+    }
+
+    async function load() {
+      try {
+        const since = history.length ? history[history.length - 1].t : 0;
+        const data = await window.api.getMetrics(since);
+        info = { ...data.process, totalsRequests: data.totals.requests, totalsErrors: data.totals.errors };
+        if (data.storage) storage = data.storage;
+        history = since ? history.concat(data.history).slice(-360) : data.history;
+        live.textContent = 'Live';
+        live.className = 'badge on';
+        render();
+      } catch (err) {
+        live.textContent = 'Fehler';
+        live.className = 'badge off';
+      }
+    }
+
+    function startPolling() {
+      if (timer) return;
+      load();
+      timer = setInterval(() => { if (!document.hidden) load(); }, 10000);
+    }
+    function stopPolling() {
+      clearInterval(timer);
+      timer = null;
+      live.textContent = 'Pausiert';
+      live.className = 'badge';
+    }
+
+    document.addEventListener('admin-tab-change', (e) => {
+      active = e.detail === 'monitor';
+      if (active) {
+        // beim Oeffnen einmal alles inkl. Speichergroessen laden, danach nur neue Messpunkte
+        storage = null;
+        history = [];
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    });
+    // Diagramme an neue Breite anpassen (Drehen, Fenstergroesse)
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => { if (active) render(); }, 150);
+    });
+    if (!$('.tab[data-tab="monitor"]').hidden) {
+      active = true;
+      startPolling();
     }
   }
 
@@ -2082,6 +2280,7 @@
     bindAuditLog();
     bindNavidrome();
     bindMusicAssistant();
+    bindMonitor();
 
     if (!appInitialized) {
       appInitialized = true;

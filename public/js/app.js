@@ -345,7 +345,12 @@
       if (!wrap) return;
       this.tick();
       if (this.pollTimer) clearInterval(this.pollTimer);
-      this.pollTimer = setInterval(() => this.tick(), 3000);
+      // Im Hintergrund-Tab nicht nachfragen (spart Server- und Akkulast), beim Zurueckkehren sofort
+      this.pollTimer = setInterval(() => { if (!document.hidden) this.tick(); }, 3000);
+      if (!this.visibilityBound) {
+        this.visibilityBound = true;
+        document.addEventListener('visibilitychange', () => { if (!document.hidden && this.pollTimer) this.tick(); });
+      }
       if (this.progressTimer) clearInterval(this.progressTimer);
       this.progressTimer = setInterval(() => this.updateProgress(), 1000);
     },

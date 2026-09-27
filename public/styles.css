@@ -1158,6 +1158,10 @@ body.icons-color .link-icon .icon-generic { fill: var(--md-inverse-primary); opa
   transition: color var(--md-dur-short) var(--md-ease);
 }
 .footer-link:hover { color: var(--md-primary); text-decoration: underline; text-underline-offset: 3px; }
+/* Touch: groessere Tippflaeche (optisch unveraendert) */
+@media (pointer: coarse) {
+  .footer-link { display: inline-block; padding: 10px 6px; margin: -10px -6px; }
+}
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
@@ -1257,3 +1261,10 @@ body.icons-color .link-icon .icon-generic { fill: var(--md-inverse-primary); opa
 
 /* Unsichtbarer Container fuer SVG-Filter-Definitionen */
 .svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* ---------- Grosse Bildschirme: Karte waechst maßvoll mit ---------- */
+@media (min-width: 1600px) {
+  .card { width: min(540px, 100%); }
+  .avatar-wrap { width: 124px; height: 124px; }
+  .name { font-size: 28px; line-height: 36px; }
+}

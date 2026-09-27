@@ -10,6 +10,7 @@ const fs = require('fs');
 const helmet = require('helmet');
 const compression = require('compression');
 const setup = require('./lib/setup');
+const metrics = require('./lib/metrics');
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -19,6 +20,10 @@ const NODE_ENV = process.env.NODE_ENV || 'production';
 
 // Health-Check vor Setup, damit Load-Balancer / Uptime-Checker funktionieren
 let setupMode = false;
+
+// Ressourcenmonitor: zaehlt alle Anfragen (Anzahl, Antwortzeit, 5xx)
+app.use(metrics.middleware);
+
 app.get('/health', async (req, res) => {
   // Im Setup-Modus lib/db NICHT laden: der Pool wuerde mit der noch leeren Konfiguration
   // gecacht und das anschliessende Web-Setup (Migrationen/Seeding) daran scheitern.
@@ -147,10 +152,24 @@ const authLimiter = rateLimit({
 });
 
 // Moderates Limit für allgemeine API (z.B. 200 Requests pro Minute)
+// Logos (/api/icon/…) sind gecachte statische Dateien und zaehlen nicht zum API-Limit –
+// sonst verbraucht allein eine Startseite mit vielen Links das Kontingent
+const isIconRequest = (req) => req.path.startsWith('/icon/');
+
 const apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 200,
+  skip: isIconRequest,
   message: { ok: false, error: 'API-Limit erreicht. Bitte kurz warten.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Eigenes, grosszuegiges Limit fuer den Icon-Proxy (Schutz vor Massenabrufen unbekannter Namen)
+const iconLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 600,
+  message: 'Zu viele Icon-Anfragen',
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -167,11 +186,31 @@ const loginLimiter = rateLimit({
 
 app.use('/api/login', loginLimiter);
 app.use('/api/setup', authLimiter);
+app.use('/api/icon', iconLimiter);
 app.use('/api', apiLimiter);
 
 // =========================================================
 // App je nach Setup-Status finalisieren
 // =========================================================
+// Eigene CSS/JS-Verweise in HTML-Seiten mit ?v=<Version> versehen (Cache-Busting bei Updates)
+const APP_VERSION = require('./package.json').version;
+function versionAssets(html) {
+  return html.replace(/(href|src)="(\/(?:js\/[a-z0-9._-]+\.js|[a-z0-9_-]+\.css))"/gi,
+    (m, attr, url) => `${attr}="${url}?v=${encodeURIComponent(APP_VERSION)}"`);
+}
+
+// HTML-Seite mit versionierten Assets senden; im Produktionsmodus einmal gelesen und gecacht
+const htmlCache = new Map();
+function sendHtml(res, file, status = 200) {
+  let html = NODE_ENV === 'production' ? htmlCache.get(file) : null;
+  if (!html) {
+    html = versionAssets(fs.readFileSync(path.join(__dirname, 'public', file), 'utf8'));
+    if (NODE_ENV === 'production') htmlCache.set(file, html);
+  }
+  res.status(status).setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(html);
+}
+
 async function finalizeApp() {
   let setupRequired = false;
   const MAX_DB_ATTEMPTS = 10;
@@ -229,14 +268,20 @@ async function finalizeApp() {
       res.send(swContent);
     });
 
-    // Statische Dateien: kurzer Cache mit Revalidierung
+    // Statische Dateien. CSS/JS mit ?v=<Version> (von sendHtml gesetzt) duerfen ein Jahr im
+    // Browser-Cache bleiben – jede neue Version hat eine neue URL. Ohne ?v= kurzer Cache.
     app.use(express.static(path.join(__dirname, 'public'), {
       index: false,
       setHeaders: (res, filePath) => {
+        const versioned = Boolean(res.req?.query?.v);
         if (filePath.endsWith('.html')) {
           res.setHeader('Cache-Control', 'no-cache');
+        } else if ((filePath.endsWith('.js') || filePath.endsWith('.css')) && versioned) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
           res.setHeader('Cache-Control', 'public, max-age=60, must-revalidate');
+        } else if (filePath.endsWith('.woff2')) {
+          res.setHeader('Cache-Control', 'public, max-age=2592000');
         } else {
           res.setHeader('Cache-Control', 'public, max-age=86400');
         }
@@ -274,6 +319,7 @@ async function finalizeApp() {
       max: 120,
       standardHeaders: true,
       legacyHeaders: false,
+      skip: isIconRequest,
       keyGenerator: (req) => req.ip || req.socket?.remoteAddress || 'unknown',
       handler: (req, res) => res.status(429).json({ ok: false, error: 'Zu viele Anfragen. Bitte warte einen Moment.' }),
     });
@@ -307,11 +353,11 @@ async function finalizeApp() {
     app.get('/admin', (req, res, next) => {
       const { isIpAllowed } = require('./lib/auth');
       if (!isIpAllowed(req)) return res.status(403).send('Admin-Zugang von dieser IP nicht erlaubt');
-      res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+      sendHtml(res, 'admin.html');
     });
-    app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
-    app.get('/changelog', (req, res) => res.sendFile(path.join(__dirname, 'public', 'changelog.html')));
-    app.get('/api-docs', (req, res) => res.sendFile(path.join(__dirname, 'public', 'api-docs.html')));
+    app.get('/login', (req, res) => sendHtml(res, 'login.html'));
+    app.get('/changelog', (req, res) => sendHtml(res, 'changelog.html'));
+    app.get('/api-docs', (req, res) => sendHtml(res, 'api-docs.html'));
     app.get('/robots.txt', (req, res) => {
       const publicDomain = process.env.PUBLIC_DOMAIN || '';
       res.set('Content-Type', 'text/plain');
@@ -401,7 +447,7 @@ async function finalizeApp() {
       }
     });
 
-    const indexHtmlTemplate = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+    const indexHtmlTemplate = versionAssets(fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8'));
 
     // Startseite mit dynamischen Open-Graph-Tags fuer aktuellen Track
     app.get('/', async (req, res, next) => {
@@ -412,7 +458,7 @@ async function finalizeApp() {
 
         // Nicht oeffentlich: nur eingeloggte Admins sehen die Seite (z. B. Vorschau im Admin)
         if (profile.is_public === false && !req.session?.userId) {
-          return res.status(403).sendFile(path.join(__dirname, 'public', 'login.html'));
+          return sendHtml(res, 'login.html', 403);
         }
 
         const publicDomain = process.env.PUBLIC_DOMAIN;
@@ -576,6 +622,9 @@ async function finalizeApp() {
 
     // Namensliste der Dashboard Icons im Hintergrund laden (Icon-Erkennung fuer Links)
     require('./lib/icons').ensureLoaded();
+
+    // Ressourcenmonitor starten (Messpunkt alle 10 s, Verlauf 1 h im Speicher)
+    metrics.start(require('./lib/db').pool);
   }
 }
 

@@ -48,6 +48,18 @@
     <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
 
     <div class="changelog-entry">
+      <h2>2026-09-27 — OpenWeb v3.1.0 (Ressourcenmonitor & Performance)</h2>
+      <ul>
+        <li><strong>Ressourcenmonitor:</strong> Neuer Admin-Bereich „Monitor“ mit CPU-Last, Arbeitsspeicher, Event-Loop-Verzögerung, Anfragen pro Minute, Antwortzeiten, Serverfehlern und Datenbankverbindungen – live alle 10 Sekunden mit Verlauf der letzten Stunde, dazu Datenbankgröße, Sitzungen und Backups.</li>
+        <li><strong>Weniger Last für die Musikserver:</strong> Die „Now Playing“-Abfrage wird kurz zwischengespeichert und von allen Besuchern geteilt – statt einer Anfrage pro Besucher alle 3 Sekunden geht nur noch eine an Navidrome/Music Assistant. Tabs im Hintergrund fragen nicht mehr nach.</li>
+        <li><strong>Schnellere Startseite:</strong> Schrift wird vorgeladen, CSS/JS bleiben nach dem ersten Besuch dauerhaft im Browser-Cache (neue Version = neue Datei), Logos werden auf dem Server zwischengespeichert.</li>
+        <li><strong>Schnellerer Admin:</strong> Halb so viele Anfragen beim Öffnen (Vorschau und Icon-Vorschläge laden erst bei Bedarf), die Musik-Vorschau fragt nur bei geöffnetem Musik-Tab nach.</li>
+        <li><strong>Bildschirmanpassung:</strong> Admin nutzt große Bildschirme besser aus, die Startseite wächst auf Full-HD maßvoll mit, größere Tippflächen im Footer, Monitor mit zwei Spalten auf dem Handy – geprüft von 320 px bis 1920 px.</li>
+        <li><strong>Behoben:</strong> Logos zählten zum API-Limit – bei vielen Links oder mehreren Besuchern im selben Netz konnten Icons oder Daten ausbleiben.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <h2>2026-09-27 — OpenWeb v3.0.11 – v3.0.12 (Einheitliche Icons & Korrekturen)</h2>
       <ul>
         <li><strong>Einheitliche Link-Icons:</strong> Alle Logos kommen jetzt aus <a href="https://github.com/homarr-labs/dashboard-icons" target="_blank" rel="noopener noreferrer">Dashboard Icons</a> – keine Mischung mehr aus Emojis, weißen und bunten Logos.</li>

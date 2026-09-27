@@ -15,6 +15,10 @@
   
   
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <!-- Hauptschrift (Space Grotesk 400/500/600, lateinisch) sofort laden statt erst nach fonts.css -->
+  <link rel="preload" href="/fonts/font-14.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/font-17.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/font-20.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/fonts.css" />
   <link rel="stylesheet" href="/admin.css" />
 </head>
@@ -43,6 +47,7 @@
         <button class="side-btn" data-tab="data">💾 Daten</button>
         <button class="side-btn" data-tab="settings">⚙️ Einstellungen</button>
         <button class="side-btn" data-tab="audit">📝 Audit-Log</button>
+        <button class="side-btn" data-tab="monitor">📈 Monitor</button>
       </nav>
       <div class="side-footer">
         <a href="/" target="_blank" class="side-link">↗ Seite öffnen</a>
@@ -288,6 +293,42 @@
           <h3>📝 Audit-Log</h3>
           <p class="hint">Protokoll wichtiger Admin-Aktionen: Login, Logout, Link-Änderungen, Imports, Backups, API-Keys, Passwortwechsel.</p>
           <div id="audit-log-table" class="audit-log-table"></div>
+        </div>
+      </section>
+
+      <!-- TAB: MONITOR -->
+      <section class="tab" data-tab="monitor" hidden>
+        <div class="card-block">
+          <div class="monitor-head">
+            <div>
+              <h3>📈 Ressourcenmonitor</h3>
+              <p class="hint">Verbrauch dieser App (Node.js-Prozess und Datenbankverbindungen), alle 10 Sekunden aktualisiert. Verlauf der letzten Stunde, nur im Arbeitsspeicher.</p>
+            </div>
+            <span id="monitor-live" class="badge">Pausiert</span>
+          </div>
+          <div id="monitor-cards" class="monitor-cards"></div>
+        </div>
+        <div class="monitor-charts">
+          <div class="card-block monitor-chart">
+            <h4>CPU-Last <span class="hint" id="monitor-cpu-note"></span></h4>
+            <canvas id="monitor-chart-cpu" height="140"></canvas>
+          </div>
+          <div class="card-block monitor-chart">
+            <h4>Arbeitsspeicher</h4>
+            <canvas id="monitor-chart-mem" height="140"></canvas>
+          </div>
+          <div class="card-block monitor-chart">
+            <h4>Anfragen pro Minute</h4>
+            <canvas id="monitor-chart-req" height="140"></canvas>
+          </div>
+          <div class="card-block monitor-chart">
+            <h4>Antwortzeit (Ø und 95 %)</h4>
+            <canvas id="monitor-chart-resp" height="140"></canvas>
+          </div>
+        </div>
+        <div class="card-block">
+          <h3>Details</h3>
+          <ul id="monitor-details" class="monitor-details"></ul>
         </div>
       </section>
 
@@ -674,7 +715,8 @@
     <form method="dialog" class="form">
       <h3>👁 Live-Vorschau</h3>
       <div class="preview-frame-wrap">
-        <iframe id="preview-frame" src="/" sandbox="allow-scripts allow-same-origin"></iframe>
+        <!-- src wird erst beim Oeffnen der Vorschau gesetzt (sonst laedt der Admin die ganze Startseite mit) -->
+          <iframe id="preview-frame" title="Live-Vorschau der Startseite" sandbox="allow-scripts allow-same-origin"></iframe>
       </div>
       <div class="form-actions">
         <button type="button" id="preview-refresh" class="btn ghost">🔄 Aktualisieren</button>

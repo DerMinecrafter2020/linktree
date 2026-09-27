@@ -287,41 +287,61 @@ router.post('/links/:id/click', async (req, res, next) => {
   }
 });
 
-router.get('/icon/simpleicon/:id.svg', async (req, res, next) => {
-  try {
-    const id = req.params.id;
-    if (!/^[a-z0-9-]+$/.test(id)) return res.status(400).send('Bad Request');
-    const response = await fetch(`https://cdn.jsdelivr.net/npm/simple-icons@11/icons/${id}.svg`);
-    if (!response.ok) return res.status(response.status).send('Not Found');
-    res.setHeader('Content-Type', 'image/svg+xml');
-    // Fremd-SVGs duerfen bei Direktaufruf keine Skripte ausfuehren
-    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
-    res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
-    const text = await response.text();
-    res.send(text);
-  } catch (err) {
-    next(err);
-  }
-});
+// Dashboard-Icon-Proxy mit Speicher-Cache: Logos aendern sich praktisch nie, jsdelivr wird
+// so pro Logo nur einmal gefragt (statt bei jedem Seitenaufruf jedes Besuchers)
+const ICON_CACHE_MAX = 400;
+const ICON_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const ICON_MISS_TTL_MS = 60 * 60 * 1000;
+const ICON_MAX_BYTES = 1024 * 1024;
+const iconCache = new Map(); // key -> { status, body, type, expires }
+
+function iconCacheGet(key) {
+  const hit = iconCache.get(key);
+  if (!hit) return null;
+  if (hit.expires < Date.now()) { iconCache.delete(key); return null; }
+  // LRU: zuletzt genutzte ans Ende
+  iconCache.delete(key);
+  iconCache.set(key, hit);
+  return hit;
+}
+
+function iconCacheSet(key, entry) {
+  iconCache.set(key, entry);
+  while (iconCache.size > ICON_CACHE_MAX) iconCache.delete(iconCache.keys().next().value);
+}
 
 router.get('/icon/dashboardicon/:name/:format?', async (req, res, next) => {
   try {
     const name = req.params.name;
     const format = req.params.format || 'png';
-    if (!/^[a-z0-9-]+$/.test(name) || !['png', 'svg', 'webp'].includes(format)) {
+    if (!/^[a-z0-9-]{1,80}$/.test(name) || !['png', 'svg', 'webp'].includes(format)) {
       return res.status(400).send('Bad Request');
     }
-    const url = `https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/${format}/${name}.${format}`;
-    const response = await fetch(url);
-    if (!response.ok) return res.status(response.status).send('Not Found');
-
-    res.setHeader('Content-Type', format === 'svg' ? 'image/svg+xml' : `image/${format}`);
+    const key = `${name}.${format}`;
+    let entry = iconCacheGet(key);
+    if (!entry) {
+      const url = `https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/${format}/${key}`;
+      const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!response.ok) {
+        entry = { status: 404, expires: Date.now() + ICON_MISS_TTL_MS };
+      } else {
+        const body = Buffer.from(await response.arrayBuffer());
+        if (body.length > ICON_MAX_BYTES) return res.status(502).send('Icon zu gross');
+        entry = { status: 200, body, type: format === 'svg' ? 'image/svg+xml' : `image/${format}`, expires: Date.now() + ICON_CACHE_TTL_MS };
+      }
+      iconCacheSet(key, entry);
+    }
+    if (entry.status !== 200) {
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      return res.status(404).send('Not Found');
+    }
+    res.setHeader('Content-Type', entry.type);
+    // Fremd-SVGs duerfen bei Direktaufruf keine Skripte ausfuehren
     res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
-    res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
-    
-    const buffer = await response.arrayBuffer();
-    res.end(Buffer.from(buffer));
+    res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+    res.end(entry.body);
   } catch (err) {
+    if (err.name === 'TimeoutError' || err.name === 'AbortError') return res.status(504).send('Icon-Quelle antwortet nicht');
     next(err);
   }
 });

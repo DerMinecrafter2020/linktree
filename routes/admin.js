@@ -157,6 +157,36 @@ router.get('/links', async (req, res, next) => {
   }
 });
 
+// ---------- Ressourcenmonitor ----------
+router.get('/metrics', async (req, res, next) => {
+  try {
+    const metrics = require('../lib/metrics');
+    const since = parseInt(req.query.since, 10) || 0;
+    const data = metrics.snapshot(since);
+    // Groessen, die sich selten aendern, nur beim ersten Abruf (ohne since) mitliefern
+    if (!since) {
+      const { rows } = await db.query(`
+        SELECT pg_database_size(current_database()) AS db_bytes,
+               (SELECT COUNT(*)::int FROM user_sessions WHERE expire > NOW()) AS sessions,
+               (SELECT COUNT(*)::int FROM link_clicks) AS clicks
+      `);
+      let backupBytes = 0;
+      let backupCount = 0;
+      try {
+        for (const b of backup.listBackups()) { backupBytes += b.size; backupCount += 1; }
+      } catch { /* Backup-Ordner fehlt */ }
+      data.storage = {
+        dbBytes: Number(rows[0].db_bytes),
+        sessions: rows[0].sessions,
+        clicks: rows[0].clicks,
+        backupBytes,
+        backupCount,
+      };
+    }
+    res.json({ ok: true, data });
+  } catch (err) { next(err); }
+});
+
 // ---------- Icons (Dashboard Icons) ----------
 // Namenssuche fuer die Icon-Auswahl im Link-Dialog
 router.get('/icons/dashboard', async (req, res, next) => {
