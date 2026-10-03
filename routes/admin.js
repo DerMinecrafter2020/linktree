@@ -15,6 +15,7 @@ const backup = require('../lib/backup');
 const audit = require('../lib/audit');
 const alert = require('../lib/alert');
 const icons = require('../lib/icons');
+const encryptionKeyBackup = require('../lib/encryption-key-backup');
 
 function generateApiKey() {
   return require('crypto').randomBytes(32).toString('hex');
@@ -612,25 +613,15 @@ router.post('/alert-settings', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Ungueltige Empfaenger-E-Mail' });
     }
 
-    // SMTP-Passwort verschluesselt speichern. Leeres Feld = bisheriges Passwort behalten
-    // (die Einstellungsseite bekommt es aus Sicherheitsgruenden nie zurueck).
-    // Ohne gueltigen NAVIDROME_ENCRYPTION_KEY wie bisher im Klartext speichern (mit Warnung),
-    // statt jedes Speichern der Einstellungen scheitern zu lassen.
-    const tryEncrypt = (value) => {
-      try {
-        return encrypt(value);
-      } catch (err) {
-        console.warn('[alert-settings] SMTP-Passwort unverschluesselt gespeichert:', err.message);
-        return value;
-      }
-    };
+    // SMTP-Passwort verschluesselt speichern. Leeres Feld = bisheriges Passwort behalten.
+    // Bei fehlendem/ungueltigem Schluessel abbrechen, niemals Klartext persistieren.
     let smtpPassword;
     if (s.smtp_password) {
-      smtpPassword = tryEncrypt(String(s.smtp_password).slice(0, 500));
+      smtpPassword = encrypt(String(s.smtp_password).slice(0, 500));
     } else {
       const { rows: existing } = await db.query('SELECT smtp_password FROM alert_settings WHERE id = 1 LIMIT 1');
       const current = existing[0]?.smtp_password || null;
-      smtpPassword = current && !isEncrypted(current) ? tryEncrypt(current) : current;
+      smtpPassword = current && !isEncrypted(current) ? encrypt(current) : current;
     }
 
     const smtpPort = parseInt(s.smtp_port, 10);
@@ -1244,6 +1235,55 @@ router.post('/change-password', async (req, res, next) => {
     if (!rows[0]) return false;
     return verifyPassword(password, rows[0].password_hash);
   }
+
+  router.post('/encryption-key/backup', async (req, res, next) => {
+    try {
+      if (!(await checkCurrentPassword(req))) {
+        return res.status(401).json({ ok: false, error: 'Aktuelles Passwort falsch' });
+      }
+      if (typeof req.body.backupPassword === 'string' && req.body.backupPassword === req.body.password) {
+        return res.status(400).json({ ok: false, error: 'Die Wiederherstellungs-Passphrase muss sich vom Admin-Passwort unterscheiden.' });
+      }
+      const encryptedBackup = await encryptionKeyBackup.createBackup(
+        process.env.NAVIDROME_ENCRYPTION_KEY,
+        req.body.backupPassword
+      );
+      await audit.log(req, 'encryption_key_backup', 'encryption_key');
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ ok: true, data: { backup: encryptedBackup } });
+    } catch (err) {
+      if (err.message.startsWith('Ein Schluessel-Backup-Vorgang')) {
+        return res.status(429).json({ ok: false, error: 'Ein Schlüssel-Backup läuft bereits. Bitte kurz warten.' });
+      }
+      if (err.message.startsWith('Das Wiederherstellungspasswort')) {
+        return res.status(400).json({ ok: false, error: err.message });
+      }
+      next(err);
+    }
+  });
+
+  router.post('/encryption-key/restore', async (req, res, next) => {
+    try {
+      if (!(await checkCurrentPassword(req))) {
+        return res.status(401).json({ ok: false, error: 'Aktuelles Passwort falsch' });
+      }
+      const keyHex = await encryptionKeyBackup.restoreBackup(req.body.backup, req.body.backupPassword);
+      encryptionKeyBackup.writeKeyToEnvFile(keyHex);
+      process.env.NAVIDROME_ENCRYPTION_KEY = keyHex;
+      await audit.log(req, 'encryption_key_restore', 'encryption_key');
+      res.json({ ok: true, data: { restartRequired: false } });
+    } catch (err) {
+      if (err.message.startsWith('Ein Schluessel-Backup-Vorgang')) {
+        return res.status(429).json({ ok: false, error: 'Ein Schlüssel-Backup läuft bereits. Bitte kurz warten.' });
+      }
+      if (err.message.startsWith('Das Wiederherstellungspasswort') ||
+          err.message.startsWith('Die Schluessel-Backup-Datei') ||
+          err.message.startsWith('Backup konnte nicht entschluesselt werden')) {
+        return res.status(400).json({ ok: false, error: err.message });
+      }
+      next(err);
+    }
+  });
 
   router.post('/settings/2fa/totp/setup', async (req, res) => {
     try {

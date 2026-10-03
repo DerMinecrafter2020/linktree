@@ -48,6 +48,16 @@
     <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
 
     <div class="changelog-entry">
+      <h2>2026-10-03 — OpenWeb v3.1.1 (Zugangsdaten sicher verschlüsseln)</h2>
+      <ul>
+        <li><strong>Zugangsdaten:</strong> Passwörter und Tokens für Musik- und Mail-Integrationen werden mit einem gültigen Schlüssel verschlüsselt gespeichert. Ohne gültigen Schlüssel wird das Speichern beziehungsweise Seeding abgebrochen, statt Zugangsdaten unverschlüsselt abzulegen.</li>
+        <li><strong>Bestehende SMTP-Einstellungen:</strong> Ältere SMTP-Passwörter im Klartext werden beim nächsten Laden der Benachrichtigungseinstellungen automatisch verschlüsselt.</li>
+        <li><strong>Setup:</strong> Die Dateirechte der erzeugten <code>.env</code> werden auch dann auf den Eigentümer beschränkt, wenn die Datei bereits existiert.</li>
+        <li><strong>Schlüssel-Backup:</strong> Der Anwendungsschlüssel kann als separat passwortgeschützte Datei gesichert und im Admin-Bereich oder offline wiederhergestellt werden.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <h2>2026-09-27 — OpenWeb v3.1.0 (Ressourcenmonitor & Performance)</h2>
       <ul>
         <li><strong>Ressourcenmonitor:</strong> Neuer Admin-Bereich „Monitor“ mit CPU-Last, Arbeitsspeicher, Event-Loop-Verzögerung, Anfragen pro Minute, Antwortzeiten, Serverfehlern und Datenbankverbindungen – live alle 10 Sekunden mit Verlauf der letzten Stunde, dazu Datenbankgröße, Sitzungen und Backups.</li>

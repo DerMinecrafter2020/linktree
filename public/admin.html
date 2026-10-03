@@ -548,6 +548,51 @@
           </div>
         </div>
         <div class="card-block">
+          <h3>🔐 Verschlüsselungsschlüssel sichern</h3>
+          <p>Die Schlüsseldatei wird mit einer eigenen Wiederherstellungs-Passphrase geschützt. Bewahre Datei und Passphrase getrennt und außerhalb dieses Servers auf. Ohne beides können gespeicherte Zugangsdaten nach einem Schlüsselverlust nicht wiederhergestellt werden.</p>
+          <form id="encryption-key-backup-form" class="form">
+            <label>
+              <span>Aktuelles Admin-Passwort</span>
+              <input name="password" type="password" autocomplete="current-password" required />
+            </label>
+            <label>
+              <span>Wiederherstellungs-Passphrase (mindestens 16 Zeichen)</span>
+              <input name="backupPassword" type="password" minlength="16" maxlength="1024" autocomplete="new-password" required />
+            </label>
+            <label>
+              <span>Passphrase wiederholen</span>
+              <input name="backupPasswordConfirm" type="password" minlength="16" maxlength="1024" autocomplete="new-password" required />
+            </label>
+            <div class="form-actions">
+              <button type="submit" class="btn primary">Verschlüsseltes Schlüssel-Backup herunterladen</button>
+            </div>
+            <p id="encryption-key-backup-status" class="hint" aria-live="polite"></p>
+          </form>
+        </div>
+        <div class="card-block">
+          <h3>♻️ Verschlüsselungsschlüssel wiederherstellen</h3>
+          <p class="hint">Die Wiederherstellung ersetzt den Schlüssel in der <code>.env</code> und aktiviert ihn sofort. Verwende nur ein Backup dieser Installation. Bei einem fehlenden oder ungültigen Schlüssel nutze stattdessen den Offline-Befehl unten.</p>
+          <form id="encryption-key-restore-form" class="form">
+            <label>
+              <span>Aktuelles Admin-Passwort</span>
+              <input name="password" type="password" autocomplete="current-password" required />
+            </label>
+            <label>
+              <span>Wiederherstellungs-Passphrase</span>
+              <input name="backupPassword" type="password" maxlength="1024" autocomplete="current-password" required />
+            </label>
+            <label>
+              <span>Schlüssel-Backup-Datei</span>
+              <input name="backupFile" type="file" accept="application/json,.json" required />
+            </label>
+            <div class="form-actions">
+              <button type="submit" class="btn danger">Schlüssel wiederherstellen</button>
+            </div>
+            <p id="encryption-key-restore-status" class="hint" aria-live="polite"></p>
+          </form>
+          <p class="hint">Offline-Wiederherstellung im Projektverzeichnis: <code>node scripts/restore-encryption-key.js /pfad/zum/openweb-encryption-key-backup.json</code></p>
+        </div>
+        <div class="card-block">
           <h3>📤 Export</h3>
           <p>Alle Einstellungen und Links als JSON herunterladen.</p>
           <button id="export-btn" class="btn">JSON exportieren</button>

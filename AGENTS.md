@@ -43,6 +43,7 @@ routes/
 lib/
   auth.js                 bcrypt, requireAdminSession, IP-Allowlist (IPv4/CIDR)
   crypto.js               AES-256-GCM encrypt/decrypt/isEncrypted (Key: NAVIDROME_ENCRYPTION_KEY)
+  encryption-key-backup.js Verschlüsseltes Backup/Wiederherstellung des Anwendungsschlüssels
   totp.js                 TOTP-Helfer (otplib v13, ±30 s, Replay-Schutz über afterTimeStep)
   validators.js           Serverseitige Eingabeprüfung (safeText, safeUrl, validateEmail, …)
   icons.js                Link-Icons: Dashboard-Icons-Namensliste (Cache), Erkennung, icon_resolved
@@ -72,6 +73,7 @@ public/                   Statische Dateien (werden 1:1 ausgeliefert!)
   js/sw-register*.js      Service-Worker-Registrierung
   sw.js                   Service Worker (Network-First, cached nie /api/)
 scripts/bump-version.sh   Versionserhöhung (siehe Abschnitt 8)
+scripts/restore-encryption-key.js Offline-Wiederherstellung aus verschlüsseltem Schlüssel-Backup
 .githooks/pre-commit      Automatische Patch-Erhöhung bei jedem Code-Commit
 install.sh                Interaktive Installation auf Linux (systemd, nginx, Docker-DB)
 Dockerfile, docker-compose.yml, .dockerignore, nginx-lb.conf.example
@@ -93,6 +95,7 @@ Dockerfile, docker-compose.yml, .dockerignore, nginx-lb.conf.example
 | Sicherheits-Check der Pakete | `npm audit` (Ziel: 0 Funde) |
 | Docker | `docker compose up -d` |
 | Linux-Installation | `bash install.sh` (`update`, `change-password`, `reset-db`, `logs`) |
+| Verschlüsselungsschlüssel offline wiederherstellen | `node scripts/restore-encryption-key.js <Schlüssel-Backup.json>` (im Projektverzeichnis; Passphrase wird verdeckt abgefragt) |
 
 **Tests:** Es gibt keine automatisierten Tests (`npm test` ist ein Platzhalter). Änderungen daher
 manuell im Browser prüfen – besonders Login (Passwort, TOTP, WebAuthn) und Admin-Funktionen.
@@ -120,7 +123,7 @@ Vorlage: `.env.example`. Die `.env` enthält Secrets → **niemals committen, lo
 | `POSTGRES_PASSWORD` | Docker | Passwort des Postgres-Containers (muss zu `DATABASE_URL` passen) |
 | `SESSION_SECRET` | ja | Zufälliger 64-Hex-Wert, Server startet sonst nicht |
 | `SESSION_MAX_AGE_MS` | – | Session-Dauer (Standard 24 h; „Angemeldet bleiben“ = 30 Tage) |
-| `NAVIDROME_ENCRYPTION_KEY` | ja | 32 Byte Hex – verschlüsselt Navidrome-Passwort, MA-Token und SMTP-Passwort in der DB |
+| `NAVIDROME_ENCRYPTION_KEY` | ja | 32 Byte Hex – verschlüsselt Navidrome-Passwort, MA-Token und SMTP-Passwort in der DB. Schlüssel-Backup im Admin separat erstellen und Passphrase getrennt aufbewahren. |
 | `ADMIN_EMAIL` | – | E-Mail des initialen Admins (Seeding) |
 | `ADMIN_PASSWORD`, `NAVIDROME_PASSWORD` | – | **Nur für das Seeding**, danach aus der `.env` entfernen |
 | `NAVIDROME_URL`, `NAVIDROME_USERNAME`, `NAVIDROME_POLL_INTERVAL_SEC` | – | Initiale Navidrome-Daten (Seeding) |

@@ -1451,6 +1451,7 @@ input[type="checkbox"] {
   animation: slideUp var(--md-dur-medium) var(--md-ease-emphasized);
 }
 .toast.error { background: var(--md-error-container); color: var(--md-on-error-container); }
+.hint.error { color: var(--md-error); }
 
 @keyframes slideUp {
   from { transform: translate(-50%, 16px); opacity: 0; }

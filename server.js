@@ -241,6 +241,14 @@ async function finalizeApp() {
     app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
     app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
   } else {
+    try {
+      require('./lib/crypto').assertKey();
+    } catch (err) {
+      console.error('[FATAL] NAVIDROME_ENCRYPTION_KEY fehlt oder ist ungueltig. Bitte einen 32-Byte-Hex-Schluessel (64 Hex-Zeichen) konfigurieren.');
+      process.exit(1);
+      return;
+    }
+
     console.log('[server] Prüfe auf ausstehende Datenbank-Migrationen...');
     try {
       await require('./db/migrate').run();

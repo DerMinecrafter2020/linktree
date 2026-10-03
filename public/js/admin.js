@@ -1209,6 +1209,69 @@
   }
 
   function bindData() {
+    const keyBackupForm = $('#encryption-key-backup-form');
+    keyBackupForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.currentTarget;
+      const fd = new FormData(form);
+      const backupPassword = String(fd.get('backupPassword') || '');
+      const backupPasswordConfirm = String(fd.get('backupPasswordConfirm') || '');
+      const status = $('#encryption-key-backup-status');
+      if (backupPassword !== backupPasswordConfirm) {
+        status.textContent = 'Die Wiederherstellungs-Passphrasen stimmen nicht überein.';
+        status.classList.add('error');
+        return;
+      }
+
+      status.textContent = 'Schlüssel-Backup wird erstellt …';
+      status.classList.remove('error');
+      try {
+        const result = await window.api.createEncryptionKeyBackup(String(fd.get('password') || ''), backupPassword);
+        downloadJSON(result.backup, `openweb-encryption-key-backup-${new Date().toISOString().slice(0, 10)}.json`);
+        status.textContent = 'Backup heruntergeladen. Bewahre Datei und Passphrase getrennt und offline auf.';
+        form.reset();
+      } catch (err) {
+        status.textContent = 'Backup konnte nicht erstellt werden: ' + err.message;
+        status.classList.add('error');
+        form.password.value = '';
+        form.backupPassword.value = '';
+        form.backupPasswordConfirm.value = '';
+      }
+    });
+
+    const keyRestoreForm = $('#encryption-key-restore-form');
+    keyRestoreForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.currentTarget;
+      const fd = new FormData(form);
+      const file = fd.get('backupFile');
+      const status = $('#encryption-key-restore-status');
+      if (!(file instanceof File) || !file.size || file.size > 64 * 1024) {
+        status.textContent = 'Bitte eine gültige Schlüssel-Backup-Datei bis maximal 64 KB auswählen.';
+        status.classList.add('error');
+        return;
+      }
+      if (!confirm('Der Anwendungsschlüssel wird ersetzt. Nur ein Backup dieser Installation verwenden. Fortfahren?')) return;
+
+      status.textContent = 'Backup wird geprüft und Schlüssel wiederhergestellt …';
+      status.classList.remove('error');
+      try {
+        const backup = JSON.parse(await file.text());
+        await window.api.restoreEncryptionKey({
+          password: String(fd.get('password') || ''),
+          backupPassword: String(fd.get('backupPassword') || ''),
+          backup,
+        });
+        status.textContent = 'Schlüssel wiederhergestellt und im laufenden Server aktiviert.';
+        form.reset();
+      } catch (err) {
+        status.textContent = 'Wiederherstellung fehlgeschlagen: ' + err.message;
+        status.classList.add('error');
+        form.password.value = '';
+        form.backupPassword.value = '';
+      }
+    });
+
     $('#backup-now-btn')?.addEventListener('click', async () => {
       try {
         await window.api.createBackup();

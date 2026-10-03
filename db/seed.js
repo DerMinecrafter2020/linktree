@@ -6,7 +6,7 @@ require('dotenv').config();
 
 const bcrypt = require('bcrypt');
 const db = require('../lib/db');
-const { encrypt } = require('../lib/crypto');
+const { encrypt, assertKey } = require('../lib/crypto');
 
 async function seed(overrides = {}) {
   const adminEmail = overrides.adminEmail || process.env.ADMIN_EMAIL || 'admin@example.com';
@@ -15,6 +15,18 @@ async function seed(overrides = {}) {
   if (!adminPassword || String(adminPassword).length < 8) {
     throw new Error('ADMIN_PASSWORD muss mindestens 8 Zeichen lang sein.');
   }
+
+  assertKey();
+
+  // Zugangsdaten vor allen DB-Aenderungen verschluesseln: Bei einem fehlenden oder
+  // ungueltigen Schluessel soll das Seeding abbrechen, statt teilweise zu laufen.
+  const nav = overrides.navidrome || {};
+  const navUrl = (nav.url || process.env.NAVIDROME_URL || '').trim();
+  const navUser = (nav.username || process.env.NAVIDROME_USERNAME || '').trim();
+  const navPass = (nav.password || process.env.NAVIDROME_PASSWORD || '').trim();
+  const navEnabled = !!(navUrl && navUser && navPass);
+  const pollInterval = parseInt(process.env.NAVIDROME_POLL_INTERVAL_SEC || '30', 10) || 30;
+  const encryptedPass = navPass ? encrypt(navPass) : null;
 
   const passwordHash = await bcrypt.hash(adminPassword, 12);
 
@@ -84,22 +96,6 @@ async function seed(overrides = {}) {
     console.log('[seed] Default-Links angelegt');
   }
 
-  const nav = overrides.navidrome || {};
-  const navUrl = (nav.url || process.env.NAVIDROME_URL || '').trim();
-  const navUser = (nav.username || process.env.NAVIDROME_USERNAME || '').trim();
-  const navPass = (nav.password || process.env.NAVIDROME_PASSWORD || '').trim();
-  const navEnabled = !!(navUrl && navUser && navPass);
-  const pollInterval = parseInt(process.env.NAVIDROME_POLL_INTERVAL_SEC || '30', 10) || 30;
-
-  let encryptedPass = null;
-  if (navPass) {
-    try {
-      encryptedPass = encrypt(navPass);
-    } catch (err) {
-      console.warn('[seed] Konnte Navidrome-Passwort nicht verschluesseln:', err.message);
-    }
-  }
-
   await db.query(`
     INSERT INTO navidrome_settings (id, enabled, url, username, password_encrypted, poll_interval_sec)
     VALUES (1, $1, $2, $3, $4, $5)
@@ -107,7 +103,7 @@ async function seed(overrides = {}) {
       enabled = EXCLUDED.enabled,
       url = EXCLUDED.url,
       username = EXCLUDED.username,
-      password_encrypted = EXCLUDED.password_encrypted,
+      password_encrypted = COALESCE(EXCLUDED.password_encrypted, navidrome_settings.password_encrypted),
       poll_interval_sec = EXCLUDED.poll_interval_sec,
       updated_at = NOW()
   `, [navEnabled, navUrl || null, navUser || null, encryptedPass, pollInterval]);

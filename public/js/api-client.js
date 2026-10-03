@@ -88,6 +88,9 @@
     testAlertSettings: () => post('/admin/alert-settings/test'),
     getBackups: () => get('/admin/backups'),
     createBackup: () => post('/admin/backups', {}),
+    createEncryptionKeyBackup: (password, backupPassword) =>
+      post('/admin/encryption-key/backup', { password, backupPassword }),
+    restoreEncryptionKey: (payload) => post('/admin/encryption-key/restore', payload),
     getApiKeys: () => get('/admin/api-keys'),
     createApiKey: (name) => post('/admin/api-keys', { name }),
     deleteApiKey: (id) => del(`/admin/api-keys/${id}`),
