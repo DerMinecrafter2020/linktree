@@ -88,6 +88,65 @@
   --radius-lg: var(--md-shape-lg);
 }
 
+/* Admin-Themes: dieselben Akzent- und Oberflächenrollen wie auf der Startseite */
+[data-theme="midnight"] {
+  --md-primary: #9ecaff;
+  --md-on-primary: #003258;
+  --md-primary-container: #00497d;
+  --md-on-primary-container: #d1e4ff;
+  --md-secondary: #bbc7db;
+  --md-on-secondary: #253140;
+  --md-secondary-container: #3b4858;
+  --md-on-secondary-container: #d7e3f7;
+  --md-tertiary: #d6bee4;
+  --md-on-tertiary: #3b2948;
+  --md-tertiary-container: #523f5f;
+  --md-on-tertiary-container: #f2daff;
+  --md-surface: #111418;
+  --md-surface-dim: #111418;
+  --md-surface-bright: #37393e;
+  --md-surface-container-lowest: #0c0e12;
+  --md-surface-container-low: #191c20;
+  --md-surface-container: #1d2024;
+  --md-surface-container-high: #282a2f;
+  --md-surface-container-highest: #33353a;
+  --md-on-surface: #e1e2e8;
+  --md-on-surface-variant: #c3c7cf;
+  --md-outline: #8d9199;
+  --md-outline-variant: #43474e;
+  --md-inverse-surface: #e1e2e8;
+  --md-inverse-primary: #0061a4;
+}
+
+[data-theme="sunset"] {
+  --md-primary: #ffb781;
+  --md-on-primary: #4f2500;
+  --md-primary-container: #6f3800;
+  --md-on-primary-container: #ffdcc5;
+  --md-secondary: #e5bfa8;
+  --md-on-secondary: #422b1b;
+  --md-secondary-container: #5b4131;
+  --md-on-secondary-container: #ffdcc5;
+  --md-tertiary: #cac98e;
+  --md-on-tertiary: #323205;
+  --md-tertiary-container: #484a1b;
+  --md-on-tertiary-container: #e7e5a8;
+  --md-surface: #1a120d;
+  --md-surface-dim: #1a120d;
+  --md-surface-bright: #423731;
+  --md-surface-container-lowest: #140d08;
+  --md-surface-container-low: #221a15;
+  --md-surface-container: #271e18;
+  --md-surface-container-high: #322822;
+  --md-surface-container-highest: #3d332c;
+  --md-on-surface: #f0dfd7;
+  --md-on-surface-variant: #d6c3b7;
+  --md-outline: #9f8d83;
+  --md-outline-variant: #52443b;
+  --md-inverse-surface: #f0dfd7;
+  --md-inverse-primary: #8e4e14;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { min-height: 100%; }
 
@@ -103,6 +162,7 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color var(--md-dur-long) var(--md-ease), color var(--md-dur-long) var(--md-ease);
 }
 
 :focus-visible {
@@ -326,6 +386,20 @@ code {
 }
 /* M3 Headline Medium */
 .content-head h2 { font-size: 28px; line-height: 36px; font-weight: 500; letter-spacing: 0; }
+.content-head-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.admin-theme-control { display: inline-flex; align-items: center; gap: 8px; color: var(--md-on-surface-variant); font-size: 12px; font-weight: 500; }
+.admin-theme-control select {
+  min-height: 36px;
+  padding: 0 30px 0 12px;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-sm);
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-high);
+  font: inherit;
+  cursor: pointer;
+}
+.admin-theme-control select:hover { background: var(--md-surface-container-highest); }
+.admin-theme-control select:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
 
 /* Verbindungsstatus als M3 Assist Chip */
 .connection-state {

@@ -550,6 +550,21 @@
     render();
     np.start();
     bindPublicActions();
+    revealAdminShortcut();
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) revealAdminShortcut();
+    });
+  }
+
+  async function revealAdminShortcut() {
+    const shortcut = $('#admin-shortcut');
+    if (!shortcut || window.self !== window.top || !window.api?.me) return;
+    try {
+      await window.api.me();
+      shortcut.hidden = false;
+    } catch (err) {
+      if (err.status === 401 || err.status === 403) shortcut.hidden = true;
+    }
   }
 
   function bindPublicActions() {

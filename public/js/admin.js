@@ -54,6 +54,36 @@
     } catch { return null; }
   }
 
+  function bindAdminTheme() {
+    const select = $('#admin-theme-select');
+    if (!select) return;
+
+    const storageKey = 'openweb-admin-theme';
+    const allowedThemes = new Set(['midnight', 'sunset']);
+    const apply = (value) => {
+      const theme = allowedThemes.has(value) ? value : '';
+      if (theme) document.body.setAttribute('data-theme', theme);
+      else document.body.removeAttribute('data-theme');
+      select.value = theme;
+    };
+
+    let savedTheme = '';
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (allowedThemes.has(stored)) savedTheme = stored;
+    } catch { /* Theme bleibt fuer diese Sitzung auf Dunkel */ }
+    apply(savedTheme);
+
+    select.addEventListener('change', () => {
+      const theme = allowedThemes.has(select.value) ? select.value : '';
+      apply(theme);
+      try {
+        if (theme) localStorage.setItem(storageKey, theme);
+        else localStorage.removeItem(storageKey);
+      } catch { /* Theme gilt bis zum Schliessen dieser Seite */ }
+    });
+  }
+
   function sanitizeIconField(s) {
     if (typeof s !== 'string') return '🔗';
     const t = s.trim() || '🔗';
@@ -2362,6 +2392,7 @@
     const ok = await checkSession();
     if (!ok) return;
 
+    bindAdminTheme();
     bindTabs();
     bindProfile();
     bindAvatarUpload();

@@ -375,6 +375,17 @@ body {
   transition: box-shadow var(--md-dur-short) var(--md-ease);
 }
 
+.admin-shortcut {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  text-decoration: none;
+}
+.admin-shortcut:hover { text-decoration: none; }
+
 .profile-action svg {
   width: 20px;
   height: 20px;
@@ -1220,6 +1231,7 @@ body.icons-color .link-icon .icon-generic { fill: var(--md-inverse-primary); opa
   .np-player { padding: 10px; gap: 12px; min-width: 0; }
   .np-info { min-width: 0; }
   .profile-actions { margin-top: 12px; }
+  .admin-shortcut { top: 8px; right: 8px; }
 }
 
 @media (min-width: 481px) and (max-width: 767px) {
