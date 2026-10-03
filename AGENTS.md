@@ -47,14 +47,14 @@ lib/
   totp.js                 TOTP-Helfer (otplib v13, ±30 s, Replay-Schutz über afterTimeStep)
   validators.js           Serverseitige Eingabeprüfung (safeText, safeUrl, validateEmail, …)
   icons.js                Link-Icons: Dashboard-Icons-Namensliste (Cache), Erkennung, icon_resolved
-  metrics.js              Ressourcenmonitor: CPU, RAM, Event-Loop, Anfragen, DB-Pool (Verlauf 1 h im RAM)
+  metrics.js              Ressourcenmonitor: CPU, RAM, Event-Loop, Anfragen, DB-Pool (30 Tage in PostgreSQL)
   shortcache.js           Kurzzeit-Cache mit geteilten Abrufen (z. B. Now Playing, 2,5 s)
   db.js                   pg-Pool, query(), transaction()
   setup.js                Erkennung/Durchführung des Initial-Setups, schreibt .env
   audit.js                Audit-Log für Admin-Aktionen
   alert.js                Benachrichtigungen (Webhook / SMTP) bei Login, Passwortwechsel, Backup-Fehler
   backup.js               Tägliche JSON-Backups nach ./backups (Rechte 600)
-  maintenance.js          Aufräumen alter Sessions / Klickdaten (DATA_RETENTION_DAYS)
+  maintenance.js          Aufräumen alter Sessions / Klickdaten und Monitor-Messpunkte (30 Tage)
   navidrome.js            Subsonic-API-Client inkl. Radiosender-Erkennung
   musicassistant.js       Music-Assistant-API-Client
   discord.js              „Now Playing“-Discord-Webhook (Polling alle 10 s)

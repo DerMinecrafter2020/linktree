@@ -302,32 +302,69 @@
           <div class="monitor-head">
             <div>
               <h3>📈 Ressourcenmonitor</h3>
-              <p class="hint">Verbrauch dieser App (Node.js-Prozess und Datenbankverbindungen), alle 10 Sekunden aktualisiert. Verlauf der letzten Stunde, nur im Arbeitsspeicher.</p>
+              <p class="hint">Verbrauch dieser App (Node.js-Prozess und Datenbankverbindungen), alle 10 Sekunden aktualisiert. Messpunkte werden 30 Tage zentral in PostgreSQL gespeichert und sind auf allen Admin-Geräten verfügbar.</p>
             </div>
             <span id="monitor-live" class="badge">Pausiert</span>
+          </div>
+          <div class="monitor-toolbar">
+            <p id="monitor-updated" class="hint" aria-live="polite">Warte auf Messdaten …</p>
+            <span class="monitor-window">Messintervall 10 s · Verlauf bis 60 min</span>
           </div>
           <div id="monitor-cards" class="monitor-cards"></div>
         </div>
         <div class="monitor-charts">
           <div class="card-block monitor-chart">
-            <h4>CPU-Last <span class="hint" id="monitor-cpu-note"></span></h4>
-            <canvas id="monitor-chart-cpu" height="140"></canvas>
+            <div class="monitor-chart-head">
+              <div class="monitor-chart-title">
+                <h4>CPU-Last</h4>
+                <p class="hint">Belegung des Node.js-Prozesses</p>
+              </div>
+              <div class="monitor-legend"><span class="monitor-key">Prozess</span></div>
+            </div>
+            <canvas id="monitor-chart-cpu" height="180" role="img" aria-label="CPU-Auslastung des Node.js-Prozesses im Zeitverlauf">CPU-Diagramm</canvas>
           </div>
           <div class="card-block monitor-chart">
-            <h4>Arbeitsspeicher</h4>
-            <canvas id="monitor-chart-mem" height="140"></canvas>
+            <div class="monitor-chart-head">
+              <div class="monitor-chart-title">
+                <h4>Arbeitsspeicher</h4>
+                <p class="hint">Belegter Prozessspeicher</p>
+              </div>
+              <div class="monitor-legend">
+                <span class="monitor-key">RSS</span>
+                <span class="monitor-key secondary">V8-Heap</span>
+              </div>
+            </div>
+            <canvas id="monitor-chart-mem" height="180" role="img" aria-label="RSS- und V8-Heap-Speicherverbrauch im Zeitverlauf">Speicher-Diagramm</canvas>
           </div>
           <div class="card-block monitor-chart">
-            <h4>Anfragen pro Minute</h4>
-            <canvas id="monitor-chart-req" height="140"></canvas>
+            <div class="monitor-chart-head">
+              <div class="monitor-chart-title">
+                <h4>Anfragen pro Minute</h4>
+                <p class="hint">HTTP-Anfragen und Serverfehler</p>
+              </div>
+              <div class="monitor-legend">
+                <span class="monitor-key">Anfragen</span>
+                <span class="monitor-key error">5xx-Fehler</span>
+              </div>
+            </div>
+            <canvas id="monitor-chart-req" height="180" role="img" aria-label="Anfragen und Serverfehler pro Minute im Zeitverlauf">Anfragen-Diagramm</canvas>
           </div>
           <div class="card-block monitor-chart">
-            <h4>Antwortzeit (Ø und 95 %)</h4>
-            <canvas id="monitor-chart-resp" height="140"></canvas>
+            <div class="monitor-chart-head">
+              <div class="monitor-chart-title">
+                <h4>Antwortzeit</h4>
+                <p class="hint">Dauer abgeschlossener Anfragen</p>
+              </div>
+              <div class="monitor-legend">
+                <span class="monitor-key">Durchschnitt</span>
+                <span class="monitor-key secondary">95. Perzentil</span>
+              </div>
+            </div>
+            <canvas id="monitor-chart-resp" height="180" role="img" aria-label="Durchschnittliche und 95. Perzentil-Antwortzeit im Zeitverlauf">Antwortzeit-Diagramm</canvas>
           </div>
         </div>
         <div class="card-block">
-          <h3>Details</h3>
+          <h3>System &amp; Speicher</h3>
           <ul id="monitor-details" class="monitor-details"></ul>
         </div>
       </section>

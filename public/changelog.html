@@ -48,6 +48,14 @@
     <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
 
     <div class="changelog-entry">
+      <h2>2026-10-03 — OpenWeb v3.1.2 – v3.1.4 (Ressourcenmonitor verbessert)</h2>
+      <ul>
+        <li><strong>Übersicht:</strong> Diagramme haben verständliche Legenden und kurze Erläuterungen. Der Monitor zeigt den Zeitpunkt der letzten Messung sowie klare Lade-, Fehler- und Pausenzustände und passt sich auf kleinen Bildschirmen besser an.</li>
+        <li><strong>Persistenter Verlauf:</strong> Messpunkte und Gesamtsummen werden zentral in PostgreSQL gespeichert. Der Verlauf ist dadurch auf anderen Admin-Geräten und nach einem Serverneustart verfügbar; einzelne Messpunkte werden nach 30 Tagen aufgeräumt.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <h2>2026-10-03 — OpenWeb v3.1.1 (Zugangsdaten sicher verschlüsseln)</h2>
       <ul>
         <li><strong>Zugangsdaten:</strong> Passwörter und Tokens für Musik- und Mail-Integrationen werden mit einem gültigen Schlüssel verschlüsselt gespeichert. Ohne gültigen Schlüssel wird das Speichern beziehungsweise Seeding abgebrochen, statt Zugangsdaten unverschlüsselt abzulegen.</li>

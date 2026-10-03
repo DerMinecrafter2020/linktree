@@ -164,6 +164,9 @@ router.get('/metrics', async (req, res, next) => {
     const metrics = require('../lib/metrics');
     const since = parseInt(req.query.since, 10) || 0;
     const data = metrics.snapshot(since);
+    const persisted = await metrics.persistentSnapshot(since);
+    data.history = persisted.history;
+    data.totals = persisted.totals;
     // Groessen, die sich selten aendern, nur beim ersten Abruf (ohne since) mitliefern
     if (!since) {
       const { rows } = await db.query(`

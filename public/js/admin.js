@@ -2134,6 +2134,7 @@
     const cards = $('#monitor-cards');
     if (!cards) return;
     const live = $('#monitor-live');
+    const updated = $('#monitor-updated');
     let history = [];
     let info = null;
     let storage = null;
@@ -2147,6 +2148,10 @@
       const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
       return d ? `${d} T ${h} h` : h ? `${h} h ${m} min` : `${m} min`;
     };
+
+    const formatSampleTime = (sample) => sample
+      ? new Date(sample.t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      : null;
 
     // Einfaches Liniendiagramm (mehrere Reihen, gefuellte Flaeche fuer die erste)
     function drawChart(canvas, series, { unit = '', min = 0 } = {}) {
@@ -2227,9 +2232,9 @@
         card('Arbeitsspeicher', formatBytes(last.rss), `Heap ${formatBytes(last.heapUsed)} von ${formatBytes(info.heapLimit)}`,
           last.heapUsed / info.heapLimit > 0.8 ? 'warn' : ''),
         card('Event-Loop', `${last.loopP99Ms.toFixed(1)} ms`, `Verzögerung (99 %), Ø ${last.loopMeanMs.toFixed(1)} ms`, last.loopP99Ms > 100 ? 'warn' : ''),
-        card('Anfragen', `${Math.round(last.reqPerMin)}/min`, `seit Start: ${info.totalsRequests.toLocaleString('de-DE')}`),
+        card('Anfragen', `${Math.round(last.reqPerMin)}/min`, `seit Messbeginn: ${info.totalsRequests.toLocaleString('de-DE')}`),
         card('Antwortzeit', `${Math.round(last.respAvgMs)} ms`, `95 % unter ${Math.round(last.respP95Ms)} ms`, last.respP95Ms > 1000 ? 'warn' : ''),
-        card('Serverfehler', `${last.errPerMin}/min`, `seit Start: ${info.totalsErrors}`, last.errPerMin > 0 ? 'warn' : ''),
+        card('Serverfehler', `${last.errPerMin}/min`, `seit Messbeginn: ${info.totalsErrors.toLocaleString('de-DE')}`, last.errPerMin > 0 ? 'warn' : ''),
         card('DB-Verbindungen', `${last.dbTotal - last.dbIdle} aktiv`, `${last.dbIdle} frei${last.dbWaiting ? ` · ${last.dbWaiting} wartend` : ''}`, last.dbWaiting > 0 ? 'warn' : ''),
         card('Laufzeit', fmtUptime(info.uptimeSec), `Node ${info.node}`)
       );
@@ -2271,22 +2276,47 @@
 
     async function load() {
       try {
-        const since = history.length ? history[history.length - 1].t : 0;
+        let since = history.length ? history[history.length - 1].t : 0;
+        if (since && Date.now() - since > 60 * 60 * 1000) {
+          history = [];
+          since = 0;
+        }
         const data = await window.api.getMetrics(since);
+        if (!active) return;
         info = { ...data.process, totalsRequests: data.totals.requests, totalsErrors: data.totals.errors };
         if (data.storage) storage = data.storage;
         history = since ? history.concat(data.history).slice(-360) : data.history;
         live.textContent = 'Live';
         live.className = 'badge on';
+        if (history.length) {
+          const lastSample = history[history.length - 1];
+          updated.textContent = `Letzter Messpunkt ${formatSampleTime(lastSample)}`;
+          updated.title = new Date(lastSample.t).toLocaleString('de-DE');
+        } else {
+          updated.textContent = 'Verbindung aktiv · erster Messpunkt wird erwartet.';
+          updated.removeAttribute('title');
+        }
+        updated.classList.remove('error');
         render();
       } catch (err) {
+        if (!active) return;
         live.textContent = 'Fehler';
         live.className = 'badge off';
+        const lastSample = history[history.length - 1];
+        updated.textContent = lastSample
+          ? `Aktualisierung fehlgeschlagen · letzter Messpunkt ${formatSampleTime(lastSample)}`
+          : 'Messdaten konnten nicht geladen werden. Der nächste Abruf folgt in 10 Sekunden.';
+        updated.classList.add('error');
+        if (!lastSample) cards.replaceChildren(el('p', { class: 'hint error', text: updated.textContent }));
       }
     }
 
     function startPolling() {
       if (timer) return;
+      live.textContent = 'Verbinde …';
+      live.className = 'badge';
+      updated.textContent = 'Messdaten werden geladen …';
+      updated.classList.remove('error');
       load();
       timer = setInterval(() => { if (!document.hidden) load(); }, 10000);
     }
@@ -2295,6 +2325,11 @@
       timer = null;
       live.textContent = 'Pausiert';
       live.className = 'badge';
+      const lastSample = history[history.length - 1];
+      updated.textContent = lastSample
+        ? `Aktualisierung pausiert · letzter Messpunkt ${formatSampleTime(lastSample)}`
+        : 'Aktualisierung pausiert.';
+      updated.classList.remove('error');
     }
 
     document.addEventListener('admin-tab-change', (e) => {

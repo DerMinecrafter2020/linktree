@@ -1657,6 +1657,19 @@ input[type="checkbox"] {
 /* ---------- Ressourcenmonitor ---------- */
 .monitor-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .monitor-head .badge { flex-shrink: 0; margin-top: 4px; }
+.monitor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 12px;
+  padding: 10px 12px;
+  border-radius: var(--md-shape-sm);
+  background: var(--md-surface-container);
+}
+.monitor-toolbar p { margin: 0; }
+.monitor-toolbar p.error { color: var(--md-error); }
+.monitor-window { flex-shrink: 0; color: var(--md-on-surface-variant); font-size: 12px; text-align: right; }
 .monitor-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr));
@@ -1680,9 +1693,24 @@ input[type="checkbox"] {
   margin-bottom: 16px;
 }
 .monitor-charts .card-block { margin-bottom: 0; }
-.monitor-chart h4 { font-size: 14px; font-weight: 500; letter-spacing: 0.1px; margin-bottom: 8px; color: var(--md-on-surface); }
-.monitor-chart canvas { display: block; width: 100%; height: 140px; }
+.monitor-chart-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.monitor-chart-title { min-width: 0; }
+.monitor-chart h4 { font-size: 14px; font-weight: 500; letter-spacing: 0.1px; margin: 0; color: var(--md-on-surface); }
+.monitor-chart-title .hint { margin: 3px 0 0; font-size: 12px; }
+.monitor-legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 12px; flex-shrink: 0; }
+.monitor-key { display: inline-flex; align-items: center; gap: 6px; color: var(--md-on-surface-variant); font-size: 11px; line-height: 16px; white-space: nowrap; }
+.monitor-key::before { content: ''; width: 14px; height: 3px; border-radius: var(--md-shape-full); background: var(--md-primary); }
+.monitor-key.secondary::before { background: var(--md-tertiary); }
+.monitor-key.error::before { background: var(--md-error); }
+.monitor-chart canvas { display: block; width: 100%; height: 180px; }
 .monitor-details { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 8px 24px; }
 .monitor-details li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--md-outline-variant); font-size: 14px; }
 .monitor-details li span { color: var(--md-on-surface-variant); }
 .monitor-details li strong { font-weight: 500; text-align: right; overflow-wrap: anywhere; }
+
+@media (max-width: 540px) {
+  .monitor-toolbar { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .monitor-window { text-align: left; }
+  .monitor-chart-head { flex-direction: column; }
+  .monitor-legend { justify-content: flex-start; }
+}
