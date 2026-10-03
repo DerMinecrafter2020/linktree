@@ -140,6 +140,21 @@ router.get('/profile', requirePublicProfile, async (req, res, next) => {
   }
 });
 
+// Rechtstexte muessen auch bei einem nicht oeffentlichen Profil ohne Admin-Login erreichbar sein.
+router.get('/legal-content', async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT impressum_text, datenschutz_text FROM profile WHERE id = 1 LIMIT 1'
+    );
+    res.json({
+      ok: true,
+      data: rows[0] || { impressum_text: '', datenschutz_text: '' },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 function getNowInBerlin() {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
 }

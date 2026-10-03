@@ -276,6 +276,11 @@ async function finalizeApp() {
       res.send(swContent);
     });
 
+    // Unterseiten mit eigenen CSS-/JS-Dateien versioniert und nicht direkt statisch ausliefern.
+    app.get('/changelog.html', (req, res) => sendHtml(res, 'changelog.html'));
+    app.get('/impressum.html', (req, res) => sendHtml(res, 'impressum.html'));
+    app.get('/datenschutz.html', (req, res) => sendHtml(res, 'datenschutz.html'));
+
     // Statische Dateien. CSS/JS mit ?v=<Version> (von sendHtml gesetzt) duerfen ein Jahr im
     // Browser-Cache bleiben – jede neue Version hat eine neue URL. Ohne ?v= kurzer Cache.
     app.use(express.static(path.join(__dirname, 'public'), {

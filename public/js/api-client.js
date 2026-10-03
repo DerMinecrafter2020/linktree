@@ -43,6 +43,7 @@
   window.api = {
     // Öffentlich
     getProfile: () => get('/profile'),
+    getLegalContent: () => get('/legal-content'),
     getLinks: () => get('/links'),
     getLinkCategories: () => get('/links/categories'),
     trackLinkClick: (id, utm) => post(`/links/${id}/click`, { utm }),

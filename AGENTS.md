@@ -35,7 +35,7 @@ Docker/Compose ist nur eine alternative Variante und wird produktiv nicht genutz
 ```
 server.js                 Einstiegspunkt: Middleware, Setup-Modus, Routen, Cronjobs
 routes/
-  public.js               Öffentliche API (/api/...): Profil, Links, Klicks, Icons, QR, Login + 2FA-Login
+  public.js               Öffentliche API (/api/...): Profil, Rechtstexte, Links, Klicks, Icons, QR, Login + 2FA-Login
   admin.js                Admin-API (/api/admin/...), komplett hinter requireAdminSession
   navidrome.js            /api/navidrome: Now-Playing + Cover-Proxy (öffentlich), /control (Admin)
   api/status.js           /api/status/now-playing (Music Assistant → Navidrome-Fallback)
@@ -67,6 +67,7 @@ public/                   Statische Dateien (werden 1:1 ausgeliefert!)
   index.html, admin.html, login.html, setup.html, changelog.html, impressum.html, datenschutz.html …
   js/api-client.js        window.api – einziger Weg, wie das Frontend das Backend aufruft
   js/app.js               Öffentliche Seite
+  js/legal.js             Rechtstexte: sichere Ausgabe, Absätze und Zeilenumbrüche
   js/icons.js             Icon-Darstellung (createResolved, Material-Symbole, Stil weiß/bunt)
   js/admin.js             Admin-Oberfläche (eine große IIFE)
   js/login.js             Login-Seite inkl. TOTP/WebAuthn

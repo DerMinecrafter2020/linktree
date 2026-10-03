@@ -256,6 +256,56 @@ body {
   overflow: hidden;
 }
 
+.card.changelog { width: min(720px, 100%); }
+.legal-content.card {
+  width: min(800px, 100%);
+  max-width: 800px;
+  margin: auto;
+  padding: clamp(20px, 5vw, 40px);
+}
+.legal-content > h1 { margin: 0 0 20px; font-size: clamp(28px, 5vw, 36px); line-height: 1.2; }
+.legal-content .back-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: -8px 0 16px -8px;
+  padding: 0 8px;
+  border-radius: var(--md-shape-sm);
+  color: var(--md-primary);
+  font-weight: 500;
+  text-decoration: none;
+}
+.legal-content .back-link:hover { background: var(--md-surface-container-high); text-decoration: underline; text-underline-offset: 3px; }
+.legal-content .user-content {
+  color: var(--md-on-surface);
+  font-size: 15px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+.legal-content .user-content h2,
+.legal-content .user-content h3 {
+  margin: 1.6em 0 0.55em;
+  color: var(--md-primary);
+  font-size: 1.2rem;
+  line-height: 1.35;
+  font-weight: 600;
+}
+.legal-content .user-content h2:first-child,
+.legal-content .user-content h3:first-child { margin-top: 0; }
+.legal-content .user-content h2 + h2 { margin-top: 0.55em; color: var(--md-on-surface); font-size: 1rem; font-weight: 500; }
+.legal-content .user-content p { margin: 0 0 1em; }
+.legal-content .user-content a { color: var(--md-primary); overflow-wrap: anywhere; }
+.legal-content .user-content ul,
+.legal-content .user-content ol { margin: 0 0 1.2em; padding-inline-start: 1.5em; }
+.legal-content .user-content li { margin: 0.35em 0; padding-inline-start: 0.2em; }
+.legal-content .user-content blockquote {
+  margin: 1em 0;
+  padding: 0.25em 0 0.25em 1em;
+  border-left: 3px solid var(--md-primary);
+  color: var(--md-on-surface-variant);
+}
+
 /* ---------- Profil ---------- */
 .profile {
   display: flex;
