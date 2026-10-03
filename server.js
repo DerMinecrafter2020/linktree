@@ -479,7 +479,7 @@ async function finalizeApp() {
           ? (publicDomain.startsWith('http') ? publicDomain : `${req.protocol}://${publicDomain}`)
           : `${req.protocol}://${req.get('host')}`;
 
-        let html = indexHtmlTemplate;
+        let html = indexHtmlTemplate.replace('__CURRENT_YEAR__', () => String(new Date().getFullYear()));
         html = html.replace(/(<meta name="robots"[^>]*?>)?/i, '<meta name="robots" content="index, follow" />');
 
         // Custom CSS injizieren
