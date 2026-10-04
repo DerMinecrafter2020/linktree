@@ -1,123 +1,180 @@
-# OpenWeb · Link in Bio
+# OpenWeb – selbst gehostete Link-in-Bio-Seite
 
-Eine komplette Link-in-Bio-Seite (a la Linktree) im **Dark & Neon**-Stil mit eigener vollumfänglicher Admin-Oberfläche, tiefgehenden Statistiken und Musik-Integration.
+OpenWeb ist eine responsive Link-in-Bio-Seite mit Admin-Panel, Statistiken und Musik-Integration. Das Frontend besteht aus Vanilla-HTML/CSS/JavaScript und benötigt keinen Build-Schritt.
 
-- **Backend:** Node.js 20.19+ / 22.12+ + Express 4
-- **Datenbank:** PostgreSQL 16
-- **Auth:** E-Mail/Passwort (bcrypt), **2FA (WebAuthn/Passkeys)**, serverseitige Sessions
-- **Frontend:** Statisches HTML/JS/CSS, komplett ohne Frontend-Frameworks (Vanilla)
+| Komponente | Technik |
+|---|---|
+| Backend | Node.js **20.19+** oder **22.12+**, Express 4 |
+| Datenbank | PostgreSQL 16 |
+| Anmeldung | E-Mail/Passwort, TOTP und WebAuthn/Passkeys |
+| Oberfläche | Material 3 Dark; öffentliche Themes Dunkel, Midnight und Sunset |
 
----
+## Funktionen
 
-## ✨ Features
+### Öffentliche Seite
 
-### 🖥️ Frontend (Public Page)
-- Animierter **Aurora-Hintergrund** und Neon-Avatar mit rotierendem Ring
-- Hover-Effekte: Karten wachsen, URLs leuchten im Neon-Cyan auf
-- **Now Playing:** Live-Anzeige des aktuell gehörten Songs (über Navidrome/Subsonic API oder Music Assistant)
-- Integrierte Rechtstexte (Impressum, Datenschutz)
+- Responsive Profilseite mit Kategorien, Kurzlinks und Dashboard-Icons.
+- Links können geplant, zeitlich begrenzt und passwortgeschützt werden. Die Ziel-URL geschützter Links wird erst nach erfolgreicher Passwortprüfung ausgegeben.
+- Besucher können Links teilen, QR-Codes öffnen und – sofern aktiviert – das Theme wählen.
+- Now-Playing-Anzeige über Navidrome/Subsonic oder Music Assistant; optional mit Discord-Webhook und Musikverlauf.
+- Impressum und Datenschutzerklärung lassen sich im Admin-Panel pflegen. Leerzeilen und Zeilenumbrüche werden auf den Unterseiten formatiert dargestellt.
+- Nach Admin-Anmeldung erscheint auf der Hauptseite ein mobilfreundlicher Direktzugang zum Admin-Panel.
 
-### 📊 Umfangreiche Statistiken
-Die Admin-Oberfläche bietet ein dediziertes Statistik-Dashboard für wählbare Zeiträume (7, 30, 90 Tage):
-- Klick-Verlauf (Interaktives Balkendiagramm)
-- Breakdown nach **Geräten**, **Browsern**, **Betriebssystemen** und **Ländern**
-- Auswertung von **Top Quellen / UTM-Parametern** (Source & Medium)
-- Klicks & Unique Visitors pro einzelnem Link
-- **Musik-Verlauf (Scrobbles)**: Automatische Aufzeichnung und Anzeige der zuletzt gehörten Songs. Doppelte Tracks werden intelligent zusammengefasst.
-- **CSV-Export** aller generierten Statistiken
+### Admin-Panel
 
-### 🛠️ Admin & Verwaltung
-- 🔐 **Hohe Sicherheit:** Echter Login mit 2FA (WebAuthn) Support für Passkeys / Security Keys.
-- 🔗 **Link-Verwaltung**: Hinzufügen, bearbeiten, deaktivieren, löschen und per **Drag & Drop** sortieren.
-- 🎨 **Icons**: Unterstützt einfache Emojis, direkte Bild-URLs oder über 2000 [Simple Icons](https://simpleicons.org/).
-- 👤 **Profil-Verwaltung**: Name, Handle, Bio, und Avatar (Bild-Upload oder Initialen).
-- 💾 **Backups**: Komplettes JSON-Export/Import der Links.
-- 🎵 **Navidrome- & Music Assistant-Einstellungen**: Bequem im UI verwaltbar (Passwörter werden sicher AES-256-GCM verschlüsselt in der DB abgelegt).
+- Profil-, Link- und Kategorienverwaltung, einschließlich Zeitsteuerung, Ablaufdatum, Passwortschutz und Kurzlinks.
+- Statistiken über 7, 30 oder 90 Tage: Klicks, eindeutige Besucher, Geräte, Browser, Betriebssysteme, Länder und UTM-Parameter; CSV-Export.
+- API-Key-Verwaltung und öffentliche API-Dokumentation.
+- Ressourcenmonitor für CPU, Arbeitsspeicher, Event-Loop, HTTP-Anfragen/-Fehler, Antwortzeiten und PostgreSQL-Verbindungen. Messpunkte werden zentral gespeichert, sind auf anderen Admin-Geräten sichtbar und bleiben bei Neustarts erhalten. Messpunkte werden nach 30 Tagen gelöscht; das Diagramm zeigt die letzte Stunde.
+- Lokale Theme-Auswahl Dunkel/Midnight/Sunset für das Admin-Panel.
+- TOTP- und WebAuthn-Verwaltung, Audit-Log, Benachrichtigungen und JSON-Backups.
+- Verschlüsselungsschlüssel-Backup als separat passwortgeschützte Datei; Wiederherstellung im Admin-Panel oder offline.
 
----
+## Voraussetzungen
 
-## 🚀 Installation & Setup
+- Linux für den empfohlenen Produktivbetrieb mit systemd/nginx; Git und Bash für `install.sh`.
+- Node.js **20.19+** oder **22.12+** und npm.
+- PostgreSQL 16. Für die alternative Compose-Installation wird Docker Compose benötigt.
+- Eine öffentliche Domain und HTTPS werden für den Produktivbetrieb empfohlen.
 
-### Variante A: Docker + Web-basiertes Setup (Empfohlen)
+## Installation
 
-Die einfachste Möglichkeit, OpenWeb zu starten. Es wird automatisch erkannt, wenn das System noch unkonfiguriert ist, und ein Setup-Assistent im Browser gestartet.
+### Empfohlen: Linux-Installation mit `install.sh`
 
-1. Repository klonen und in den Ordner wechseln:
+Das Installationsskript richtet OpenWeb direkt auf einem Linux-Server ein. Es kann eine PostgreSQL-Datenbank in Docker Compose verwenden oder sich mit einer bestehenden PostgreSQL-URL verbinden. Bei Ausführung als root können außerdem ein systemd-Dienst, nginx und optional ein Let's-Encrypt-Zertifikat eingerichtet werden.
+
+```bash
+git clone https://github.com/DerMinecrafter2020/linktree.git openweb
+cd openweb
+sudo bash install.sh
+```
+
+Folge den Fragen zu Datenbank, Admin-Konto, Domain und optionaler Navidrome-Integration. Das Skript generiert Session- und Verschlüsselungsschlüssel und führt die Migrationen sowie das initiale Seeding aus. Die `.env` wird mit restriktiven Dateirechten angelegt.
+
+Nach der Installation ist der Dienst – sofern systemd eingerichtet wurde – über `openweb` verwaltbar:
+
+```bash
+sudo systemctl status openweb
+sudo systemctl restart openweb
+sudo journalctl -u openweb -n 100 -f
+```
+
+Weitere Verwaltungsbefehle:
+
+```bash
+sudo bash install.sh update             # Aktualisieren, Migrationen ausführen und Neustart anbieten
+sudo bash install.sh change-password    # Admin-Passwort ändern
+sudo bash install.sh change-navidrome   # Navidrome-Zugangsdaten ändern
+sudo bash install.sh reset-db           # Datenbank zurücksetzen und neu seeden (löscht Daten)
+sudo bash install.sh logs               # systemd-Logs live anzeigen
+```
+
+### Alternative: Docker Compose
+
+Docker Compose ist als alternative Betriebsart vorhanden, aber nicht der empfohlene Produktivweg. **Nicht mit den Platzhaltern aus `.env.example` starten.** Compose bindet App und PostgreSQL standardmäßig nur an `127.0.0.1`.
+
+```bash
+git clone https://github.com/DerMinecrafter2020/linktree.git openweb
+cd openweb
+cp .env.example .env
+```
+
+Vor dem Start in `.env` mindestens `POSTGRES_PASSWORD`, `SESSION_SECRET`, `NAVIDROME_ENCRYPTION_KEY`, `ADMIN_EMAIL` und `ADMIN_PASSWORD` setzen. `SESSION_SECRET` und `NAVIDROME_ENCRYPTION_KEY` müssen jeweils 64 Hex-Zeichen (32 Byte) enthalten; Schlüssel lassen sich z. B. mit `openssl rand -hex 32` erzeugen. `ADMIN_PASSWORD` wird nur für das initiale Seeding benötigt.
+
+Die Datenbank vorbereiten und den Admin anlegen:
+
+```bash
+docker compose build app
+docker compose up -d postgres
+docker compose run --rm app npm run db:migrate
+docker compose run --rm app npm run db:seed
+```
+
+Danach `ADMIN_PASSWORD` und ein eventuell verwendetes `NAVIDROME_PASSWORD` aus der Host-`.env` entfernen und die App starten:
+
+```bash
+docker compose up -d app
+docker compose logs -f app
+```
+
+**Wichtig:** Für Compose die Datenbank vor dem App-Start über die Befehle oben migrieren und seeden. Der Web-Setup-Assistent schreibt seine `.env` innerhalb des Containers; diese Datei ist nicht dauerhaft. Ein vollständiges Host-`.env` und das manuelle Seeding vermeiden außerdem, dass ein im Container erzeugter Verschlüsselungsschlüssel nach dem Neustart von Compose-Werten abweicht.
+
+### Manuelle Installation / Entwicklung
+
+1. PostgreSQL bereitstellen und `DATABASE_URL` in `.env` konfigurieren. `.env.example` kann als Vorlage dienen.
+2. `SESSION_SECRET` und `NAVIDROME_ENCRYPTION_KEY` durch gültige, zufällige 64-stellige Hex-Schlüssel ersetzen.
+3. Abhängigkeiten und Datenbankschema einrichten:
+
    ```bash
-   git clone https://github.com/DerMinecrafter2020/linktree.git openweb
-   cd openweb
+   npm ci
+   npm run db:migrate
+   npm run db:seed
    ```
-2. `.env` erstellen:
+
+   Für das Seeding muss `ADMIN_PASSWORD` (mindestens 8 Zeichen) in `.env` gesetzt sein. Danach `ADMIN_PASSWORD` und `NAVIDROME_PASSWORD` wieder daraus entfernen.
+
+4. Starten:
+
    ```bash
-   cp .env.example .env
+   npm start
    ```
-3. Docker Compose starten (startet Node.js Server + PostgreSQL DB):
-   ```bash
-   docker compose up -d
-   ```
-4. Setup im Browser abschließen:
-   Öffne `http://localhost:3000/setup.html` in deinem Browser. Der Assistent führt dich durch die Erstellung des Admin-Accounts, das initiale Profil und die Datenbankanbindung.
 
-### Variante B: Manuell über Install-Script (Linux Server)
+   Für lokale Entwicklung über unverschlüsseltes HTTP `NODE_ENV=development` setzen. Im Produktionsmodus ist das Session-Cookie auf HTTPS beschränkt.
 
-Für produktive Deployments direkt auf einem Linux-Server bietet das beiliegende Bash-Script einen komfortablen Weg, Systemd-Services, Nginx-Proxys und die Datenbank automatisch einzurichten.
+Wenn noch keine Datenbank konfiguriert ist oder noch kein aktiver Admin existiert, startet OpenWeb im Setup-Modus. Den Setup-Assistenten nur aus einem vertrauenswürdigen Netzwerk aufrufen und nicht öffentlich erreichbar lassen. Nach erfolgreichem Setup beendet sich der Prozess; bei manuellem Start erneut `npm start` ausführen. Eine konfigurierte, aber nicht erreichbare Datenbank führt absichtlich **nicht** in den öffentlichen Setup-Modus.
+
+## Zugangsdaten und Schlüssel-Backup
+
+Navidrome-Passwort, Music-Assistant-Token und SMTP-Passwort werden mit AES-256-GCM verschlüsselt in PostgreSQL gespeichert. `NAVIDROME_ENCRYPTION_KEY` muss dauerhaft gesichert und unverändert erhalten bleiben; ohne passenden Schlüssel sind die bestehenden Zugangsdaten nicht entschlüsselbar.
+
+Im Admin-Panel unter **Daten → Verschlüsselungsschlüssel sichern** eine Backup-Datei erstellen. Dafür wird eine eigene Wiederherstellungs-Passphrase mit mindestens 16 Zeichen festgelegt. **Backup-Datei und Passphrase getrennt und außerhalb des Servers aufbewahren.** Die regulären JSON-Backups enthalten den Verschlüsselungsschlüssel absichtlich nicht.
+
+Wenn die App noch läuft, den Schlüssel im selben Admin-Bereich mit der Backup-Datei, der Wiederherstellungs-Passphrase und dem aktuellen Admin-Passwort wiederherstellen. Wenn OpenWeb wegen eines fehlenden oder ungültigen Schlüssels nicht startet, im Projektverzeichnis ausführen:
 
 ```bash
-bash install.sh
+node scripts/restore-encryption-key.js /pfad/zum/openweb-encryption-key-backup.json
 ```
 
-Das Script:
-- Fragt nach der gewünschten Datenbank-Variante (installiert via Docker oder nutzt bestehende URL)
-- Erfragt Admin-Zugangsdaten und generiert kryptografische Schlüssel
-- Installiert npm-Abhängigkeiten und führt SQL-Migrationen aus
-- Richtet auf Wunsch einen **systemd-Service** und einen **nginx Reverse Proxy** ein
+Das Wiederherstellungspasswort wird verdeckt abgefragt; anschließend den Dienst neu starten. Wird der Schlüssel über eine externe Umgebungsvariablen-Verwaltung bereitgestellt, dort ebenfalls den wiederhergestellten Wert eintragen.
 
-Weitere Befehle des Install-Scripts:
+## Einstellungen und Datenhaltung
+
+| Variable | Zweck |
+|---|---|
+| `DATABASE_URL` | PostgreSQL-Verbindungs-URL; erforderlich im Normalbetrieb |
+| `SESSION_SECRET` | Zufälliger 64-Hex-Wert zum Signieren der Sessions |
+| `NAVIDROME_ENCRYPTION_KEY` | Zufälliger 64-Hex-Wert für verschlüsselte Dienst-Zugangsdaten |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Initiales Admin-Seeding; `ADMIN_PASSWORD` anschließend entfernen |
+| `ADMIN_IP_ALLOWLIST` | Optionale Liste erlaubter Admin-IPv4-Adressen/CIDR-Netze |
+| `TRUST_PROXY` | Anzahl vertrauenswürdiger Reverse-Proxys; ohne Proxy auf `0` setzen |
+| `DATA_RETENTION_DAYS` | Aufbewahrung von Klickstatistiken (Standard: 365 Tage) |
+| `BACKUP_DIR` | Zielverzeichnis der automatischen JSON-Backups (Standard: `./backups`) |
+
+Datenbankmigrationen laufen beim Serverstart. Tägliche JSON-Backups werden um 03:00 Uhr erstellt und lassen sich im Admin-Bereich herunterladen oder manuell auslösen. Die tägliche Wartung löscht abgelaufene Sessions, alte Klickdaten und Monitor-Messpunkte älter als 30 Tage. Die Monitor-Gesamtsummen bleiben dauerhaft in der Datenbank erhalten.
+
+Die automatischen JSON-Backups sichern Profil-, Link-, Kategorie- und ausgewählte Admin-Daten; sie sind keine vollständige PostgreSQL- oder Server-Sicherung. Dateien im Backup-Verzeichnis werden mit restriktiven Dateirechten angelegt.
+
+## Updates
+
+Für die empfohlene Linux-Installation:
+
 ```bash
-bash install.sh update           # Holt neuen Code und führt Updates durch
-bash install.sh change-password  # Admin-Passwort neu setzen
-bash install.sh reset-db         # Datenbank komplett zurücksetzen
-bash install.sh logs             # systemd-Logs live anzeigen
+sudo bash install.sh update
 ```
 
----
+Das Skript holt den neuesten Code, installiert die in `package-lock.json` festgeschriebenen Produktionsabhängigkeiten, führt Migrationen aus, setzt Dateirechte und bietet einen Dienstneustart an.
 
-## 🛠 Datenmodell / Architektur
+Bei Docker Compose:
 
-- `users` — Admin-Benutzer (E-Mail + Passwort-Hash)
-- `user_credentials` — WebAuthn 2FA Keys
-- `profile` — Singleton (`id = 1`) mit Name, Handle, Bio, Avatar
-- `links` — Link-Einträge mit Position, Aktiv-Status, Icon
-- `link_clicks` — Analytik-Rohdaten (IP-Hash, User-Agent Parses, UTM)
-- `music_history` — Lokales Scrobble-Tagebuch
-- `admin_settings` — Singleton mit Admin-Status
-- `navidrome_settings` & `musicassistant_settings` — Singleton, API-Keys verschlüsselt
-- `user_sessions` — Verwaltet von `connect-pg-simple`
-
----
-
-## 🔒 Sicherheit
-
-- **Passwörter & 2FA**: Bcrypt Hashing für Passwörter. 2FA wird nativ über WebAuthn (FIDO2) abgewickelt.
-- **Verschlüsselung**: API Keys / Passwörter für Navidrome & Music Assistant werden via AES-256-GCM verschlüsselt in der Datenbank abgelegt. Der nötige Schlüssel `NAVIDROME_ENCRYPTION_KEY` verbleibt ausschließlich in der `.env`-Datei auf dem Server.
-- **Datenschutz**: IP-Adressen in den Statistiken werden sofort als kryptografischer Hash gespeichert (Unique Visitors), Roh-IPs werden niemals gesichert.
-- **Absicherung**: Helmet + CSP, SameSite-Cookies, vorbereitete SQL-Statements (`pg` param queries) verhindern XSS und SQL-Injection.
-
----
-
-## 🔁 Updates durchführen
-
-Wenn die Anwendung läuft, kannst du Aktualisierungen jederzeit wie folgt einspielen:
-
-**Bei Nutzung von `install.sh`:**
 ```bash
-bash install.sh update
+git pull --ff-only
+docker compose build app
+docker compose run --rm app npm run db:migrate
+docker compose up -d app
 ```
 
-**Bei manueller / Docker Nutzung:**
-```bash
-git pull
-docker compose build  # (Falls neue npm-Pakete hinzukamen)
-docker compose up -d
-docker compose exec app npm run db:migrate  # Führt evtl. neue SQL-Migrationen aus
-```
+## Weitere Informationen
+
+- Öffentliche API-Dokumentation: `/api-docs`
+- Änderungen: `/changelog.html`
+- Lizenz: MIT
