@@ -86,7 +86,7 @@
       </div>
     </header>
 
-    <section id="navidrome-player" class="np-player idle" aria-label="Aktuell gespielter Track" hidden>
+    <section id="navidrome-player" class="np-player idle" data-progress-style="time" aria-label="Aktuell gespielter Track" hidden>
       <div class="np-turntable-wrap" aria-hidden="true">
         <div class="np-turntable-base">
           <div class="np-cover"></div>
@@ -101,6 +101,9 @@
         <div class="np-title">Verbinde mit Navidrome…</div>
         <div class="np-artist">—</div>
         <div class="np-progress" id="np-progress"></div>
+        <div class="np-progress-line" id="np-progress-line" role="progressbar" aria-label="Wiedergabefortschritt" aria-valuemin="0" aria-valuemax="100">
+          <div class="np-progress-line-fill"></div>
+        </div>
         <div class="np-album" aria-hidden="true"></div>
         <div class="np-extra" aria-hidden="true"></div>
       </div>
@@ -112,7 +115,7 @@
 
     <footer class="footer">
       <span class="dot"></span>
-      <span>made with <span class="heart">♥</span> · <span class="year">__CURRENT_YEAR__</span> · <a href="/changelog.html" class="footer-link">Changelog</a> · v3.1.12</span>
+      <span>made with <span class="heart">♥</span> · <span class="year">__CURRENT_YEAR__</span> · <a href="/changelog.html" class="footer-link">Changelog</a> · v3.1.13</span>
       <div style="margin-top: 10px; font-size: 0.85em; display: flex; gap: 15px; justify-content: center;">
         <a href="/impressum.html" class="footer-link">Impressum</a>
         <a href="/datenschutz.html" class="footer-link">Datenschutz</a>

@@ -699,6 +699,38 @@ body {
   margin-top: 4px;
 }
 
+.np-progress-line {
+  display: none;
+  width: 100%;
+  height: 4px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-highest);
+}
+.np-player[data-progress-style="line"] .np-progress { display: none; }
+.np-player[data-progress-style="line"] .np-progress-line { display: block; }
+.np-player.idle .np-progress-line { display: none; }
+.np-progress-line-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--md-primary);
+  transition: width 850ms linear;
+}
+.np-progress-line.indeterminate .np-progress-line-fill {
+  width: 34%;
+  animation: np-progress-indeterminate 1.4s var(--md-ease) infinite;
+}
+@keyframes np-progress-indeterminate {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(310%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .np-progress-line-fill { transition: none; }
+  .np-progress-line.indeterminate .np-progress-line-fill { animation-duration: 3s; }
+}
+
 .np-album {
   display: block;
   max-height: 0;

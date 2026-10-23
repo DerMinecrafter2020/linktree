@@ -350,12 +350,44 @@
       f.custom_css.value = state.profile.custom_css || '';
       updateAvatarPreview(state.profile.avatar_url || null);
     }
+
+    renderPlayerProgressForm();
     
     const fLegal = $('#legal-form');
     if (fLegal) {
       fLegal.impressum_text.value = state.profile.impressum_text || '';
       fLegal.datenschutz_text.value = state.profile.datenschutz_text || '';
     }
+  }
+
+  function renderPlayerProgressForm() {
+    const form = $('#player-progress-form');
+    const style = state.profile?.player_progress_style === 'line' ? 'line' : 'time';
+    if (form) form.player_progress_style.value = style;
+    const preview = $('#admin-np-player');
+    if (preview) preview.dataset.progressStyle = style;
+  }
+
+  function bindPlayerProgress() {
+    const form = $('#player-progress-form');
+    if (!form || !window.api) return;
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const status = $('#player-progress-status');
+      status.textContent = 'Speichere …';
+      try {
+        const profile = state.profile || await window.api.getAdminProfile();
+        state.profile = await window.api.saveAdminProfile({
+          ...profile,
+          player_progress_style: form.player_progress_style.value === 'line' ? 'line' : 'time'
+        });
+        renderPlayerProgressForm();
+        status.textContent = '✅ Player-Anzeige gespeichert.';
+      } catch (err) {
+        status.textContent = '❌ ' + (err.message || 'Einstellung konnte nicht gespeichert werden.');
+      }
+    });
   }
 
   function buildLinkRow(link) {
@@ -2124,6 +2156,9 @@
       clearMarquee(metaEl);
       metaEl.textContent = 'Starte Musik im aktiven Player, um die Vorschau zu sehen.';
       progressEl.textContent = '00:00 / 00:00';
+      const progressFill = $('#admin-np-progress-line .np-progress-line-fill');
+      if (progressFill) progressFill.style.width = '0%';
+      $('#admin-np-progress-line')?.classList.remove('indeterminate');
       cover.classList.add('placeholder');
       cover.replaceChildren();
     }
@@ -2174,6 +2209,19 @@
 
     function updateProgress() {
       if (!currentTrack) return;
+      const progressLine = $('#admin-np-progress-line');
+      const progressFill = progressLine?.querySelector('.np-progress-line-fill');
+      if (progressLine && progressFill) {
+        const duration = Number(currentTrack.duration) || 0;
+        const isIndeterminate = currentTrack.isRadio || duration <= 0;
+        const progress = duration > 0
+          ? Math.min(100, Math.max(0, (Number(localPosition) || 0) / duration * 100))
+          : 0;
+        progressLine.classList.toggle('indeterminate', isIndeterminate);
+        progressFill.style.width = isIndeterminate ? '34%' : `${progress}%`;
+        if (isIndeterminate) progressLine.removeAttribute('aria-valuenow');
+        else progressLine.setAttribute('aria-valuenow', String(Math.round(progress)));
+      }
       if (currentTrack.isRadio) {
         progressEl.textContent = currentTrack.radioStreamUrl ? '📡 Stream' : '📡 Radio';
         return;
@@ -2486,6 +2534,7 @@
     bindAdminTheme();
     bindTabs();
     bindProfile();
+    bindPlayerProgress();
     bindAvatarUpload();
     bindLinks();
     bindLinkDialog();

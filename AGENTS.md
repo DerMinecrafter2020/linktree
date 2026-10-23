@@ -203,6 +203,8 @@ Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
 - Music Assistant: `musicassistant_settings.user_id` bestimmt den Benutzer für „Now Playing“.
   Die Player-Zuordnung stammt aus `player_filter` der Music-Assistant-API; ohne eingeschränkte
   Player-Zuordnung wird vorsichtshalber keine Music-Assistant-Wiedergabe ausgegeben.
+- Die öffentliche Player-Fortschrittsanzeige wird über `profile.player_progress_style` (`time`|`line`)
+  konfiguriert; das Frontend liest diese Einstellung über `/api/profile`.
 - Icon-Proxy `/api/icon/dashboardicon` cacht Logos 7 Tage im Speicher (max. 400) und zählt
   nicht zum API-Limit (eigenes Limit 600/min) – sonst verbrauchen viele Links das Kontingent.
 - Admin: Daten erst laden, wenn sie gebraucht werden (Vorschau-iframe, Icon-Vorschläge,

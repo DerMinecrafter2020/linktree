@@ -267,10 +267,28 @@
           </form>
         </div>
 
+        <div class="card-block">
+          <h3>🎛️ Player-Anzeige</h3>
+          <p>Wähle, wie der Fortschritt des Musik-Players auf der Startseite dargestellt wird.</p>
+          <form id="player-progress-form" class="form">
+            <label>
+              <span>Fortschritts-Theme</span>
+              <select name="player_progress_style">
+                <option value="time">Minuten und Sekunden (0:42 / 3:18)</option>
+                <option value="line">Animierte Fortschrittslinie</option>
+              </select>
+            </label>
+            <div class="form-actions">
+              <button type="submit" class="btn primary">Speichern</button>
+            </div>
+            <p id="player-progress-status" class="hint" aria-live="polite"></p>
+          </form>
+        </div>
+
 
         <div class="card-block" id="navidrome-preview-block">
           <h3>👁️ Live-Vorschau</h3>
-          <div id="admin-np-player" class="np-player idle" aria-label="Aktuell gespielter Track">
+          <div id="admin-np-player" class="np-player idle" data-progress-style="time" aria-label="Aktuell gespielter Track">
             <div class="np-turntable-wrap" aria-hidden="true">
               <div class="np-turntable-base">
                 <div class="np-cover" id="admin-np-cover"></div>
@@ -286,6 +304,9 @@
               <div class="np-title" id="admin-np-title">Momentan läuft nichts</div>
               <div class="np-album" id="admin-np-meta">Starte Musik in Navidrome, um die Vorschau zu sehen.</div>
               <div class="np-extra" id="admin-np-progress">00:00 / 00:00</div>
+              <div class="np-progress-line" id="admin-np-progress-line" role="progressbar" aria-label="Wiedergabefortschritt" aria-valuemin="0" aria-valuemax="100">
+                <div class="np-progress-line-fill"></div>
+              </div>
             </div>
           </div>
         </div>

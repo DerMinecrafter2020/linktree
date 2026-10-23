@@ -133,6 +133,7 @@ router.get('/profile', requirePublicProfile, async (req, res, next) => {
       avatar: 'CA',
       avatar_url: null,
       theme: 'dark',
+      player_progress_style: 'time',
     };
     res.json({ ok: true, data: profile });
   } catch (err) {
@@ -382,7 +383,7 @@ router.get('/qr-code', async (req, res, next) => {
 
 router.get('/public/profile', requireApiKey, async (req, res, next) => {
   try {
-    const { rows } = await db.query('SELECT name, handle, bio, avatar, avatar_url, theme, is_public, allow_visitor_theme, icon_style FROM profile WHERE id = 1 LIMIT 1');
+    const { rows } = await db.query('SELECT name, handle, bio, avatar, avatar_url, theme, is_public, allow_visitor_theme, icon_style, player_progress_style FROM profile WHERE id = 1 LIMIT 1');
     res.json({ ok: true, data: rows[0] || null });
   } catch (err) { next(err); }
 });

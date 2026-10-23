@@ -78,6 +78,9 @@ router.post('/profile', async (req, res, next) => {
     const impressumText = req.body.impressum_text !== undefined ? String(req.body.impressum_text || '').slice(0, 10000) : undefined;
     const datenschutzText = req.body.datenschutz_text !== undefined ? String(req.body.datenschutz_text || '').slice(0, 10000) : undefined;
     const iconStyle = ['white', 'color'].includes(req.body.icon_style) ? req.body.icon_style : undefined;
+    const playerProgressStyle = ['time', 'line'].includes(req.body.player_progress_style)
+      ? req.body.player_progress_style
+      : undefined;
 
     const updates = [
       'name = EXCLUDED.name',
@@ -121,6 +124,13 @@ router.post('/profile', async (req, res, next) => {
       updates.splice(-1, 0, `icon_style = EXCLUDED.icon_style`);
       values.push(iconStyle);
       extraCols.push('icon_style');
+      extraVals.push('$' + idx++);
+    }
+
+    if (playerProgressStyle !== undefined) {
+      updates.splice(-1, 0, 'player_progress_style = EXCLUDED.player_progress_style');
+      values.push(playerProgressStyle);
+      extraCols.push('player_progress_style');
       extraVals.push('$' + idx++);
     }
     
@@ -1010,8 +1020,8 @@ router.post('/import', async (req, res, next) => {
       if (data.profile && typeof data.profile === 'object') {
         const p = data.profile;
         await client.query(`
-          INSERT INTO profile (id, name, handle, bio, avatar, avatar_url, theme)
-          VALUES (1, $1, $2, $3, $4, $5, $6)
+          INSERT INTO profile (id, name, handle, bio, avatar, avatar_url, theme, player_progress_style)
+          VALUES (1, $1, $2, $3, $4, $5, $6, $7)
           ON CONFLICT (id) DO UPDATE SET
             name = EXCLUDED.name,
             handle = EXCLUDED.handle,
@@ -1019,6 +1029,7 @@ router.post('/import', async (req, res, next) => {
             avatar = EXCLUDED.avatar,
             avatar_url = EXCLUDED.avatar_url,
             theme = EXCLUDED.theme,
+            player_progress_style = EXCLUDED.player_progress_style,
             updated_at = NOW()
         `, [
           v.safeText(p.name, 80),
@@ -1027,6 +1038,7 @@ router.post('/import', async (req, res, next) => {
           v.safeText(p.avatar, 2).toUpperCase() || 'CA',
           v.validateAvatarUrl(p.avatar_url),
           v.validateTheme(p.theme),
+          ['time', 'line'].includes(p.player_progress_style) ? p.player_progress_style : 'time',
         ]);
       }
 
