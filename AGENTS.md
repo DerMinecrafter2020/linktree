@@ -171,8 +171,9 @@ aktiv, wird eine neue Session mit `pendingUserId` erzeugt → `POST /api/login/t
 Session-ID** mit `userId`. Der Fehlversuchszähler wird erst nach vollständigem Login zurückgesetzt.
 
 **Admin-Schutz:** `routes/admin.js` nutzt `router.use(requireAdminSession)`: Session vorhanden,
-IP erlaubt, Benutzer existiert und ist aktiv. Neue Admin-Endpunkte gehören **immer** in diesen
-Router.
+IP erlaubt, Benutzer existiert und ist aktiv. Die Seite `/admin` prüft die Session zusätzlich
+serverseitig; bei Wiederherstellung aus dem Back-Forward-Cache wird sie zur erneuten Prüfung geladen.
+Neue Admin-Endpunkte gehören **immer** in diesen Router.
 
 **Passwortgeschützte Links:** Die Ziel-URL wird **nie** ohne Passwort ausgeliefert (`url: null` in
 `/api/links` und `/api/public/links`, kein Kurzlink `/go/:slug`, nicht in Sitemap oder

@@ -15,6 +15,12 @@
   const state = { profile: null, links: [], navidrome: null, musicassistant: null, musicassistantUsers: [] };
   const TAB_STORAGE_KEY = 'openweb-admin-active-tab';
 
+  // Seiten aus dem Back-Forward-Cache fuehren DOMContentLoaded nicht erneut aus.
+  // Neu laden, damit die Session erneut geprueft und der Admin-Inhalt frisch aufgebaut wird.
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) window.location.reload();
+  });
+
   const $  = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 
@@ -178,7 +184,7 @@
       return true;
     } catch {
       setConnection('err');
-      location.href = '/login';
+      location.replace('/login');
       return false;
     }
   }
@@ -189,7 +195,7 @@
     } catch (err) {
       console.warn('[logout]', err.message);
     }
-    location.href = '/login';
+    location.replace('/login');
   }
 
   function processAvatar(file) {

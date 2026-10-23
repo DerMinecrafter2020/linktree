@@ -366,6 +366,7 @@ async function finalizeApp() {
     app.get('/admin', (req, res, next) => {
       const { isIpAllowed } = require('./lib/auth');
       if (!isIpAllowed(req)) return res.status(403).send('Admin-Zugang von dieser IP nicht erlaubt');
+      if (!req.session?.userId) return res.redirect('/login');
       sendHtml(res, 'admin.html');
     });
     app.get('/login', (req, res) => sendHtml(res, 'login.html'));
