@@ -252,15 +252,15 @@
               <small class="hint">Nur ausfüllen, wenn du das Token ändern willst.</small>
             </label>
             <label>
-              <span>Player für „Now Playing“</span>
-              <select name="playerId">
-                <option value="">Player laden und auswählen …</option>
+              <span>Music Assistant-Benutzer für „Now Playing“</span>
+              <select name="userId">
+                <option value="">Benutzer laden und auswählen …</option>
               </select>
-              <small class="hint">Es wird ausschließlich dieser Player angezeigt. Speichere zuerst URL und Token, dann lade die Player.</small>
+              <small class="hint">Es werden nur Player ausgewertet, die in Music Assistant für den Benutzer freigegeben sind. Speichere zuerst URL und Token. Ohne Player-Beschränkung kann Music Assistant die Benutzer nicht unterscheiden.</small>
             </label>
 
             <div class="form-actions">
-              <button type="button" id="musicassistant-load-players-btn" class="btn ghost">Player laden</button>
+              <button type="button" id="musicassistant-load-users-btn" class="btn ghost">Benutzer laden</button>
               <button type="submit" class="btn primary">Speichern</button>
             </div>
             <p id="musicassistant-status" class="hint" aria-live="polite"></p>

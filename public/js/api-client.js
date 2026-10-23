@@ -105,7 +105,7 @@
 
     getMusicAssistantSettings: () => get('/admin/settings/musicassistant'),
     saveMusicAssistantSettings: (cfg) => post('/admin/settings/musicassistant', cfg),
-    getMusicAssistantPlayers: () => get('/admin/settings/musicassistant/players'),
+    getMusicAssistantUsers: () => get('/admin/settings/musicassistant/users'),
 
     exportData: () => get('/admin/export'),
     importData: (data) => post('/admin/import', data),

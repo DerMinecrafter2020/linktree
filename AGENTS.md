@@ -200,8 +200,9 @@ Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
   `Cache-Control: max-age=1 Jahr, immutable`. Neue Seiten also **nicht** per `res.sendFile`.
 - „Now Playing“ (`lib/navidrome.js`, `lib/musicassistant.js`) ist per `shortCache` 2,5 s gecacht
   und wird von allen Besuchern geteilt; das Frontend fragt nur bei sichtbarem Tab alle 3 s nach.
-- Music Assistant: `musicassistant_settings.player_id` begrenzt „Now Playing“ auf den im Admin-Bereich
-  ausgewählten Player. Ohne Auswahl wird keine Music-Assistant-Wiedergabe ausgegeben.
+- Music Assistant: `musicassistant_settings.user_id` bestimmt den Benutzer für „Now Playing“.
+  Die Player-Zuordnung stammt aus `player_filter` der Music-Assistant-API; ohne eingeschränkte
+  Player-Zuordnung wird vorsichtshalber keine Music-Assistant-Wiedergabe ausgegeben.
 - Icon-Proxy `/api/icon/dashboardicon` cacht Logos 7 Tage im Speicher (max. 400) und zählt
   nicht zum API-Limit (eigenes Limit 600/min) – sonst verbrauchen viele Links das Kontingent.
 - Admin: Daten erst laden, wenn sie gebraucht werden (Vorschau-iframe, Icon-Vorschläge,

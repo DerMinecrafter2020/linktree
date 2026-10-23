@@ -12,7 +12,7 @@
   const DASHBOARD_ICON_IDS = ['instagram','youtube','github','discord','spotify','tiktok','x','linkedin','whatsapp','telegram','twitch','reddit','navidrome','jellyfin','plex','nextcloud'];
   const TAB_TITLES = { links: 'Links', stats: 'Statistik', apikeys: 'API-Keys', profile: 'Profil', music: 'Musik', data: 'Daten', settings: 'Einstellungen', audit: 'Audit-Log', monitor: 'Monitor' };
 
-  const state = { profile: null, links: [], navidrome: null, musicassistant: null, musicassistantPlayers: [] };
+  const state = { profile: null, links: [], navidrome: null, musicassistant: null, musicassistantUsers: [] };
   const TAB_STORAGE_KEY = 'openweb-admin-active-tab';
 
   const $  = (s, r = document) => r.querySelector(s);
@@ -1916,6 +1916,7 @@
     try {
       state.musicassistant = await window.api.getMusicAssistantSettings();
       renderMusicAssistantForm();
+      if (state.musicassistant?.url) await loadMusicAssistantUsers();
     } catch (err) {
       console.warn('[admin] Music Assistant-Settings konnten nicht geladen werden:', err.message);
     }
@@ -1928,39 +1929,42 @@
     form.enabled.checked = !!cfg.enabled;
     form.url.value = cfg.url || '';
     form.token.value = '';
-    renderMusicAssistantPlayers(state.musicassistantPlayers, cfg.player_id || '');
+    renderMusicAssistantUsers(state.musicassistantUsers, cfg.user_id || '');
   }
 
-  function renderMusicAssistantPlayers(players, selectedPlayerId) {
-    const select = $('#musicassistant-form select[name="playerId"]');
+  function renderMusicAssistantUsers(users, selectedUserId) {
+    const select = $('#musicassistant-form select[name="userId"]');
     if (!select) return;
 
-    const selectedId = selectedPlayerId ? String(selectedPlayerId) : '';
+    const selectedId = selectedUserId ? String(selectedUserId) : '';
     const knownIds = new Set();
-    const options = [new Option('Player laden und auswählen …', '')];
+    const options = [new Option('Benutzer laden und auswählen …', '')];
 
-    for (const player of players) {
-      if (!player || !player.player_id) continue;
-      const playerId = String(player.player_id);
-      knownIds.add(playerId);
-      const name = player.name && player.name !== playerId
-        ? `${player.name} (${playerId})`
-        : playerId;
-      options.push(new Option(name, playerId));
+    for (const user of users) {
+      if (!user || !user.user_id) continue;
+      const userId = String(user.user_id);
+      knownIds.add(userId);
+      const displayName = user.name && user.username && user.username !== user.name
+        ? `${user.name} (${user.username})`
+        : (user.name || user.username || userId);
+      const currentLabel = user.is_current ? ' (API-Token-Benutzer)' : '';
+      const filterLabel = user.has_player_filter ? '' : ' (keine Player-Beschränkung)';
+      const name = `${displayName}${currentLabel}${filterLabel}`;
+      options.push(new Option(name, userId));
     }
 
     if (selectedId && !knownIds.has(selectedId)) {
-      options.push(new Option(`Gespeicherter Player (${selectedId}) – derzeit nicht geladen`, selectedId));
+      options.push(new Option(`Gespeicherter Benutzer (${selectedId}) – erneut laden`, selectedId));
     }
 
     select.replaceChildren(...options);
     select.value = selectedId;
   }
 
-  async function loadMusicAssistantPlayers() {
+  async function loadMusicAssistantUsers() {
     const form = $('#musicassistant-form');
     const status = $('#musicassistant-status');
-    const button = $('#musicassistant-load-players-btn');
+    const button = $('#musicassistant-load-users-btn');
     if (!form || !status || !state.musicassistant?.url) {
       if (status) status.textContent = 'Speichere zuerst die Music Assistant URL.';
       return;
@@ -1970,18 +1974,28 @@
       return;
     }
 
-    const selectedId = form.playerId.value || state.musicassistant.player_id || '';
+    const savedSelection = form.userId.value || state.musicassistant.user_id || '';
     if (button) button.disabled = true;
-    status.textContent = 'Lade Player …';
+    status.textContent = 'Lade Benutzer …';
     try {
-      const players = await window.api.getMusicAssistantPlayers();
-      state.musicassistantPlayers = Array.isArray(players) ? players : [];
-      renderMusicAssistantPlayers(state.musicassistantPlayers, selectedId);
-      status.textContent = state.musicassistantPlayers.length
-        ? `${state.musicassistantPlayers.length} Player geladen. Wähle deinen Player und speichere.`
-        : 'Keine Player gefunden.';
+      const users = await window.api.getMusicAssistantUsers();
+      state.musicassistantUsers = Array.isArray(users) ? users : [];
+      const selectedId = savedSelection || state.musicassistantUsers.find(user => user.is_current)?.user_id || '';
+      renderMusicAssistantUsers(state.musicassistantUsers, selectedId);
+      const selectedUser = state.musicassistantUsers.find(user => String(user.user_id) === String(selectedId));
+      if (!state.musicassistantUsers.length) {
+        status.textContent = 'Keine Benutzer gefunden.';
+      } else if (savedSelection && !selectedUser) {
+        status.textContent = 'Der gespeicherte Music-Assistant-Benutzer wurde nicht gefunden. Bitte wähle einen verfügbaren Benutzer.';
+      } else if (selectedUser && !selectedUser.has_player_filter) {
+        status.textContent = 'Benutzer geladen, aber ohne Player-Beschränkung. Beschränke ihn in Music Assistant auf deine Player.';
+      } else if (selectedUser?.is_current) {
+        status.textContent = 'Der Benutzer des API-Tokens ist vorausgewählt. Prüfe die Auswahl und speichere.';
+      } else {
+        status.textContent = `${state.musicassistantUsers.length} Benutzer geladen. Wähle deinen Benutzer und speichere.`;
+      }
     } catch (err) {
-      status.textContent = '❌ ' + (err.message || 'Player konnten nicht geladen werden');
+      status.textContent = '❌ ' + (err.message || 'Benutzer konnten nicht geladen werden');
     } finally {
       if (button) button.disabled = false;
     }
@@ -1992,7 +2006,7 @@
     if (!form || !window.api) return;
     loadMusicAssistantSettings();
 
-    $('#musicassistant-load-players-btn')?.addEventListener('click', loadMusicAssistantPlayers);
+    $('#musicassistant-load-users-btn')?.addEventListener('click', loadMusicAssistantUsers);
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -2007,17 +2021,29 @@
         enabled: !!form.enabled.checked,
         url,
         token,
-        playerId: form.playerId.value
+        userId: form.userId.value
       };
       try {
         await window.api.saveMusicAssistantSettings(cfg);
         state.musicassistant = await window.api.getMusicAssistantSettings();
-        if (settingsChanged) state.musicassistantPlayers = [];
+        if (settingsChanged) state.musicassistantUsers = [];
         renderMusicAssistantForm();
         toast('🎵 Music Assistant-Einstellungen gespeichert');
-        $('#musicassistant-status').textContent = cfg.enabled && !cfg.playerId
-          ? 'Einstellungen gespeichert. Lade die Player, wähle deinen Player und speichere erneut.'
-          : '';
+        const selectedUser = state.musicassistantUsers.find(user => String(user.user_id) === String(cfg.userId));
+        const status = $('#musicassistant-status');
+        if (!cfg.enabled) {
+          status.textContent = '';
+        } else if (!cfg.userId) {
+          status.textContent = 'Einstellungen gespeichert. Lade die MA-Benutzer und wähle deinen Benutzer.';
+        } else if (settingsChanged) {
+          status.textContent = 'Einstellungen gespeichert. Lade die Benutzer erneut, um die Auswahl zu prüfen.';
+        } else if (!selectedUser) {
+          status.textContent = 'Der Benutzer wurde gespeichert, ist aber nicht in der geladenen Liste. Lade die Benutzer erneut.';
+        } else if (!selectedUser.has_player_filter) {
+          status.textContent = 'Der Benutzer hat keine Player-Beschränkung. Beschränke ihn in Music Assistant auf deine Player.';
+        } else {
+          status.textContent = '';
+        }
       } catch (err) {
         toast('Fehler: ' + (err.message || 'Speichern fehlgeschlagen'), true);
       }
