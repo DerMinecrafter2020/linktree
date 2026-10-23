@@ -275,8 +275,9 @@
               <span>Fortschritts-Theme</span>
               <select name="player_progress_style">
                 <option value="time">Minuten und Sekunden (0:42 / 3:18)</option>
-                <option value="line">Animierte Fortschrittslinie</option>
+                <option value="line">Wellenform + Minuten und Sekunden</option>
               </select>
+              <small class="hint">Die Wellenform ist stilisiert; der Fortschritt läuft synchron zur Wiedergabe.</small>
             </label>
             <div class="form-actions">
               <button type="submit" class="btn primary">Speichern</button>
@@ -303,9 +304,10 @@
               <span class="np-badge" id="admin-np-badge">🎶</span>
               <div class="np-title" id="admin-np-title">Momentan läuft nichts</div>
               <div class="np-album" id="admin-np-meta">Starte Musik in Navidrome, um die Vorschau zu sehen.</div>
-              <div class="np-extra" id="admin-np-progress">00:00 / 00:00</div>
+              <div class="np-progress" id="admin-np-progress">00:00 / 00:00</div>
               <div class="np-progress-line" id="admin-np-progress-line" role="progressbar" aria-label="Wiedergabefortschritt" aria-valuemin="0" aria-valuemax="100">
-                <div class="np-progress-line-fill"></div>
+                <div class="np-waveform-layer np-waveform-base"></div>
+                <div class="np-waveform-layer np-waveform-played"></div>
               </div>
             </div>
           </div>

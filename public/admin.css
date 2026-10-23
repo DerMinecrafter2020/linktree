@@ -1370,8 +1370,8 @@ input[type="checkbox"] {
   z-index: 1;
 }
 
-.np-player.playing .np-cover { animation: np-spin 5.5s linear infinite; }
-.np-player.paused .np-cover { animation: np-spin 5.5s linear infinite paused; }
+.np-player.playing .np-cover { animation: np-spin 10s linear infinite; }
+.np-player.paused .np-cover { animation: np-spin 10s linear infinite paused; }
 .np-player.idle .np-cover { animation: none; opacity: 0.6; }
 
 @keyframes np-spin {
@@ -1422,34 +1422,50 @@ input[type="checkbox"] {
 
 #admin-np-player .np-progress-line {
   display: none;
+  position: relative;
   width: 100%;
-  height: 4px;
+  height: 22px;
   margin-top: 8px;
   overflow: hidden;
   border-radius: var(--md-shape-full);
-  background: var(--md-surface-container-highest);
+  --wave-progress: 0%;
 }
-#admin-np-player[data-progress-style="line"] #admin-np-progress { display: none; }
 #admin-np-player[data-progress-style="line"] .np-progress-line { display: block; }
 #admin-np-player.idle .np-progress-line { display: none; }
-#admin-np-player .np-progress-line-fill {
-  width: 0;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--md-primary);
-  transition: width 850ms linear;
+#admin-np-player.idle .np-progress { display: none; }
+#admin-np-player .np-waveform-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 1px;
 }
-#admin-np-player .np-progress-line.indeterminate .np-progress-line-fill {
-  width: 34%;
-  animation: admin-np-progress-indeterminate 1.4s var(--md-ease) infinite;
+#admin-np-player .np-wave-bar {
+  display: block;
+  flex: 1 1 0;
+  min-width: 1px;
+  border-radius: var(--md-shape-full);
 }
-@keyframes admin-np-progress-indeterminate {
-  from { transform: translateX(-110%); }
-  to { transform: translateX(310%); }
+#admin-np-player .np-waveform-base .np-wave-bar {
+  background: var(--md-outline-variant);
+  opacity: 0.8;
+}
+#admin-np-player .np-waveform-played {
+  clip-path: inset(0 calc(100% - var(--wave-progress)) 0 0);
+  transition: clip-path 1.1s linear;
+}
+#admin-np-player .np-waveform-played .np-wave-bar { background: var(--md-primary); }
+#admin-np-player .np-progress-line.indeterminate .np-waveform-played {
+  clip-path: inset(0 70% 0 0);
+  animation: admin-np-waveform-indeterminate 1.8s var(--md-ease) infinite alternate;
+}
+@keyframes admin-np-waveform-indeterminate {
+  from { clip-path: inset(0 70% 0 0); }
+  to { clip-path: inset(0 0 0 70%); }
 }
 @media (prefers-reduced-motion: reduce) {
-  #admin-np-player .np-progress-line-fill { transition: none; }
-  #admin-np-player .np-progress-line.indeterminate .np-progress-line-fill { animation-duration: 3s; }
+  #admin-np-player .np-waveform-played { transition: none; }
+  #admin-np-player .np-progress-line.indeterminate .np-waveform-played { animation-duration: 3s; }
 }
 
 .np-album {

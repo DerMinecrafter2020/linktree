@@ -366,6 +366,31 @@
     if (form) form.player_progress_style.value = style;
     const preview = $('#admin-np-player');
     if (preview) preview.dataset.progressStyle = style;
+    if (style === 'line') populateAdminWaveform($('#admin-np-progress-line'));
+  }
+
+  function populateAdminWaveform(container) {
+    if (!container || container.dataset.waveformReady === 'true') return;
+    const base = container.querySelector('.np-waveform-base');
+    const played = container.querySelector('.np-waveform-played');
+    if (!base || !played) return;
+
+    const createBars = () => {
+      const fragment = document.createDocumentFragment();
+      for (let index = 0; index < 48; index++) {
+        const variation = Math.abs(Math.sin(index * 1.73) * Math.cos(index * 0.37));
+        const envelope = 0.45 + 0.55 * Math.abs(Math.sin(index * 0.11 + 0.8));
+        const bar = document.createElement('span');
+        bar.className = 'np-wave-bar';
+        bar.style.height = `${12 + Math.round(82 * variation * envelope)}%`;
+        fragment.appendChild(bar);
+      }
+      return fragment;
+    };
+
+    base.replaceChildren(createBars());
+    played.replaceChildren(createBars());
+    container.dataset.waveformReady = 'true';
   }
 
   function bindPlayerProgress() {
@@ -2156,9 +2181,11 @@
       clearMarquee(metaEl);
       metaEl.textContent = 'Starte Musik im aktiven Player, um die Vorschau zu sehen.';
       progressEl.textContent = '00:00 / 00:00';
-      const progressFill = $('#admin-np-progress-line .np-progress-line-fill');
-      if (progressFill) progressFill.style.width = '0%';
-      $('#admin-np-progress-line')?.classList.remove('indeterminate');
+      const progressLine = $('#admin-np-progress-line');
+      if (progressLine) {
+        progressLine.style.setProperty('--wave-progress', '0%');
+        progressLine.classList.remove('indeterminate');
+      }
       cover.classList.add('placeholder');
       cover.replaceChildren();
     }
@@ -2210,15 +2237,14 @@
     function updateProgress() {
       if (!currentTrack) return;
       const progressLine = $('#admin-np-progress-line');
-      const progressFill = progressLine?.querySelector('.np-progress-line-fill');
-      if (progressLine && progressFill) {
+      if (progressLine) {
         const duration = Number(currentTrack.duration) || 0;
         const isIndeterminate = currentTrack.isRadio || duration <= 0;
         const progress = duration > 0
           ? Math.min(100, Math.max(0, (Number(localPosition) || 0) / duration * 100))
           : 0;
         progressLine.classList.toggle('indeterminate', isIndeterminate);
-        progressFill.style.width = isIndeterminate ? '34%' : `${progress}%`;
+        progressLine.style.setProperty('--wave-progress', `${progress}%`);
         if (isIndeterminate) progressLine.removeAttribute('aria-valuenow');
         else progressLine.setAttribute('aria-valuenow', String(Math.round(progress)));
       }
@@ -2251,6 +2277,10 @@
       isPolling = true;
       try {
         const track = await window.NavidromeAPI.nowPlaying();
+        if (['time', 'line'].includes(track?.player_progress_style) && player.dataset.progressStyle !== track.player_progress_style) {
+          player.dataset.progressStyle = track.player_progress_style;
+          if (track.player_progress_style === 'line') populateAdminWaveform($('#admin-np-progress-line'));
+        }
         if (!track || !track.playing) {
           if (currentTrack) renderIdle();
           isPolling = false;

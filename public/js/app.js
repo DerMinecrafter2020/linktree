@@ -71,6 +71,30 @@
     return img;
   }
 
+  function populateWaveform(container) {
+    if (!container || container.dataset.waveformReady === 'true') return;
+    const base = container.querySelector('.np-waveform-base');
+    const played = container.querySelector('.np-waveform-played');
+    if (!base || !played) return;
+
+    const createBars = () => {
+      const fragment = document.createDocumentFragment();
+      for (let index = 0; index < 48; index++) {
+        const variation = Math.abs(Math.sin(index * 1.73) * Math.cos(index * 0.37));
+        const envelope = 0.45 + 0.55 * Math.abs(Math.sin(index * 0.11 + 0.8));
+        const bar = document.createElement('span');
+        bar.className = 'np-wave-bar';
+        bar.style.height = `${12 + Math.round(82 * variation * envelope)}%`;
+        fragment.appendChild(bar);
+      }
+      return fragment;
+    };
+
+    base.replaceChildren(createBars());
+    played.replaceChildren(createBars());
+    container.dataset.waveformReady = 'true';
+  }
+
   // Link-Icons kommen einheitlich aus Dashboard Icons (vom Server aufgeloest: icon_resolved)
   function renderIcon(link) {
     if (!window.icons?.createResolved) return document.createTextNode('');
@@ -320,6 +344,7 @@
       window.icons?.applyStyle?.(profile?.icon_style);
       const player = $('#navidrome-player');
       if (player) player.dataset.progressStyle = profile?.player_progress_style === 'line' ? 'line' : 'time';
+      if (profile?.player_progress_style === 'line') populateWaveform($('#np-progress-line'));
       renderProfile(profile);
       buildThemeSwitcher(profile?.allow_visitor_theme !== false);
       if (profile?.is_public === false) {
@@ -364,9 +389,19 @@
       this.progressTimer = null;
     },
 
+    applyProgressStyle(style) {
+      if (!['time', 'line'].includes(style)) return;
+      const wrap = $('#navidrome-player');
+      if (!wrap || wrap.dataset.progressStyle === style) return;
+      wrap.dataset.progressStyle = style;
+      if (style === 'line') populateWaveform($('#np-progress-line'));
+      if (this.currentTrack) this.renderExtra(this.currentTrack, this.localPosition);
+    },
+
     async tick() {
       try {
         const newTrack = await window.NavidromeAPI.nowPlaying();
+        this.applyProgressStyle(newTrack?.player_progress_style);
         if (!newTrack || newTrack.playing !== true) {
           this.currentTrack = null;
           this.renderIdle();
@@ -440,15 +475,14 @@
       if (!extraEl) return;
 
       const progressLine = $('#np-progress-line');
-      const progressFill = progressLine?.querySelector('.np-progress-line-fill');
-      if (progressLine && progressFill) {
+      if (progressLine) {
         const duration = Number(data.duration) || 0;
         const isIndeterminate = data.isRadio || duration <= 0;
         const progress = duration > 0
           ? Math.min(100, Math.max(0, (Number(position) || 0) / duration * 100))
           : 0;
         progressLine.classList.toggle('indeterminate', isIndeterminate);
-        progressFill.style.width = isIndeterminate ? '34%' : `${progress}%`;
+        progressLine.style.setProperty('--wave-progress', `${progress}%`);
         if (isIndeterminate) {
           progressLine.removeAttribute('aria-valuenow');
         } else {
@@ -496,9 +530,11 @@
       if (progressEl) { progressEl.textContent = ''; progressEl.hidden = true; }
       const extraEl = wrap?.querySelector('.np-extra');
       if (extraEl) { extraEl.innerHTML = ''; extraEl.hidden = true; }
-      const progressFill = $('#np-progress-line .np-progress-line-fill');
-      if (progressFill) progressFill.style.width = '0%';
-      $('#np-progress-line')?.classList.remove('indeterminate');
+      const progressLine = $('#np-progress-line');
+      if (progressLine) {
+        progressLine.style.setProperty('--wave-progress', '0%');
+        progressLine.classList.remove('indeterminate');
+      }
       const cover = wrap?.querySelector('.np-cover');
       if (cover) {
         cover.replaceChildren(document.createTextNode('🎵'));
