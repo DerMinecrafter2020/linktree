@@ -16,6 +16,7 @@ const audit = require('../lib/audit');
 const alert = require('../lib/alert');
 const icons = require('../lib/icons');
 const encryptionKeyBackup = require('../lib/encryption-key-backup');
+const { getAvailablePlayers: getMusicAssistantPlayers } = require('../lib/musicassistant');
 
 function generateApiKey() {
   return require('crypto').randomBytes(32).toString('hex');
@@ -838,7 +839,7 @@ router.post('/settings/navidrome', async (req, res, next) => {
 router.get('/settings/musicassistant', async (req, res, next) => {
   try {
     const { rows } = await db.query(`
-      SELECT id, enabled, url, updated_at
+      SELECT id, enabled, url, player_id, updated_at
       FROM musicassistant_settings
       WHERE id = 1
       LIMIT 1
@@ -849,10 +850,27 @@ router.get('/settings/musicassistant', async (req, res, next) => {
   }
 });
 
+router.get('/settings/musicassistant/players', async (req, res) => {
+  try {
+    const players = await getMusicAssistantPlayers();
+    res.json({ ok: true, data: players });
+  } catch (err) {
+    if (err.status === 400) {
+      return res.status(400).json({ ok: false, error: err.message });
+    }
+    console.error('[admin musicassistant/players]', err.message);
+    res.status(502).json({
+      ok: false,
+      error: 'Music Assistant-Player konnten nicht geladen werden. Bitte URL und Token prüfen.'
+    });
+  }
+});
+
 router.post('/settings/musicassistant', async (req, res, next) => {
   try {
     const enabled = !!req.body.enabled;
     const url = req.body.url ? v.safeUrl(req.body.url) : null;
+    const playerId = v.safeText(req.body.playerId, 255) || null;
 
     let encryptedToken = null;
     if (req.body.token) {
@@ -861,27 +879,29 @@ router.post('/settings/musicassistant', async (req, res, next) => {
 
     if (encryptedToken) {
       await db.query(`
-        INSERT INTO musicassistant_settings (id, enabled, url, token_encrypted)
-        VALUES (1, $1, $2, $3)
+        INSERT INTO musicassistant_settings (id, enabled, url, token_encrypted, player_id)
+        VALUES (1, $1, $2, $3, $4)
         ON CONFLICT (id) DO UPDATE SET
           enabled = EXCLUDED.enabled,
           url = EXCLUDED.url,
           token_encrypted = EXCLUDED.token_encrypted,
+          player_id = EXCLUDED.player_id,
           updated_at = NOW()
-      `, [enabled, url, encryptedToken]);
+      `, [enabled, url, encryptedToken, playerId]);
     } else {
       await db.query(`
-        INSERT INTO musicassistant_settings (id, enabled, url)
-        VALUES (1, $1, $2)
+        INSERT INTO musicassistant_settings (id, enabled, url, player_id)
+        VALUES (1, $1, $2, $3)
         ON CONFLICT (id) DO UPDATE SET
           enabled = EXCLUDED.enabled,
           url = EXCLUDED.url,
+          player_id = EXCLUDED.player_id,
           updated_at = NOW()
-      `, [enabled, url]);
+      `, [enabled, url, playerId]);
     }
 
     const { rows } = await db.query(`
-      SELECT id, enabled, url, updated_at
+      SELECT id, enabled, url, player_id, updated_at
       FROM musicassistant_settings
       WHERE id = 1
       LIMIT 1

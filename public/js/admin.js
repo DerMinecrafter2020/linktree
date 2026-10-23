@@ -12,7 +12,7 @@
   const DASHBOARD_ICON_IDS = ['instagram','youtube','github','discord','spotify','tiktok','x','linkedin','whatsapp','telegram','twitch','reddit','navidrome','jellyfin','plex','nextcloud'];
   const TAB_TITLES = { links: 'Links', stats: 'Statistik', apikeys: 'API-Keys', profile: 'Profil', music: 'Musik', data: 'Daten', settings: 'Einstellungen', audit: 'Audit-Log', monitor: 'Monitor' };
 
-  const state = { profile: null, links: [], navidrome: null };
+  const state = { profile: null, links: [], navidrome: null, musicassistant: null, musicassistantPlayers: [] };
   const TAB_STORAGE_KEY = 'openweb-admin-active-tab';
 
   const $  = (s, r = document) => r.querySelector(s);
@@ -1928,12 +1928,71 @@
     form.enabled.checked = !!cfg.enabled;
     form.url.value = cfg.url || '';
     form.token.value = '';
+    renderMusicAssistantPlayers(state.musicassistantPlayers, cfg.player_id || '');
+  }
+
+  function renderMusicAssistantPlayers(players, selectedPlayerId) {
+    const select = $('#musicassistant-form select[name="playerId"]');
+    if (!select) return;
+
+    const selectedId = selectedPlayerId ? String(selectedPlayerId) : '';
+    const knownIds = new Set();
+    const options = [new Option('Player laden und auswählen …', '')];
+
+    for (const player of players) {
+      if (!player || !player.player_id) continue;
+      const playerId = String(player.player_id);
+      knownIds.add(playerId);
+      const name = player.name && player.name !== playerId
+        ? `${player.name} (${playerId})`
+        : playerId;
+      options.push(new Option(name, playerId));
+    }
+
+    if (selectedId && !knownIds.has(selectedId)) {
+      options.push(new Option(`Gespeicherter Player (${selectedId}) – derzeit nicht geladen`, selectedId));
+    }
+
+    select.replaceChildren(...options);
+    select.value = selectedId;
+  }
+
+  async function loadMusicAssistantPlayers() {
+    const form = $('#musicassistant-form');
+    const status = $('#musicassistant-status');
+    const button = $('#musicassistant-load-players-btn');
+    if (!form || !status || !state.musicassistant?.url) {
+      if (status) status.textContent = 'Speichere zuerst die Music Assistant URL.';
+      return;
+    }
+    if (form.url.value.trim() !== state.musicassistant.url || form.token.value) {
+      status.textContent = 'Speichere zuerst die geänderte URL oder das Token.';
+      return;
+    }
+
+    const selectedId = form.playerId.value || state.musicassistant.player_id || '';
+    if (button) button.disabled = true;
+    status.textContent = 'Lade Player …';
+    try {
+      const players = await window.api.getMusicAssistantPlayers();
+      state.musicassistantPlayers = Array.isArray(players) ? players : [];
+      renderMusicAssistantPlayers(state.musicassistantPlayers, selectedId);
+      status.textContent = state.musicassistantPlayers.length
+        ? `${state.musicassistantPlayers.length} Player geladen. Wähle deinen Player und speichere.`
+        : 'Keine Player gefunden.';
+    } catch (err) {
+      status.textContent = '❌ ' + (err.message || 'Player konnten nicht geladen werden');
+    } finally {
+      if (button) button.disabled = false;
+    }
   }
 
   function bindMusicAssistant() {
     const form = $('#musicassistant-form');
     if (!form || !window.api) return;
     loadMusicAssistantSettings();
+
+    $('#musicassistant-load-players-btn')?.addEventListener('click', loadMusicAssistantPlayers);
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -1943,16 +2002,22 @@
         toast('URL ist Pflicht, wenn der Player aktiviert ist', true);
         return;
       }
+      const settingsChanged = url !== (state.musicassistant?.url || '') || !!token;
       const cfg = {
         enabled: !!form.enabled.checked,
         url,
-        token
+        token,
+        playerId: form.playerId.value
       };
       try {
         await window.api.saveMusicAssistantSettings(cfg);
         state.musicassistant = await window.api.getMusicAssistantSettings();
+        if (settingsChanged) state.musicassistantPlayers = [];
         renderMusicAssistantForm();
         toast('🎵 Music Assistant-Einstellungen gespeichert');
+        $('#musicassistant-status').textContent = cfg.enabled && !cfg.playerId
+          ? 'Einstellungen gespeichert. Lade die Player, wähle deinen Player und speichere erneut.'
+          : '';
       } catch (err) {
         toast('Fehler: ' + (err.message || 'Speichern fehlgeschlagen'), true);
       }
