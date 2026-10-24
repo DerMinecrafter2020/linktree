@@ -32,9 +32,65 @@ laeuft auf einem einzelnen Server (eigenstaendig oder mit Docker Compose).
 
 ---
 
+## Node.js 26 auf Debian/Ubuntu installieren
+
+OpenWebs `package.json` akzeptiert Node.js 26 bereits. Die Befehle unten installieren die
+offizielle Node.js-Version **26.12.1** systemweit unter `/opt/node26` und prüfen vor dem Entpacken
+die SHA-256-Prüfsumme. Unterstützt sind Debian/Ubuntu auf `amd64` und `arm64`.
+
+> **LTS-Hinweis (24.10.2026):** Node.js 26.12.1 ist derzeit ein Current-Release; der Wechsel zu
+> LTS ist für den 28.10.2026 vorgesehen. Node.js 24 ist aktuell LTS.
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl xz-utils
+
+NODE_VERSION=26.12.1
+case "$(dpkg --print-architecture)" in
+  amd64) NODE_ARCH=x64 ;;
+  arm64) NODE_ARCH=arm64 ;;
+  *) echo "Nicht unterstützte Architektur: $(dpkg --print-architecture)" >&2; exit 1 ;;
+esac
+
+cd /tmp
+curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz"
+curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt"
+grep " node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz$" SHASUMS256.txt | sha256sum --check -
+
+sudo install -d "/opt/node-v${NODE_VERSION}"
+sudo tar -xJf "node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" -C "/opt/node-v${NODE_VERSION}" --strip-components=1
+sudo ln -sfn "/opt/node-v${NODE_VERSION}" /opt/node26
+export PATH="/opt/node26/bin:$PATH"
+node --version
+npm --version
+```
+
+Für einen bestehenden systemd-Dienst den Node-26-Pfad in der Dienstumgebung setzen:
+
+```bash
+sudo install -d /etc/systemd/system/openweb.service.d
+sudo tee /etc/systemd/system/openweb.service.d/node26.conf >/dev/null <<'EOF'
+[Service]
+Environment="PATH=/opt/node26/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=
+ExecStart=/usr/bin/env npm start
+EOF
+sudo systemctl daemon-reload
+```
+
+Danach OpenWeb mit Node.js 26 aktualisieren und neu starten:
+
+```bash
+cd /opt/openweb
+sudo env PATH="/opt/node26/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" bash install.sh update
+sudo systemctl status openweb --no-pager
+```
+
+---
+
 ## Schnellstart mit `install.sh`
 
-Auf einem frischen Debian/Ubuntu-Server mit Node.js >= 20.19 (bzw. >= 22.12):
+Auf einem frischen Debian/Ubuntu-Server mit Node.js 26 (kompatibel ab 20.19 bzw. 22.12):
 
 ```bash
 cd /opt
@@ -43,7 +99,7 @@ git clone https://github.com/DerMinecrafter2020/linktree.git openweb
 cd openweb
 
 # Interaktives Setup (erstellt .env, DB, Admin, systemd, nginx)
-bash install.sh
+sudo env PATH="/opt/node26/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" bash install.sh
 ```
 
 Das Script fragt ab:
@@ -90,7 +146,7 @@ generierten `SESSION_SECRET` aktiviert wird.
 
 ### 1. Systemvoraussetzungen
 
-- Node.js >= 20.19 (bzw. >= 22.12) – aeltere Versionen koennen die TOTP-Bibliothek nicht laden
+- Node.js 26 empfohlen; kompatible Mindestversion 20.19 bzw. 22.12 (wegen otplib 13)
 - PostgreSQL >= 14
 - npm
 
@@ -183,7 +239,8 @@ Type=simple
 User=openweb
 Group=openweb
 WorkingDirectory=/opt/openweb
-ExecStart=/usr/bin/npm start
+Environment=PATH=/opt/node26/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env npm start
 Restart=always
 RestartSec=5
 EnvironmentFile=/opt/openweb/.env
@@ -209,7 +266,7 @@ sudo systemctl status openweb
 ### Code aktualisieren
 ```bash
 cd /opt/openweb
-bash install.sh update
+sudo env PATH="/opt/node26/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" bash install.sh update
 ```
 
 ### Admin-Passwort aendern

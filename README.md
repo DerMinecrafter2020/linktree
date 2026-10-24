@@ -4,7 +4,7 @@ OpenWeb ist eine responsive Link-in-Bio-Seite mit Admin-Panel, Statistiken und M
 
 | Komponente | Technik |
 |---|---|
-| Backend | Node.js **20.19+** oder **22.12+**, Express 4 |
+| Backend | Node.js **26.x** (Zielversion; Mindestversion **20.19+** oder **22.12+**), Express 4 |
 | Datenbank | PostgreSQL 16 |
 | Anmeldung | E-Mail/Passwort, TOTP und WebAuthn/Passkeys |
 | Oberfläche | Material 3 Dark; öffentliche Themes Dunkel, Midnight und Sunset |
@@ -33,9 +33,21 @@ OpenWeb ist eine responsive Link-in-Bio-Seite mit Admin-Panel, Statistiken und M
 ## Voraussetzungen
 
 - Linux für den empfohlenen Produktivbetrieb mit systemd/nginx; Git und Bash für `install.sh`.
-- Node.js **20.19+** oder **22.12+** und npm.
+- Node.js **26.x** (Zielversion) und npm; kompatible Mindestversion ist **20.19+** oder **22.12+**.
 - PostgreSQL 16. Für die alternative Compose-Installation wird Docker Compose benötigt.
 - Eine öffentliche Domain und HTTPS werden für den Produktivbetrieb empfohlen.
+
+Node.js 26 ist am 24.10.2026 noch die Current-Version und kein LTS-Release. Für konservativen
+Produktivbetrieb ist Node.js 24 LTS die stabilere Wahl; OpenWeb unterstützt Node 26 wie gewünscht.
+Installationsbefehle für Debian/Ubuntu stehen in [DEPLOYMENT.md](DEPLOYMENT.md#nodejs-26-auf-debianubuntu-installieren).
+
+Für lokale Entwicklung mit nvm (auch nvm-windows):
+
+```bash
+nvm install 26.12.1
+nvm use 26.12.1
+node --version
+```
 
 ## Installation
 
@@ -46,7 +58,7 @@ Das Installationsskript richtet OpenWeb direkt auf einem Linux-Server ein. Es ka
 ```bash
 git clone https://github.com/DerMinecrafter2020/linktree.git openweb
 cd openweb
-sudo bash install.sh
+sudo env PATH="/opt/node26/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" bash install.sh
 ```
 
 Folge den Fragen zu Datenbank, Admin-Konto, Domain und optionaler Navidrome-Integration. Das Skript generiert Session- und Verschlüsselungsschlüssel und führt die Migrationen sowie das initiale Seeding aus. Die `.env` wird mit restriktiven Dateirechten angelegt.
@@ -62,11 +74,12 @@ sudo journalctl -u openweb -n 100 -f
 Weitere Verwaltungsbefehle:
 
 ```bash
-sudo bash install.sh update             # Aktualisieren, Migrationen ausführen und Neustart anbieten
-sudo bash install.sh change-password    # Admin-Passwort ändern
-sudo bash install.sh change-navidrome   # Navidrome-Zugangsdaten ändern
-sudo bash install.sh reset-db           # Datenbank zurücksetzen und neu seeden (löscht Daten)
-sudo bash install.sh logs               # systemd-Logs live anzeigen
+NODE26_PATH="/opt/node26/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+sudo env PATH="$NODE26_PATH" bash install.sh update             # Aktualisieren und Neustart anbieten
+sudo env PATH="$NODE26_PATH" bash install.sh change-password    # Admin-Passwort ändern
+sudo env PATH="$NODE26_PATH" bash install.sh change-navidrome   # Navidrome-Zugangsdaten ändern
+sudo env PATH="$NODE26_PATH" bash install.sh reset-db           # Datenbank zurücksetzen (löscht Daten)
+sudo bash install.sh logs                                         # systemd-Logs live anzeigen
 ```
 
 ### Alternative: Docker Compose
@@ -84,7 +97,7 @@ Vor dem Start in `.env` mindestens `POSTGRES_PASSWORD`, `SESSION_SECRET`, `NAVID
 Die Datenbank vorbereiten und den Admin anlegen:
 
 ```bash
-docker compose build app
+docker compose build --pull app
 docker compose up -d postgres
 docker compose run --rm app npm run db:migrate
 docker compose run --rm app npm run db:seed

@@ -14,7 +14,7 @@ oder Music Assistant, inkl. Discord-Webhook und Musik-Verlauf).
 
 | Bereich   | Technik |
 |-----------|---------|
-| Backend   | Node.js ≥ 20.19 bzw. ≥ 22.12 (otplib 13 lädt ESM per `require`), Docker: `node:20-alpine`, Express 4 |
+| Backend   | Node.js 26 (Zielversion; Mindestversion 20.19 bzw. 22.12 wegen otplib 13), Docker: `node:26-alpine`, Express 4 |
 | Datenbank | PostgreSQL 16, Treiber `pg` (nur parametrisierte Queries) |
 | Sessions  | `express-session` + `connect-pg-simple` (Tabelle `user_sessions`) |
 | Auth      | E-Mail + Passwort (bcrypt, 12 Runden), 2FA per TOTP (`otplib` v13) und WebAuthn/Passkeys (`@simplewebauthn/server` v13, Browser-Bundle v9.0.1 per CDN mit SRI) |

@@ -87,17 +87,17 @@ prompt_confirm() {
   [[ "$value" =~ ^[JjYy]$ ]]
 }
 
-# Node.js-Version pruefen: otplib 13 laedt ESM-Module per require() -> erst ab Node 20.19 / 22.12
+# Node.js 26 ist die Zielversion. otplib 13 benoetigt ESM-per-require ab Node 20.19 / 22.12.
 require_node() {
-  require_command node "Node.js muss installiert sein (>= 20.19 bzw. >= 22.12)."
+  require_command node "Node.js 26 wird empfohlen (Mindestversion: 20.19 bzw. 22.12)."
   require_command npm "npm muss installiert sein."
   local version major minor
   version=$(node --version | sed 's/v//')
   major=$(echo "$version" | cut -d. -f1)
   minor=$(echo "$version" | cut -d. -f2)
   if ! { [[ "$major" -ge 23 ]] || { [[ "$major" -eq 22 ]] && [[ "$minor" -ge 12 ]]; } || { [[ "$major" -eq 20 ]] && [[ "$minor" -ge 19 ]]; }; }; then
-    err "Node.js >= 20.19 (bzw. >= 22.12) erforderlich, gefunden: $version"
-    err "Update z. B. ueber NodeSource: https://github.com/nodesource/distributions"
+    err "Node.js 26 wird empfohlen; mindestens 20.19 (bzw. 22.12) erforderlich, gefunden: $version"
+    err "Installationsbefehle fuer Node.js 26 stehen in DEPLOYMENT.md."
     exit 1
   fi
 }
@@ -301,6 +301,7 @@ Type=simple
 User=openweb
 Group=openweb
 WorkingDirectory=${APP_DIR}
+Environment=PATH=/opt/node26/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/usr/bin/env npm start
 Restart=always
 RestartSec=5
