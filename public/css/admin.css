@@ -351,7 +351,8 @@ code {
 }
 .side-link:hover { color: var(--md-on-surface); text-decoration: none; }
 
-.content { padding: clamp(18px, 3vw, 32px) clamp(16px, 4vw, 40px); max-width: 1000px; width: 100%; }
+.content { padding: clamp(18px, 3vw, 32px) clamp(16px, 4vw, 40px); max-width: 1000px; width: 100%; min-width: 0; }
+/* min-width: 0 – sonst macht breiter Inhalt (z. B. im Musik-Tab) die Seite auf Handys breiter als den Bildschirm */
 /* Grosse Bildschirme: mehr Breite nutzen statt leerer Flaeche rechts */
 @media (min-width: 1400px) {
   .content { max-width: 1320px; }
@@ -2219,3 +2220,147 @@ input[type="checkbox"] {
 }
 .maintenance-quick .hint { margin: 0 4px 0 0; }
 #maintenance-form [aria-invalid="true"] { border-color: var(--md-error); }
+
+/* ---------- Einrichtungsassistent als schwebendes Fenster (createSetupWizard) ---------- */
+.dialog.wizard-dialog {
+  width: min(680px, 94vw);
+  padding: 0;
+}
+.wizard-dialog-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 20px 12px 24px;
+  background: var(--ow-overlay-bg);
+  -webkit-backdrop-filter: var(--ow-overlay-backdrop);
+  backdrop-filter: var(--ow-overlay-backdrop);
+}
+.dialog.wizard-dialog .wizard-dialog-head h3 { flex: 1; margin: 0; }
+.wizard-dialog-close {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--md-shape-full);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+}
+.wizard-dialog-close:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+.wizard-dialog-close:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+.dialog.wizard-dialog .setup-wizard {
+  margin: 0;
+  padding: 8px 24px 24px;
+  background: transparent;
+  border-radius: 0;
+}
+.dialog.wizard-dialog .wizard-nav {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: 0 -24px -24px;
+  padding: 12px 24px 20px;
+  background: var(--ow-overlay-bg);
+  -webkit-backdrop-filter: var(--ow-overlay-backdrop);
+  backdrop-filter: var(--ow-overlay-backdrop);
+  box-shadow: 0 -1px 0 var(--md-outline-variant);
+}
+@media (max-width: 560px) {
+  .dialog.wizard-dialog { display: none; width: 100%; padding: 0; }
+  .dialog.wizard-dialog[open] { display: flex; flex-direction: column; }
+  .dialog.wizard-dialog .setup-wizard { flex: 1; padding: 8px 16px 0; }
+  .dialog.wizard-dialog .wizard-nav { margin: auto -16px 0; padding: 12px 16px 16px; }
+  .wizard-dialog-head { padding: 14px 12px 8px 16px; }
+}
+
+/* Hinweis in der Karte, solange ein Dienst nicht eingerichtet ist */
+.wizard-teaser {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-top: 8px;
+  padding: 16px 18px;
+  border-radius: var(--md-shape-lg);
+  background: var(--md-surface-container-high);
+  box-shadow: inset 0 0 0 1px var(--md-outline-variant);
+}
+.wizard-teaser[hidden] { display: none; }
+.wizard-teaser-icon { font-size: 22px; line-height: 1; }
+.wizard-teaser-text { flex: 1 1 260px; margin: 0; color: var(--md-on-surface-variant); }
+.wizard-teaser-text strong { color: var(--md-on-surface); }
+.wizard-teaser-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+
+/* ---------- "Was ist neu?" nach Updates (bindWhatsNew) ---------- */
+.dialog.whats-new-dialog { width: min(620px, 94vw); display: none; flex-direction: column; gap: 16px; }
+.dialog.whats-new-dialog[open] { display: flex; }
+.whats-new-head { display: flex; align-items: flex-start; gap: 14px; }
+.dialog.whats-new-dialog .whats-new-head h3 { margin: 0 0 2px; }
+.whats-new-head .hint { margin: 0; }
+.whats-new-badge {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  font-size: 22px;
+}
+.whats-new-list { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: min(60vh, 560px); padding-right: 2px; }
+.whats-new-entry {
+  padding: 14px 16px;
+  border-radius: var(--md-shape-md);
+  background: var(--md-surface-container-high);
+}
+.whats-new-entry-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.whats-new-entry h4 { margin: 0; font-size: 16px; font-weight: 600; color: var(--md-primary); }
+.whats-new-entry time { flex-shrink: 0; font-size: 12px; color: var(--md-on-surface-variant); }
+.whats-new-entry ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.whats-new-entry li { color: var(--md-on-surface-variant); line-height: 1.5; }
+.whats-new-entry li strong { color: var(--md-on-surface); }
+.whats-new-more { margin: 0; }
+.dialog.whats-new-dialog .form-actions { margin-top: 0; }
+@media (max-width: 560px) {
+  .dialog.whats-new-dialog { width: 100%; }
+  .whats-new-list { max-height: none; flex: 1; }
+}
+@media (max-width: 560px) {
+  .wizard-teaser { padding: 14px; }
+  .wizard-teaser-icon { display: none; }
+  .wizard-teaser-text { flex-basis: 100%; }
+  .wizard-teaser-actions { width: 100%; margin-left: 0; }
+  .wizard-teaser-actions .btn { flex: 1; justify-content: center; }
+}
+
+/* Hinweis: neue Version waehrend der Sitzung installiert (bindUpdateNotice) */
+.update-notice {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  z-index: 200;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  width: min(560px, calc(100vw - 24px));
+  padding: 12px 14px 12px 18px;
+  border-radius: var(--md-shape-lg);
+  background: var(--md-inverse-surface, var(--md-surface-container-highest));
+  color: var(--md-inverse-on-surface, var(--md-on-surface));
+  box-shadow: var(--md-elevation-3);
+  animation: dialog-in var(--md-dur-medium) var(--md-ease-emphasized);
+}
+.update-notice > span { flex: 1 1 240px; }
+.update-notice-actions { display: flex; gap: 8px; margin-left: auto; }
+.update-notice .btn.ghost { color: var(--md-inverse-primary, var(--md-primary)); }

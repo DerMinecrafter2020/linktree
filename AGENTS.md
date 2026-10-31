@@ -72,6 +72,7 @@ lib/
   iprange.js              IPv4/IPv6/CIDR-Listen (BigInt-Bereiche, binaere Suche), interne Netze
   maintenance-mode.js     Wartungsmodus: Einstellungen, aktiv/abgelaufen (auto_end), Wartungsseite aus public/maintenance.html, Retry-After
   i18n.js                 Sprache fuer Server-Texte an Besucher (pickLang: Cookie ow_lang / Accept-Language, msg/t mit Woerterbuch de/en)
+  changelog.js            Changelog als Daten (parst public/changelog.html) fuer "Was ist neu?" im Admin (Feature-Versionen X.Y.0)
   og.js                   Link-Vorschau: Meta-Tags (applyMetaTags), Vorschaubild speichern/pruefen, Crawler-Erkennung, Song-Zeile
   backup.js               Tägliche JSON-Backups nach ./backups (Rechte 600)
   maintenance.js          Aufräumen alter Sessions / Klickdaten und Monitor-Messpunkte (30 Tage)
@@ -81,7 +82,7 @@ lib/
   analytics.js            User-Agent-/Länder-Parsing für Statistiken
 db/
   migrate.js              Führt db/migrations/*.sql der Reihe nach aus (Tabelle `migrations`)
-  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 025: maintenance_settings)
+  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 026: links.admin_only)
   seed.js / reset.js      Initialdaten / Datenbank leeren
 public/                   Statische Dateien (werden 1:1 ausgeliefert!)
   index.html, admin.html, login.html, setup.html, changelog.html, impressum.html, datenschutz.html …
@@ -190,9 +191,11 @@ Ein Aufruf des Admin-Bereichs erzeugt ~18 API-Anfragen – Limits nicht unter di
 senken (bei 60/15 min wurde man nach wenigen Klicks ausgesperrt). Der Brute-Force-Schutz liegt bei
 den Login-Endpunkten, nicht beim Admin-Limit.
 
-**Service Worker (`public/js/sw-register.js`):** Die Seite lädt nur bei einem **Update** neu (es gab
-beim Laden schon einen aktiven Service Worker), nicht beim ersten Installieren – sonst wird jede Seite
-beim ersten Besuch doppelt geladen.
+**Service Worker (`public/js/sw-register.js`):** Bei einem SW-Update wird **nie automatisch neu geladen**:
+Der SW arbeitet Network-First und alle eigenen Assets tragen `?v=<Version>`, die gerade geladene Seite ist also
+schon aktuell (früher lud die Startseite nach jedem Update sichtbar ein zweites Mal). Wird während einer
+Sitzung (> 15 s nach dem Laden) eine neue Version aktiv, feuert `openweb:sw-updated`; der Admin zeigt dann
+`#update-notice` mit „Neu laden“ (`bindUpdateNotice`), die Startseite ignoriert es.
 
 **Login-Ablauf (`routes/public.js`)**
 `POST /api/login` → Passwort prüfen (oder passwortlos, wenn WebAuthn-Key vorhanden) → ist 2FA
@@ -204,6 +207,12 @@ Session-ID** mit `userId`. Der Fehlversuchszähler wird erst nach vollständigem
 IP erlaubt, Benutzer existiert und ist aktiv. Die Seite `/admin` prüft die Session zusätzlich
 serverseitig; bei Wiederherstellung aus dem Back-Forward-Cache wird sie zur erneuten Prüfung geladen.
 Neue Admin-Endpunkte gehören **immer** in diesen Router.
+
+**Links nur für Admins (`links.admin_only`):** Gäste sehen solche Links nirgends; `lib/visibility.isLinkVisible(link,
+now, { isAdmin })` lässt sie nur mit `isAdmin: isAdminRequest(req)` (Session mit `userId`) durch – auf `/api/links`,
+`/go/:slug`, Entsperren und Klick. Sitemap und `/api/public/links` (API-Key) rufen ohne `isAdmin` auf und
+zeigen sie nie. `/api/links` antwortet deshalb mit `Cache-Control: private, no-store` + `Vary: Cookie`.
+Die Startseite markiert sie für den Admin mit `.link-admin-tag` („Nur Admin“).
 
 **Passwortgeschützte Links:** Die Ziel-URL wird **nie** ohne Passwort ausgeliefert (`url: null` in
 `/api/links` und `/api/public/links`, kein Kurzlink `/go/:slug`, nicht in Sitemap oder
@@ -252,11 +261,15 @@ Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
   Speicher; ein widerrufener Refresh-Token (`invalid_grant`) trennt die Verbindung. Neue
   Client-ID/-Secret verwerfen die bestehende Anmeldung. Cover nur von `https://i.scdn.co` über
   `/api/status/spotify-cover`; der Spotify-Link (`spotifyUrl`) ist intern und geht nur an Discord.
-- **Einrichtungsassistenten** (Musik-Tab): gemeinsame Logik `createSetupWizard()` in
+- **Einrichtungsassistenten** (Musik-Tab, Instagram im Profil-Tab): gemeinsame Logik `createSetupWizard()` in
   `public/js/admin.js` (Fortschritt, Schritte, Zurück/Weiter, „Manuell einrichten“, „Assistent“-Knopf
   im Formular). Markup je Dienst: `#<name>-wizard` mit leerer `.wizard-progress` (wird per JS gefüllt),
-  `.wizard-step[data-step]` und `.wizard-nav` (`.wizard-back`/`.wizard-next`/`.wizard-skip`). Der
-  Assistent erscheint, solange `isConfigured()` falsch ist, sonst das Formular; Fortschritt nur in
+  `.wizard-step[data-step]` und `.wizard-nav` (`.wizard-back`/`.wizard-next`/`.wizard-skip`). Der Assistent
+  läuft in einem **schwebenden Fenster** (`<dialog class="dialog wizard-dialog">`, beim Start per JS um das
+  Markup gebaut, Titel aus `opts.title`); in der Karte steht stattdessen `.wizard-teaser` („Einrichtung
+  starten/fortsetzen“, „Manuell einrichten“), solange `isConfigured()` falsch ist, sonst das Formular.
+  Das Fenster öffnet sich nur per Knopf bzw. `open()`/`finish()`/`reopen()` (Rückkehr von OAuth), nie
+  ungefragt beim Tab-Wechsel; Schließen/Escape behält den Fortschritt. Fortschritt nur in
   `localStorage` `openweb-<name>-wizard` (Komfort, `manual: true` = Formular).
   - Navidrome: Server (`POST /settings/navidrome/test` mit `{ url, probe: true }`, ohne Zugangsdaten) →
     Anmeldung (Test mit `{ url, username, password }` **vor** dem Speichern) → Abschlusstest.
@@ -297,6 +310,12 @@ Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
   **Nicht** `document.querySelector('[data-tab="…"]')` beobachten: der Selektor trifft zuerst den
   Knopf in der Seitenleiste, der nie versteckt wird (so lud die Statistik nur beim Start im
   versteckten Tab). Den Bereich selbst mit `.tab[data-tab="…"]` ansprechen.
+- **„Was ist neu?“** (`bindWhatsNew` in `public/js/admin.js`, `GET /api/admin/whats-new?since=&limit=`,
+  `lib/changelog.js`): Nach einem Update zeigt der Admin einmalig ein Fenster mit allen **Feature-Versionen
+  (X.Y.0)** seit der zuletzt gesehenen Version (`localStorage` `openweb-admin-seen-version`; ohne Wert nur die
+  aktuelle Feature-Version). Quelle ist `public/changelog.html` – Patch-Versionen erscheinen dort nicht.
+  Changelog-Einträge von Minor-/Major-Versionen deshalb so schreiben, dass sie ohne Kontext verständlich sind
+  (`<strong>Bereich:</strong> Text`), und das Format der `<h2>` (`DATUM — OpenWeb vX.Y.Z (Titel)`) beibehalten.
 - Statistik (`GET /api/admin/stats/links?days=&tz=`): Zeitraum = volle Kalendertage inkl. heute in
   der Browser-Zeitzone `tz` (nur Namen aus `pg_timezone_names`, sonst UTC); `timeline[].day` kommt
   als Text `YYYY-MM-DD`, nie als DATE (würde in JSON um einen Tag verrutschen).
@@ -406,10 +425,11 @@ bleiben Deutsch. Neue Besucherseiten: `js/i18n.js` einbinden und per `sendHtml()
    durchreichen; SVGs mit Sandbox-CSP. (Music Assistant: Origin des MA-Servers; Spotify: `i.scdn.co`;
    Instagram-Profilbild: `*.cdninstagram.com`/`*.fbcdn.net`.)
 11. **Keine Dateien mit Secrets oder Debug-Resten** unter `public/` ablegen – alles dort ist öffentlich.
-12. **Link-Sichtbarkeit** (aktiv, Zeitsteuerung, Ablaufdatum, Passwortschutz, „Profil nicht öffentlich“)
+12. **Link-Sichtbarkeit** (aktiv, Zeitsteuerung, Ablaufdatum, Passwortschutz, „nur für Admin“, „Profil nicht öffentlich“)
     immer über `lib/visibility.js` prüfen – auf **jedem** Pfad, der einen Link anzeigt oder auflöst
     (`/api/links`, `/api/public/links`, `/sitemap.xml`, `/go/:slug`, Entsperren, Klick). Jede Abfrage,
-    deren Ergebnis `isLinkVisible()` filtert, muss `visibilityColumns()` mitselektieren.
+    deren Ergebnis `isLinkVisible()` filtert, muss `visibilityColumns()` mitselektieren; Admin-Ansichten
+    übergeben `{ isAdmin: isAdminRequest(req) }`, öffentliche (Sitemap, API-Key) nie.
 13. **install.sh** liest die `.env` nie per `source`, sondern als reine Daten (`load_env`, nur
     bekannte Schlüssel). Programmcode gehört `root`; nur `OPENWEB_DATA_DIR` ist für den Dienst
     beschreibbar. Node-Wartungsbefehle laufen als Dienstbenutzer, `git` ohne `safe.directory`/Hooks.

@@ -463,6 +463,7 @@
       link.click_count > 0 ? `${link.click_count} Klicks` : null,
       link.slug ? `/${link.slug}` : null,
       link.is_password_protected ? '🔒 Passwort' : null,
+      link.admin_only ? '👤 Nur Admin' : null,
       link.expires_at ? `⏳ ${new Date(link.expires_at).toLocaleString('de-DE')}` : null,
     ].filter(Boolean).join(' · ');
     return el('li', { class: 'link-row', draggable: true, 'data-id': link.id },
@@ -751,11 +752,13 @@
       setMultiSelectValues(form.visible_weekdays, link.visible_weekdays);
       form.is_active.checked = link.is_active !== false;
       form.open_new.checked = link.open_new !== false;
+      form.admin_only.checked = link.admin_only === true;
       form.dataset.id = link.id;
     } else {
       delete form.dataset.id;
       form.is_active.checked = true;
       form.open_new.checked = true;
+      form.admin_only.checked = false;
       setMultiSelectValues(form.visible_weekdays, []);
     }
     refreshIconPreview();
@@ -823,6 +826,7 @@
         icon: sanitizeIconField(form.icon.value),
         is_active: form.is_active.checked,
         open_new: form.open_new.checked,
+        admin_only: form.admin_only.checked,
         meta_description: safeText(form.meta_description.value, 280),
         admin_note: safeText(form.admin_note.value, 280),
         slug: form.slug.value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '').slice(0, 80),
@@ -2423,12 +2427,16 @@
     });
   }
 
-  // ---------- Einrichtungsassistenten (Spotify, Navidrome, Music Assistant) ----------
+  // ---------- Einrichtungsassistenten (Navidrome, Music Assistant, Spotify, Instagram) ----------
   // Gemeinsame Logik: Fortschrittsanzeige, Schritte, Zurueck/Weiter, "Manuell einrichten".
-  // Der Assistent erscheint, solange der Dienst nicht eingerichtet ist (isConfigured), sonst das
-  // Formular. Der Fortschritt liegt nur im Browser (localStorage, reiner Komfort).
+  // Der Assistent laeuft in einem schwebenden Fenster (<dialog class="wizard-dialog">, beim Start
+  // um das Markup #<name>-wizard gebaut). In der Karte steht, solange der Dienst nicht eingerichtet
+  // ist, ein Hinweis mit "Einrichtung starten/fortsetzen" (.wizard-teaser), sonst das Formular.
+  // Das Fenster oeffnet sich per Knopf, ueber "Assistent" im Formular und automatisch nach der
+  // Rueckkehr von einer Anmeldung (Spotify/Instagram). Schliessen behaelt den Fortschritt.
+  // Der Fortschritt liegt nur im Browser (localStorage, reiner Komfort).
   //
-  // opts: { name, root, form, startButton, steps: [{ label, next, onNext, onEnter, persist }],
+  // opts: { name, title, root, form, startButton, steps: [{ label, next, onNext, onEnter, persist }],
   //         isConfigured(), firstStep() }
   //   next: Beschriftung des Weiter-Knopfs (null = Knopf ausblenden, der Schritt hat eine eigene Aktion)
   //   onNext: async () => true/false (false = im Schritt bleiben)
@@ -2446,6 +2454,30 @@
       write(p) { try { localStorage.setItem(storeKey, JSON.stringify(p)); } catch { /* privat/blockiert: egal */ } },
       update(patch) { this.write({ ...this.read(), ...patch }); },
     };
+
+    // Schwebendes Fenster um den Assistenten bauen
+    const titleId = `${opts.name}-wizard-title`;
+    const title = opts.title || 'Einrichtung';
+    const closeBtn = el('button', { type: 'button', class: 'wizard-dialog-close', 'aria-label': 'Fenster schließen (Fortschritt bleibt erhalten)', title: 'Schließen' }, '×');
+    const dialog = el('dialog', { class: 'dialog wizard-dialog', 'aria-labelledby': titleId },
+      el('div', { class: 'wizard-dialog-head' },
+        el('h3', { id: titleId, text: title }),
+        closeBtn));
+    const placeholder = document.createComment(`${opts.name}-wizard`);
+    root.replaceWith(placeholder);
+    dialog.appendChild(root);
+    root.hidden = false;
+    document.body.appendChild(dialog);
+
+    // Hinweis in der Karte, solange der Dienst nicht eingerichtet ist
+    const teaserText = el('p', { class: 'wizard-teaser-text' });
+    const teaserStart = el('button', { type: 'button', class: 'btn primary' });
+    const teaserManual = el('button', { type: 'button', class: 'btn ghost', text: 'Manuell einrichten' });
+    const teaser = el('div', { class: 'wizard-teaser', hidden: true },
+      el('span', { class: 'wizard-teaser-icon', 'aria-hidden': 'true' }, '✨'),
+      teaserText,
+      el('div', { class: 'wizard-teaser-actions' }, teaserManual, teaserStart));
+    placeholder.after(teaser);
 
     const progress = root.querySelector('.wizard-progress');
     progress.style.setProperty('--wizard-steps', String(total));
@@ -2480,28 +2512,65 @@
       cfg.render?.();
     }
 
+    function focusStep() {
+      const heading = root.querySelector(`.wizard-step[data-step="${w.step}"] h4`);
+      if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus({ preventScroll: true }); }
+    }
+
     function goTo(step, { focus = true } = {}) {
       w.step = Math.min(total, Math.max(1, step));
       const cfg = opts.steps[w.step - 1];
       if (w.step < total && cfg.persist !== false) prefs.update({ step: w.step });
       render();
       cfg.onEnter?.();
-      if (focus && !root.hidden) {
-        const heading = root.querySelector(`.wizard-step[data-step="${w.step}"] h4`);
-        if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus({ preventScroll: true }); }
-      }
+      if (focus && dialog.open) focusStep();
+      dialog.scrollTop = 0;
+    }
+
+    function renderTeaser() {
+      const saved = Number(prefs.read().step);
+      const resume = saved > 1 && saved < total;
+      teaserText.replaceChildren(
+        el('strong', { text: 'Noch nicht eingerichtet.' }), ' ',
+        resume
+          ? `Du warst bei Schritt ${saved} von ${total} („${opts.steps[saved - 1].label}“).`
+          : `Der Assistent führt dich in ${total} Schritten durch die Einrichtung.`);
+      teaserStart.textContent = resume ? 'Einrichtung fortsetzen' : 'Einrichtung starten';
     }
 
     function updateView() {
       // Beim ersten Anzeigen mit dem passenden Startschritt beginnen (Daten sind jetzt geladen)
       if (!w.ready && !w.stepSet) w.step = Math.min(total, Math.max(1, opts.firstStep()));
       w.ready = true;
-      const show = w.finishing || w.forced || (!opts.isConfigured() && !prefs.read().manual);
-      const wasHidden = root.hidden;
-      root.hidden = !show;
-      form.hidden = show;
-      if (show && wasHidden) goTo(w.step, { focus: false });
-      else if (show) render();
+      const configured = opts.isConfigured();
+      const showTeaser = !configured && !prefs.read().manual && !w.finishing;
+      teaser.hidden = !showTeaser;
+      form.hidden = showTeaser;
+      if (showTeaser) renderTeaser();
+      const show = w.finishing || w.forced;
+      if (show && !dialog.open) {
+        dialog.showModal();
+        goTo(w.step, { focus: false });
+        focusStep();
+      } else if (show) {
+        render();
+      } else if (dialog.open) {
+        dialog.close();
+      }
+    }
+
+    function closeWindow() {
+      w.forced = false;
+      w.finishing = false;
+      updateView();
+    }
+
+    function openWindow(step) {
+      prefs.update({ manual: false });
+      w.forced = true;
+      w.finishing = false;
+      w.step = step ?? opts.firstStep();
+      if (dialog.open) goTo(w.step); else updateView();
     }
 
     nav.next.addEventListener('click', async () => {
@@ -2513,10 +2582,8 @@
         if (!ok) return;
       }
       if (w.step === total) {
-        w.finishing = false;
-        w.forced = false;
         prefs.write({});
-        updateView();
+        closeWindow();
         return;
       }
       goTo(w.step + 1);
@@ -2527,23 +2594,22 @@
       const target = Number(dot?.dataset.goto);
       if (target && target < w.step && w.step !== total) goTo(target);
     });
-    nav.skip.addEventListener('click', () => {
-      w.forced = false;
-      w.finishing = false;
+    const goManual = () => {
       prefs.update({ manual: true });
-      updateView();
-    });
-    $(opts.startButton)?.addEventListener('click', () => {
-      prefs.update({ manual: false });
-      w.forced = true;
-      w.finishing = false;
-      w.step = opts.firstStep();
-      root.hidden = true; // damit updateView den Schritt neu betritt
-      updateView();
-    });
+      closeWindow();
+      form.querySelector('input:not([type=hidden]), select, textarea')?.focus({ preventScroll: false });
+    };
+    nav.skip.addEventListener('click', () => (opts.isConfigured() ? closeWindow() : goManual()));
+    teaserManual.addEventListener('click', goManual);
+    teaserStart.addEventListener('click', () => openWindow());
+    closeBtn.addEventListener('click', closeWindow);
+    // Escape: wie "Schliessen" (Fortschritt bleibt), nicht den Dialog hart beenden lassen
+    dialog.addEventListener('cancel', (e) => { e.preventDefault(); closeWindow(); });
+    $(opts.startButton)?.addEventListener('click', () => openWindow());
 
     return {
       get step() { return w.step; },
+      get isOpen() { return dialog.open; },
       prefs,
       goTo,
       updateView,
@@ -2559,24 +2625,19 @@
         w.finishing = true;
         w.stepSet = true;
         w.step = total;
-        root.hidden = true;
         updateView();
       },
-      // Assistent auch bei "Manuell einrichten" wieder anzeigen (z. B. nach Fehler-Rueckkehr)
+      // Nach einer Fehler-Rueckkehr (z. B. Anmeldung abgebrochen) beim passenden Schritt oeffnen
       reopen(step) {
         prefs.update({ manual: false });
+        w.forced = true;
         w.step = step;
         w.stepSet = true;
       },
       // Assistent bei einem Schritt oeffnen, auch wenn der Dienst schon eingerichtet ist
       open(step) {
-        prefs.update({ manual: false });
-        w.forced = true;
-        w.finishing = false;
-        w.step = step;
         w.stepSet = true;
-        root.hidden = true;
-        updateView();
+        openWindow(step);
       },
     };
   }
@@ -2640,6 +2701,7 @@
   function initNavidromeWizard() {
     navidromeWizard = createSetupWizard({
       name: 'navidrome',
+      title: 'Navidrome einrichten',
       root: '#navidrome-wizard',
       form: '#navidrome-form',
       startButton: '#navidrome-wizard-start-btn',
@@ -2789,6 +2851,7 @@
   function initMusicAssistantWizard() {
     maWizard = createSetupWizard({
       name: 'musicassistant',
+      title: 'Music Assistant einrichten',
       root: '#musicassistant-wizard',
       form: '#musicassistant-form',
       startButton: '#musicassistant-wizard-start-btn',
@@ -3008,6 +3071,7 @@
   function initSpotifyWizard() {
     spotifyWizard = createSetupWizard({
       name: 'spotify',
+      title: 'Spotify verbinden',
       root: '#spotify-wizard',
       form: '#spotify-form',
       startButton: '#spotify-wizard-start-btn',
@@ -3387,6 +3451,7 @@
   function initInstagramWizard() {
     instagramWizard = createSetupWizard({
       name: 'instagram',
+      title: 'Instagram verbinden',
       root: '#instagram-wizard',
       form: '#instagram-form',
       startButton: '#instagram-wizard-start-btn',
@@ -4744,6 +4809,119 @@
     }
   }
 
+  // ---------- "Was ist neu?" nach Updates ----------
+  // Nach einem Update mit groesseren Aenderungen (Feature-Version X.Y.0, Eintraege aus
+  // public/changelog.html ueber GET /api/admin/whats-new) erscheint einmal ein schwebendes Fenster.
+  // Zuletzt gesehene Version nur im Browser (localStorage, Komfort). Ohne gespeicherte Version
+  // (neuer Browser) nur die aktuelle Feature-Version, sofern sie zur laufenden Version gehoert.
+  const WHATS_NEW_KEY = 'openweb-admin-seen-version';
+  function bindWhatsNew() {
+    const readSeen = () => { try { return localStorage.getItem(WHATS_NEW_KEY) || ''; } catch { return ''; } };
+    const writeSeen = (v) => { try { localStorage.setItem(WHATS_NEW_KEY, v); } catch { /* egal */ } };
+    const parse = (v) => (/^(\d+)\.(\d+)\.(\d+)$/.exec(String(v || '')) || []).slice(1).map(Number);
+    const cmp = (a, b) => {
+      const x = parse(a); const y = parse(b);
+      if (x.length !== 3 || y.length !== 3) return 0;
+      for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] - y[i];
+      return 0;
+    };
+    const shortVersion = (v) => String(v).replace(/\.0$/, '');
+    let dlg = null;
+    let pendingVersion = null;
+
+    function build() {
+      if (dlg) return dlg;
+      dlg = el('dialog', { class: 'dialog whats-new-dialog', 'aria-labelledby': 'whats-new-title' });
+      dlg.addEventListener('close', () => { if (pendingVersion) writeSeen(pendingVersion); pendingVersion = null; });
+      document.body.appendChild(dlg);
+      return dlg;
+    }
+
+    function show(data, { seen = '' } = {}) {
+      const d = build();
+      const entries = data.entries || [];
+      const head = entries.length === 1
+        ? `Neu in OpenWeb ${shortVersion(entries[0].version)}`
+        : `Neu seit v${seen || shortVersion(entries[entries.length - 1].version)}`;
+      const sub = seen && cmp(seen, data.current) < 0
+        ? `Update von v${seen} auf v${data.current} – das sind die größeren Neuerungen.`
+        : `Du nutzt OpenWeb v${data.current}.`;
+      const list = el('div', { class: 'whats-new-list' }, entries.map((e) => el('section', { class: 'whats-new-entry' },
+        el('div', { class: 'whats-new-entry-head' },
+          el('h4', { text: e.title ? `v${e.version} · ${e.title}` : `v${e.version}` }),
+          e.date ? el('time', { datetime: e.date, text: new Date(e.date + 'T12:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) }) : null),
+        el('ul', {}, e.items.map((it) => el('li', {},
+          it.label ? el('strong', { text: it.label + ': ' }) : null,
+          it.text))))));
+      const closeBtn = el('button', { type: 'button', class: 'btn primary', text: 'Verstanden' });
+      closeBtn.addEventListener('click', () => d.close());
+      d.replaceChildren(...[
+        el('div', { class: 'whats-new-head' },
+          el('span', { class: 'whats-new-badge', 'aria-hidden': 'true', text: '✨' }),
+          el('div', {},
+            el('h3', { id: 'whats-new-title', text: head }),
+            el('p', { class: 'hint', text: sub }))),
+        list,
+        data.more ? el('p', { class: 'hint whats-new-more', text: `… und ${data.more} weitere Version${data.more === 1 ? '' : 'en'} – alles im Changelog.` }) : null,
+        el('div', { class: 'form-actions' },
+          el('a', { href: '/changelog.html', target: '_blank', rel: 'noopener', class: 'btn ghost', text: 'Ganzer Changelog' }),
+          closeBtn),
+      ].filter(Boolean));
+      pendingVersion = data.current;
+      d.showModal();
+      closeBtn.focus();
+      list.scrollTop = 0;
+    }
+
+    // Erst zeigen, wenn kein anderes Fenster offen ist (z. B. Assistent nach Spotify-Anmeldung)
+    function whenNoDialog(fn, tries = 0) {
+      if (!document.querySelector('dialog[open]')) return fn();
+      if (tries < 60) setTimeout(() => whenNoDialog(fn, tries + 1), 2000);
+    }
+
+    async function check() {
+      const seen = readSeen();
+      try {
+        const data = await window.api.getWhatsNew(seen, seen ? 5 : 1);
+        if (seen && cmp(seen, data.current) >= 0) {
+          if (seen !== data.current) writeSeen(data.current); // Downgrade o. ae.
+          return;
+        }
+        const latest = data.entries[0];
+        const relevant = seen
+          ? data.entries.length > 0
+          : latest && parse(latest.version).slice(0, 2).join('.') === parse(data.current).slice(0, 2).join('.');
+        if (!relevant) { writeSeen(data.current); return; }
+        whenNoDialog(() => show(data, { seen }));
+      } catch (err) {
+        console.warn('[admin] Was-ist-neu nicht geladen:', err.message);
+      }
+    }
+
+    $('#whats-new-btn')?.addEventListener('click', async () => {
+      try {
+        show(await window.api.getWhatsNew('', 3));
+      } catch (err) { toast('Fehler: ' + err.message, true); }
+    });
+    setTimeout(check, 800);
+  }
+
+  // Neue Version waehrend der Sitzung (Server-Update, js/sw-register.js): Hinweis statt
+  // automatischem Neuladen, damit keine Eingaben verloren gehen
+  function bindUpdateNotice() {
+    window.addEventListener('openweb:sw-updated', () => {
+      if ($('#update-notice')) return;
+      const reload = el('button', { type: 'button', class: 'btn primary small', text: 'Neu laden' });
+      reload.addEventListener('click', () => location.reload());
+      const later = el('button', { type: 'button', class: 'btn ghost small', text: 'Später' });
+      const bar = el('div', { id: 'update-notice', class: 'update-notice', role: 'status' },
+        el('span', { text: '✨ Eine neue OpenWeb-Version ist installiert. Neu laden, um sie zu verwenden.' }),
+        el('div', { class: 'update-notice-actions' }, later, reload));
+      later.addEventListener('click', () => bar.remove());
+      document.body.appendChild(bar);
+    });
+  }
+
   let appInitialized = false;
   document.addEventListener('DOMContentLoaded', async () => {
     if (location.protocol === 'file:') console.warn('%c[Security]%c App läuft lokal über file://. Für Produktion über HTTPS hosten.', 'color:#f2b8b5;font-weight:bold', 'color:inherit');
@@ -4774,6 +4952,8 @@
     bindOgPreview();
     bindBotguard();
     bindMonitor();
+    bindWhatsNew();
+    bindUpdateNotice();
 
     if (!appInitialized) {
       appInitialized = true;

@@ -16,6 +16,7 @@ const audit = require('../lib/audit');
 const alert = require('../lib/alert');
 const contact = require('../lib/contact');
 const maintenanceMode = require('../lib/maintenance-mode');
+const changelog = require('../lib/changelog');
 const og = require('../lib/og');
 const botguard = require('../lib/botguard');
 const icons = require('../lib/icons');
@@ -425,6 +426,7 @@ router.post('/links', async (req, res, next) => {
     const icon = v.sanitizeIconField(req.body.icon);
     const isActive = req.body.is_active !== false;
     const openNew = req.body.open_new !== false;
+    const adminOnly = req.body.admin_only === true;
     const metaDescription = v.safeText(req.body.meta_description, 280);
     const adminNote = v.safeText(req.body.admin_note, 280);
     const slug = v.safeSlug(req.body.slug);
@@ -447,11 +449,11 @@ router.post('/links', async (req, res, next) => {
         title, subtitle, url, display_url, icon, position, is_active, open_new,
         meta_description, admin_note, slug, category_id,
         visible_from, visible_until, visible_weekdays,
-        password_hash, expires_at
+        password_hash, expires_at, admin_only
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING *
-    `, [title, subtitle, url, displayUrl, icon, position, isActive, openNew, metaDescription, adminNote, slug, categoryId, visibleFrom, visibleUntil, visibleWeekdays, linkPassword, expiresAt]);
+    `, [title, subtitle, url, displayUrl, icon, position, isActive, openNew, metaDescription, adminNote, slug, categoryId, visibleFrom, visibleUntil, visibleWeekdays, linkPassword, expiresAt, adminOnly]);
 
     await audit.log(req, 'create', 'link', rows[0].id, { title });
     res.json({ ok: true, data: rows[0] });
@@ -498,6 +500,10 @@ router.patch('/links/:id', async (req, res, next) => {
     if (req.body.open_new !== undefined) {
       updates.push(`open_new = $${idx++}`);
       values.push(!!req.body.open_new);
+    }
+    if (req.body.admin_only !== undefined) {
+      updates.push(`admin_only = $${idx++}`);
+      values.push(req.body.admin_only === true);
     }
     if (req.body.meta_description !== undefined) {
       updates.push(`meta_description = $${idx++}`);
@@ -804,6 +810,15 @@ router.post('/og/options', async (req, res, next) => {
     const settings = await og.saveOptions({ showNowPlaying: req.body?.show_now_playing !== false });
     res.json({ ok: true, data: ogView(settings) });
   } catch (err) { next(err); }
+});
+
+// ---------- "Was ist neu?" (Feature-Versionen aus public/changelog.html, lib/changelog.js) ----------
+router.get('/whats-new', (req, res) => {
+  const current = require('../package.json').version;
+  const since = changelog.parseVersion(req.query.since) ? String(req.query.since).replace(/^v/i, '') : null;
+  const limit = Math.min(10, Math.max(1, parseInt(req.query.limit, 10) || 5));
+  const { entries, more } = changelog.highlights({ since, current, limit });
+  res.json({ ok: true, data: { current, since, entries, more } });
 });
 
 // ---------- Wartungsmodus (lib/maintenance-mode.js) ----------
@@ -1612,9 +1627,9 @@ router.post('/import', async (req, res, next) => {
             INSERT INTO links (
               title, subtitle, url, display_url, icon, position, is_active, open_new,
               meta_description, admin_note, slug, category_id,
-              visible_from, visible_until, visible_weekdays, password_hash, expires_at
+              visible_from, visible_until, visible_weekdays, password_hash, expires_at, admin_only
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
           `, [
             v.safeText(l.title, 80),
             v.safeText(l.subtitle, 120),
@@ -1633,6 +1648,7 @@ router.post('/import', async (req, res, next) => {
             v.safeWeekdays(l.visible_weekdays),
             passwordHash,
             v.safeDate(l.expires_at),
+            l.admin_only === true,
           ]);
         }
       }

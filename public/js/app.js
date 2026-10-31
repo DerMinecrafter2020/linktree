@@ -349,7 +349,16 @@
     badge.appendChild(renderIcon(link));
 
     const main = el('span', 'link-text-main');
-    main.appendChild(el('span', 'link-title', link.title));
+    const titleEl = el('span', 'link-title', link.title);
+    // Nur fuer angemeldete Admins geliefert (lib/visibility.js) – kenntlich machen
+    if (link.admin_only) {
+      a.classList.add('link-admin-only');
+      const tag = el('span', 'link-admin-tag', t('home.adminOnly'));
+      tag.title = t('home.adminOnlyHint');
+      main.appendChild(el('span', 'link-title-row')).append(titleEl, tag);
+    } else {
+      main.appendChild(titleEl);
+    }
     main.appendChild(el('span', 'link-sub', link.subtitle));
 
     const arrow = el('span', 'link-arrow', '→');

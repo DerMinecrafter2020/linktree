@@ -471,7 +471,7 @@ async function finalizeApp() {
         `, [slug]);
         // Verborgene, abgelaufene oder zeitlich nicht freigegebene Links sowie Links eines nicht
         // oeffentlichen Profils wie nicht vorhandene behandeln
-        if (!rows.length || !visibility.isLinkVisible(rows[0]) || await visibility.isProfileHiddenFor(req)) {
+        if (!rows.length || !visibility.isLinkVisible(rows[0], undefined, { isAdmin: visibility.isAdminRequest(req) }) || await visibility.isProfileHiddenFor(req)) {
           return sendHtml(res, '404.html', 404);
         }
         // Passwortgeschuetzte Links nicht per Kurzlink freigeben -> Entsperren auf der Startseite

@@ -13,7 +13,7 @@ const alert = require('../lib/alert');
 const contact = require('../lib/contact');
 const i18n = require('../lib/i18n');
 const icons = require('../lib/icons');
-const { visibilityColumns, getNowInBerlin, isLinkVisible, isProfileHiddenFor } = require('../lib/visibility');
+const { visibilityColumns, getNowInBerlin, isLinkVisible, isProfileHiddenFor, isAdminRequest } = require('../lib/visibility');
 const webauthnRp = require('../lib/webauthn-rp');
 
 const router = express.Router();
@@ -314,7 +314,11 @@ router.get('/links', requirePublicProfile, async (req, res, next) => {
       ORDER BY c.position ASC NULLS FIRST, c.name ASC, l.position ASC, l.created_at ASC
     `);
     const nowBerlin = getNowInBerlin();
-    const visible = rows.filter(l => isLinkVisible(l, nowBerlin));
+    const isAdmin = isAdminRequest(req);
+    const visible = rows.filter(l => isLinkVisible(l, nowBerlin, { isAdmin }));
+    // Antwort haengt von der Anmeldung ab ("nur fuer Admin"-Links): nie in geteilten Caches ablegen
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Vary', 'Cookie');
     // Passwort-Hashes nie an Client senden; Ziel-URL geschuetzter Links erst nach Entsperren
     // Icon-Aufloesung braucht die echte URL (auch bei geschuetzten Links), ausgeliefert wird sie nicht
     const safe = visible.map(l => ({
@@ -336,7 +340,7 @@ router.post('/links/:id/unlock', rateLimitUnlock, async (req, res, next) => {
     // freigegebene Links und Links eines nicht oeffentlichen Profils gelten als "nicht gefunden".
     const hidden = await isProfileHiddenFor(req);
     const { rows } = await db.query(`SELECT id, url, password_hash, ${visibilityColumns()} FROM links WHERE id = $1 LIMIT 1`, [id]);
-    if (hidden || !rows.length || !isLinkVisible(rows[0])) {
+    if (hidden || !rows.length || !isLinkVisible(rows[0], undefined, { isAdmin: isAdminRequest(req) })) {
       req.loginRateLimit?.increment(false);
       return res.status(404).json({ ok: false, error: i18n.t(req, 'unlock.notFound') });
     }
@@ -392,7 +396,7 @@ router.post('/links/:id/click', async (req, res, next) => {
     const hidden = await isProfileHiddenFor(req);
     const linkRes = await db.query(`SELECT id, title, url, password_hash IS NOT NULL AS is_password_protected, ${visibilityColumns()} FROM links WHERE id = $1 LIMIT 1`, [id]);
     const link = linkRes.rows[0];
-    if (hidden || !link || !isLinkVisible(link)) {
+    if (hidden || !link || !isLinkVisible(link, undefined, { isAdmin: isAdminRequest(req) })) {
       return res.status(404).json({ ok: false, error: 'Link nicht gefunden' });
     }
     const ip = req.ip || req.socket?.remoteAddress || null;

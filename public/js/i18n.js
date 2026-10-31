@@ -54,6 +54,8 @@
       'home.privateText': 'Dieses Profil ist derzeit nicht öffentlich sichtbar.',
       'home.empty': 'Noch keine Links vorhanden.',
       'home.loadError': 'Links konnten nicht geladen werden.',
+      'home.adminOnly': 'Nur Admin',
+      'home.adminOnlyHint': 'Nur für dich sichtbar – Gäste sehen diesen Link nicht.',
 
       'footer.changelog': 'Changelog – was ist neu?',
       'footer.imprint': 'Impressum',
@@ -178,6 +180,8 @@
       'home.privateText': 'This profile is currently not publicly visible.',
       'home.empty': 'No links yet.',
       'home.loadError': 'Links could not be loaded.',
+      'home.adminOnly': 'Admin only',
+      'home.adminOnlyHint': 'Only visible to you – guests can’t see this link.',
 
       'footer.changelog': 'Changelog – what’s new?',
       'footer.imprint': 'Legal notice',

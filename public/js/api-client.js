@@ -95,6 +95,7 @@
     saveOgImage: (image, key, custom = false) => post('/admin/og/image', { image, key, custom }),
     deleteOgImage: () => del('/admin/og/image'),
     saveOgOptions: (options) => post('/admin/og/options', options),
+    getWhatsNew: (since = '', limit = 5) => get(`/admin/whats-new?limit=${encodeURIComponent(limit)}${since ? `&since=${encodeURIComponent(since)}` : ''}`),
     getMaintenanceSettings: () => get('/admin/settings/maintenance'),
     saveMaintenanceSettings: (settings) => post('/admin/settings/maintenance', settings),
     getContactSettings: () => get('/admin/settings/contact'),

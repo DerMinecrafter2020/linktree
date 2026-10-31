@@ -52,6 +52,21 @@
     <p class="subtitle changelog-lang-note" data-lang-only="en" lang="en" hidden>The release notes are written in German.</p>
     <div class="changelog-list" lang="de">
     <div class="changelog-entry">
+      <h2>2026-10-31 — OpenWeb v3.12.0 (Links nur für Admins, kein doppeltes Laden)</h2>
+      <ul>
+        <li><strong>Links nur für dich:</strong> Im Link-Dialog lässt sich ein Link als „Nur für mich sichtbar (Admin)“ markieren. Gäste sehen ihn nicht – weder auf der Startseite noch über den Kurzlink, in der Sitemap oder über die öffentliche API. Angemeldet erscheint er auf der Startseite mit dem Hinweis „Nur Admin“, in der Linkliste mit „👤 Nur Admin“.</li>
+        <li><strong>Kein doppeltes Laden mehr:</strong> Nach einem Update hat sich die Startseite beim ersten Aufruf kurz ein zweites Mal geladen. Das entfällt – die Seite ist beim ersten Laden bereits aktuell. Ist der Admin-Bereich während eines Updates geöffnet, erscheint stattdessen ein Hinweis mit „Neu laden“.</li>
+      </ul>
+    </div>
+    <div class="changelog-entry">
+      <h2>2026-10-31 — OpenWeb v3.11.0 (Assistenten als Fenster & „Was ist neu?“)</h2>
+      <ul>
+        <li><strong>Einrichtungsassistenten:</strong> Die Assistenten für Navidrome, Music Assistant, Spotify und Instagram öffnen sich jetzt als schwebendes Fenster. Solange ein Dienst nicht eingerichtet ist, zeigt die Karte einen Hinweis mit „Einrichtung starten“ bzw. „Einrichtung fortsetzen“; Schließen behält den Fortschritt. Nach der Anmeldung bei Spotify oder Instagram erscheint das Fenster mit dem nächsten Schritt automatisch.</li>
+        <li><strong>Was ist neu?:</strong> Nach einem Update mit größeren Neuerungen zeigt der Admin-Bereich einmalig ein Fenster mit den wichtigsten Änderungen seit dem letzten Besuch. Über „✨ Was ist neu?“ in der Seitenleiste lässt es sich jederzeit wieder öffnen.</li>
+        <li><strong>Admin auf dem Handy:</strong> Der Musik-Tab ist auf schmalen Bildschirmen nicht mehr breiter als das Display.</li>
+      </ul>
+    </div>
+    <div class="changelog-entry">
       <h2>2026-10-31 — OpenWeb v3.10.0 (Wartungsmodus)</h2>
       <ul>
         <li><strong>Wartungsmodus:</strong> Unter Einstellungen &gt; Status lässt sich die Startseite für Besucher sperren. Wahlweise erscheint eine Wartungsseite (Status 503, Suchmaschinen kommen später wieder) oder eine „Hier ist nichts“-Seite im Stil der 404-Seite (Status 404). Überschrift und Text sind frei wählbar; ohne eigene Texte erscheinen Standardtexte auf Deutsch oder Englisch.</li>

@@ -57,6 +57,7 @@
         <a href="/api-docs" target="_blank" class="side-link">📖 API-Doku</a>
         <span class="side-link" id="preview-toggle" style="cursor:pointer;">👁 Vorschau</span>
         <span class="side-link" id="qr-toggle" style="cursor:pointer;">📱 QR-Code</span>
+        <button type="button" id="whats-new-btn" class="side-link">✨ Was ist neu?</button>
         <button id="logout-btn" class="side-link">↩ Abmelden</button>
       </div>
     </aside>
@@ -1365,6 +1366,10 @@
       <label class="row">
         <input name="open_new" type="checkbox" checked />
         <span>In neuem Tab öffnen</span>
+      </label>
+      <label class="row">
+        <input name="admin_only" type="checkbox" />
+        <span>Nur für mich sichtbar (Admin) – Gäste sehen den Link nicht, auch nicht über den Kurzlink</span>
       </label>
 
       <div class="form-actions">
