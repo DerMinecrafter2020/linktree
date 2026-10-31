@@ -17,6 +17,7 @@ OpenWeb ist eine responsive Link-in-Bio-Seite mit Admin-Panel, Statistiken und M
 - Links können geplant, zeitlich begrenzt und passwortgeschützt werden. Die Ziel-URL geschützter Links wird erst nach erfolgreicher Passwortprüfung ausgegeben.
 - Besucher können Links teilen, QR-Codes öffnen und – sofern aktiviert – das Theme wählen.
 - Now-Playing-Anzeige über Navidrome/Subsonic, Music Assistant oder Spotify (mit Logo der aktiven Quelle); optional mit Discord-Webhook und Musikverlauf.
+- Optionaler Profilabgleich mit Instagram (Profilbild, Beschreibung, Name) für Business-/Creator-Konten, eingerichtet per Assistent im Admin.
 - Impressum und Datenschutzerklärung lassen sich im Admin-Panel pflegen. Leerzeilen und Zeilenumbrüche werden auf den Unterseiten formatiert dargestellt.
 - Nach Admin-Anmeldung erscheint auf der Hauptseite ein mobilfreundlicher Direktzugang zum Admin-Panel.
 
@@ -138,7 +139,7 @@ Wenn noch keine Datenbank konfiguriert ist oder noch kein aktiver Admin existier
 
 ## Zugangsdaten und Schlüssel-Backup
 
-Navidrome-Benutzername und -Passwort, Music-Assistant-Token, Spotify-Client-Secret und -Anmeldung sowie das SMTP-Passwort werden mit AES-256-GCM verschlüsselt in PostgreSQL gespeichert. `NAVIDROME_ENCRYPTION_KEY` muss dauerhaft gesichert und unverändert erhalten bleiben; ohne passenden Schlüssel sind die bestehenden Zugangsdaten nicht entschlüsselbar.
+Navidrome-Benutzername und -Passwort, Music-Assistant-Token, Spotify-Client-Secret und -Anmeldung, Instagram-App-Secret und -Zugriff sowie das SMTP-Passwort werden mit AES-256-GCM verschlüsselt in PostgreSQL gespeichert. `NAVIDROME_ENCRYPTION_KEY` muss dauerhaft gesichert und unverändert erhalten bleiben; ohne passenden Schlüssel sind die bestehenden Zugangsdaten nicht entschlüsselbar.
 
 Im Admin-Panel unter **Daten → Verschlüsselungsschlüssel sichern** eine Backup-Datei erstellen. Dafür wird eine eigene Wiederherstellungs-Passphrase mit mindestens 16 Zeichen festgelegt. **Backup-Datei und Passphrase getrennt und außerhalb des Servers aufbewahren.** Die regulären JSON-Backups enthalten den Verschlüsselungsschlüssel absichtlich nicht.
 

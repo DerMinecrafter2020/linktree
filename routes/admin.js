@@ -1082,6 +1082,179 @@ router.post('/settings/spotify/test', async (req, res) => {
   }
 });
 
+// ---------- Instagram-Profilabgleich (Admin) ----------
+// Eigene Meta-App (Business Login for Instagram); nur Business-/Creator-Konten.
+// App-Secret und Token werden nur verschluesselt gespeichert und nie ausgegeben.
+const instagram = require('../lib/instagram');
+const INSTAGRAM_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+
+function instagramSettingsView(row, req) {
+  const s = row || {};
+  const redirect = instagram.getRedirectUriStatus(req);
+  return {
+    enabled: !!s.enabled,
+    app_id: s.app_id || '',
+    has_app_secret: !!s.app_secret_encrypted,
+    connected: instagram.isConnected(s),
+    username: s.username || null,
+    token_expires_at: s.token_expires_at || null,
+    sync_avatar: s.sync_avatar !== false,
+    sync_bio: s.sync_bio !== false,
+    sync_name: !!s.sync_name,
+    bio_available: s.bio_available,
+    last_sync_at: s.last_sync_at || null,
+    last_sync_ok: s.last_sync_ok,
+    last_sync_message: s.last_sync_message || null,
+    connected_at: s.connected_at || null,
+    redirect_uri: redirect.uri,
+    redirect_uri_configured: redirect.configured,
+    redirect_uri_secure: redirect.secure,
+    redirect_uri_localhost: redirect.localhost,
+  };
+}
+
+router.get('/settings/instagram', async (req, res, next) => {
+  try {
+    res.json({ ok: true, data: instagramSettingsView(await instagram.getSettings(), req) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Speichern: App-Zugangsdaten und/oder Auswahl der Felder. Fehlende Felder bleiben unveraendert.
+router.post('/settings/instagram', async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const current = await instagram.getSettings() || {};
+    const appId = typeof body.appId === 'string' ? body.appId.trim() : (current.app_id || '');
+    const appSecret = typeof body.appSecret === 'string' ? body.appSecret.trim() : '';
+    if (appId && !instagram.APP_ID_RE.test(appId)) {
+      return res.status(400).json({ ok: false, error: 'Ungültige Instagram-App-ID (nur Ziffern)' });
+    }
+    if (appSecret && !instagram.APP_SECRET_RE.test(appSecret)) {
+      return res.status(400).json({ ok: false, error: 'Ungültiges Instagram-App-Secret (nur Buchstaben und Ziffern)' });
+    }
+    const bool = (value, fallback) => (typeof value === 'boolean' ? value : fallback);
+    const enabled = bool(body.enabled, !!current.enabled);
+    const syncAvatar = bool(body.sync_avatar, current.sync_avatar !== false);
+    const syncBio = bool(body.sync_bio, current.sync_bio !== false);
+    const syncName = bool(body.sync_name, !!current.sync_name);
+
+    // Neue App-Zugangsdaten: bestehende Anmeldung gehoert zur alten App und wird verworfen
+    const credentialsChanged = (appId || null) !== (current.app_id || null) || !!appSecret;
+    const secretEnc = appSecret ? encrypt(appSecret) : (appId ? current.app_secret_encrypted || null : null);
+    if (enabled && (!appId || !secretEnc)) {
+      return res.status(400).json({ ok: false, error: 'App-ID und App-Secret sind Pflicht, wenn der Abgleich aktiviert ist' });
+    }
+
+    await db.query(`
+      INSERT INTO instagram_settings (id, enabled, app_id, app_secret_encrypted, sync_avatar, sync_bio, sync_name)
+      VALUES (1, $1, $2, $3, $4, $5, $6)
+      ON CONFLICT (id) DO UPDATE SET
+        enabled = EXCLUDED.enabled,
+        app_id = EXCLUDED.app_id,
+        app_secret_encrypted = EXCLUDED.app_secret_encrypted,
+        sync_avatar = EXCLUDED.sync_avatar,
+        sync_bio = EXCLUDED.sync_bio,
+        sync_name = EXCLUDED.sync_name,
+        access_token_encrypted = CASE WHEN $7 THEN NULL ELSE instagram_settings.access_token_encrypted END,
+        token_expires_at = CASE WHEN $7 THEN NULL ELSE instagram_settings.token_expires_at END,
+        username = CASE WHEN $7 THEN NULL ELSE instagram_settings.username END,
+        connected_at = CASE WHEN $7 THEN NULL ELSE instagram_settings.connected_at END,
+        updated_at = NOW()
+    `, [enabled, appId || null, secretEnc, syncAvatar, syncBio, syncName, credentialsChanged]);
+    await audit.log(req, 'settings_update', 'instagram', 1, { enabled, credentials_changed: credentialsChanged });
+
+    res.json({ ok: true, data: instagramSettingsView(await instagram.getSettings(), req) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Startet die Anmeldung: liefert die Instagram-URL (POST, damit die CSRF-Pruefung greift)
+router.post('/settings/instagram/authorize', async (req, res, next) => {
+  try {
+    const settings = await instagram.getSettings();
+    if (!instagram.isConfigured(settings)) {
+      return res.status(400).json({ ok: false, error: 'Bitte zuerst App-ID und App-Secret speichern' });
+    }
+    const state = crypto.randomBytes(32).toString('hex');
+    const redirectUri = instagram.getRedirectUri(req);
+    req.session.instagramOAuth = { state, redirectUri, createdAt: Date.now() };
+    req.session.save((err) => {
+      if (err) return next(err);
+      res.json({ ok: true, data: { url: instagram.buildAuthorizeUrl(settings, state, redirectUri) } });
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Rueckkehr von Instagram (GET). Schutz ueber den einmaligen state-Wert der Admin-Session.
+router.get('/instagram/callback', async (req, res) => {
+  const pending = req.session.instagramOAuth;
+  delete req.session.instagramOAuth;
+  const done = (status) => res.redirect(`/admin?instagram=${status}`);
+
+  const state = typeof req.query.state === 'string' ? req.query.state.replace(/#_$/, '') : '';
+  const stateOk = pending && typeof pending.state === 'string' && state.length === pending.state.length &&
+    crypto.timingSafeEqual(Buffer.from(state), Buffer.from(pending.state)) &&
+    Date.now() - pending.createdAt < INSTAGRAM_STATE_MAX_AGE_MS;
+  if (!stateOk) return done('invalid');
+  if (req.query.error) return done('denied');
+
+  const code = typeof req.query.code === 'string' ? req.query.code : '';
+  if (!code || code.length > 2000) return done('invalid');
+
+  try {
+    const settings = await instagram.getSettings();
+    if (!instagram.isConfigured(settings)) return done('error');
+    const token = await instagram.exchangeCode(settings, code, pending.redirectUri);
+    await instagram.saveToken(token.accessToken, token.expiresIn, { userId: token.userId, connected: true });
+    // Benutzernamen gleich mit abholen (Profil wird erst nach der Feldauswahl uebernommen)
+    try {
+      const profile = await instagram.fetchProfile(token.accessToken);
+      await db.query('UPDATE instagram_settings SET username = $1, bio_available = $2 WHERE id = 1',
+        [profile.username || null, profile.bioAvailable]);
+    } catch (err) {
+      console.warn('[instagram] Profil nach dem Verbinden nicht ladbar:', err.message);
+    }
+    await audit.log(req, 'connect', 'instagram', 1);
+    done('connected');
+  } catch (err) {
+    console.error('[instagram] Anmeldung fehlgeschlagen:', err.message);
+    done('error');
+  }
+});
+
+router.post('/settings/instagram/disconnect', async (req, res, next) => {
+  try {
+    await db.query(`UPDATE instagram_settings SET access_token_encrypted = NULL, token_expires_at = NULL,
+      token_refreshed_at = NULL, username = NULL, connected_at = NULL, updated_at = NOW() WHERE id = 1`);
+    await audit.log(req, 'disconnect', 'instagram', 1);
+    res.json({ ok: true, data: instagramSettingsView(await instagram.getSettings(), req) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Jetzt abgleichen (auch wenn der taegliche Abgleich deaktiviert ist)
+router.post('/settings/instagram/sync', async (req, res, next) => {
+  try {
+    const result = await instagram.syncNow({ force: true });
+    if (result.ok && result.changed.length) {
+      await audit.log(req, 'profile_sync', 'instagram', 1, { changed: result.changed });
+    }
+    const { rows } = await db.query('SELECT name, handle, bio, avatar, avatar_url FROM profile WHERE id = 1 LIMIT 1');
+    res.json({
+      ok: true,
+      data: { ...result, profile: rows[0] || null, settings: instagramSettingsView(await instagram.getSettings(), req) },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Verbindung pruefen. Mit url/username/password im Body werden diese Werte geprueft, ohne zu
 // speichern (Einrichtungsassistent); ein leeres Passwort nimmt das gespeicherte.
 router.post('/settings/navidrome/test', async (req, res) => {

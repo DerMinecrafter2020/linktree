@@ -10,7 +10,8 @@ KI-Coding-Agenten (Claude Code, Codex, Cursor, Copilot …) und an Menschen, die
 
 OpenWeb ist eine selbst gehostete **Link-in-Bio-Seite** (à la Linktree) im **Material-3-Design** (dunkel) mit
 Admin-Oberfläche, Klick-Statistiken und Musik-Integration („Now Playing“ über Navidrome/Subsonic
-, Music Assistant oder Spotify, inkl. Discord-Webhook und Musik-Verlauf).
+, Music Assistant oder Spotify, inkl. Discord-Webhook und Musik-Verlauf) sowie optionalem
+Profilabgleich mit Instagram.
 
 | Bereich   | Technik |
 |-----------|---------|
@@ -50,6 +51,8 @@ lib/
   nowplaying-public.js    Oeffentliche Feld-Allowlist fuer Now-Playing (keine internen Server-URLs)
   nowplaying.js           Aktive Quelle fuer Startseite, Verlauf und Discord (MA → Spotify → Navidrome)
   spotify.js              Spotify-Web-API-Client: OAuth (Authorization Code), Token-Refresh, Now Playing, Cover
+  instagram.js            Instagram-Profilabgleich (Business Login for Instagram): OAuth, 60-Tage-Token + Verlaengerung, Abgleich
+  redirect-uri.js         OAuth-Redirect-URIs aus APP_URL inkl. Pruefung (https, kein localhost) fuer Spotify/Instagram
   crypto.js               AES-256-GCM encrypt/decrypt/isEncrypted (Key: NAVIDROME_ENCRYPTION_KEY)
   encryption-key-backup.js Verschlüsseltes Backup/Wiederherstellung des Anwendungsschlüssels
   totp.js                 TOTP-Helfer (otplib v13, ±30 s, Replay-Schutz über afterTimeStep)
@@ -69,7 +72,7 @@ lib/
   analytics.js            User-Agent-/Länder-Parsing für Statistiken
 db/
   migrate.js              Führt db/migrations/*.sql der Reihe nach aus (Tabelle `migrations`)
-  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 020: navidrome_settings.username_encrypted)
+  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 021: instagram_settings)
   seed.js / reset.js      Initialdaten / Datenbank leeren
 public/                   Statische Dateien (werden 1:1 ausgeliefert!)
   index.html, admin.html, login.html, setup.html, changelog.html, impressum.html, datenschutz.html …
@@ -128,12 +131,12 @@ Vorlage: `.env.example`. Die `.env` enthält Secrets → **niemals committen, lo
 |----------|---------|-----------|
 | `NODE_ENV` | – | Standard **`production`** (sichere Voreinstellung). Nur lokal `development` setzen. |
 | `PORT` | – | Standard 3000 |
-| `APP_URL`, `PUBLIC_DOMAIN` | – | Öffentliche URL/Domain (Sitemap, OG-Tags, erlaubte Origins für CSRF-Prüfung, WebAuthn-RP, Spotify-Redirect-URI) |
+| `APP_URL`, `PUBLIC_DOMAIN` | – | Öffentliche URL/Domain (Sitemap, OG-Tags, erlaubte Origins für CSRF-Prüfung, WebAuthn-RP, Redirect-URIs für Spotify und Instagram) |
 | `DATABASE_URL` | ja* | PostgreSQL-URL (*alternativ `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`) |
 | `POSTGRES_PASSWORD` | Docker | Passwort des Postgres-Containers (muss zu `DATABASE_URL` passen) |
 | `SESSION_SECRET` | ja | Zufälliger 64-Hex-Wert, Server startet sonst nicht |
 | `SESSION_MAX_AGE_MS` | – | Session-Dauer (Standard 24 h; „Angemeldet bleiben“ = 30 Tage) |
-| `NAVIDROME_ENCRYPTION_KEY` | ja | 32 Byte Hex – verschlüsselt Navidrome-Benutzername und -Passwort, MA-Token, Spotify-Client-Secret/-Refresh-Token und SMTP-Passwort in der DB. Schlüssel-Backup im Admin separat erstellen und Passphrase getrennt aufbewahren. |
+| `NAVIDROME_ENCRYPTION_KEY` | ja | 32 Byte Hex – verschlüsselt Navidrome-Benutzername und -Passwort, MA-Token, Spotify-Client-Secret/-Refresh-Token, Instagram-App-Secret/-Token und SMTP-Passwort in der DB. Schlüssel-Backup im Admin separat erstellen und Passphrase getrennt aufbewahren. |
 | `ADMIN_EMAIL` | – | E-Mail des initialen Admins (Seeding) |
 | `ADMIN_PASSWORD`, `NAVIDROME_PASSWORD` | – | **Nur für das Seeding**, danach aus der `.env` entfernen |
 | `NAVIDROME_URL`, `NAVIDROME_USERNAME`, `NAVIDROME_POLL_INTERVAL_SEC` | – | Initiale Navidrome-Daten (Seeding) |
@@ -155,7 +158,8 @@ Vorlage: `.env.example`. Die `.env` enthält Secrets → **niemals committen, lo
 2. Setup-Modus: nur `/api/setup` + `setup.html`; nach erfolgreichem Setup beendet sich der Prozess
    (systemd/Docker startet neu).
 3. Normalbetrieb: Migrationen → Session-Middleware → Rate-Limits → Routen → Cronjobs (Backup +
-   Wartung täglich 03:00, Musik-Verlauf alle 15 s, Discord-Polling alle 10 s).
+   Wartung täglich 03:00, Musik-Verlauf alle 15 s, Discord-Polling alle 10 s, Instagram-Abgleich
+   stündlich geprüft / höchstens einmal pro Tag).
 
 **Middleware-Reihenfolge (relevant für Sicherheit)**
 Health-Check → Metrik-Middleware → Helmet/CSP + Security-Header → Schutz vor direktem Abruf von `admin.html` /
@@ -248,6 +252,16 @@ Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
     Abschlusstest. Rückkehr `/admin?spotify=connected` zeigt den Abschluss, Fehler Schritt 4 mit Hilfe.
     Redirect-Prüfung vom Server (`lib/spotify.getRedirectUriStatus`: https Pflicht, http nur für
     127.0.0.1/[::1], nie `localhost`).
+- **Instagram-Profilabgleich** (`lib/instagram.js`, Karte + Assistent im Admin-Tab „Profil“): nur
+  Business-/Creator-Konten, eigene Meta-App („API-Einrichtung mit Instagram-Login“, Instagram-App-ID
+  und -Secret). Redirect-URI `<APP_URL>/api/admin/instagram/callback`. Ablauf wie bei Spotify
+  (`state` in der Session) → Code-Tausch → langlebiger Token (60 Tage, verschlüsselt). `syncIfDue()`
+  läuft stündlich, gleicht höchstens alle 20 h ab und verlängert den Token wöchentlich (frühestens 24 h
+  nach Ausstellung); Fehler 190 (abgelaufen/widerrufen) trennt die Verbindung. Übernommen werden nur
+  die gewählten Felder (`sync_avatar`, `sync_bio`, `sync_name` → `name` = `@username`, `handle` =
+  Anzeigename). Das Profilbild wird nur von `*.cdninstagram.com`/`*.fbcdn.net` (https, ohne
+  Weiterleitung, max. 512 KB) geladen und als Data-URL in `profile.avatar_url` gespeichert. Ob
+  `biography` abrufbar ist, prüft der Abgleich selbst (`bio_available`); ohne bleibt die Bio unverändert.
 - **Navidrome-Anmeldedaten:** Benutzername (`username_encrypted`) und Passwort (`password_encrypted`)
   nur verschlüsselt. Schreiben ausschließlich über `lib/navidrome.saveSettings()` (Admin, Seeding,
   `install.sh change-navidrome`), lesen über `getSettings()` (liefert `username` entschlüsselt; alte
@@ -302,7 +316,8 @@ Middleware zählt jede Anfrage (Dauer, 5xx) – sie muss vor allen Routen stehen
 8. **Neue öffentliche Endpunkte** brauchen eine Begründung, Eingabeprüfung und ggf. eigenes
    Rate-Limit. Zustandsändernde Endpunkte sind POST/PATCH/PUT/DELETE (CSRF-Prüfung greift nur dort).
 9. **Proxys auf Fremd-Inhalte** (Cover, Icons) nur mit festem Ziel-Host und festen Content-Types
-   durchreichen; SVGs mit Sandbox-CSP. (Music Assistant: Origin des MA-Servers; Spotify: `i.scdn.co`.)
+   durchreichen; SVGs mit Sandbox-CSP. (Music Assistant: Origin des MA-Servers; Spotify: `i.scdn.co`;
+   Instagram-Profilbild: `*.cdninstagram.com`/`*.fbcdn.net`.)
 10. **Keine Dateien mit Secrets oder Debug-Resten** unter `public/` ablegen – alles dort ist öffentlich.
 11. **Link-Sichtbarkeit** (aktiv, Zeitsteuerung, Ablaufdatum, Passwortschutz, „Profil nicht öffentlich“)
     immer über `lib/visibility.js` prüfen – auf **jedem** Pfad, der einen Link anzeigt oder auflöst

@@ -104,6 +104,12 @@
     testNavidromeConnection: (candidate) => post('/admin/settings/navidrome/test', candidate || {}),
     testNavidromeDiscordWebhook: (source) => post('/admin/settings/navidrome/discord-test', source ? { source } : {}),
 
+    getInstagramSettings: () => get('/admin/settings/instagram'),
+    saveInstagramSettings: (cfg) => post('/admin/settings/instagram', cfg),
+    startInstagramAuthorization: () => post('/admin/settings/instagram/authorize'),
+    disconnectInstagram: () => post('/admin/settings/instagram/disconnect'),
+    syncInstagram: () => post('/admin/settings/instagram/sync'),
+
     getSpotifySettings: () => get('/admin/settings/spotify'),
     saveSpotifySettings: (cfg) => post('/admin/settings/spotify', cfg),
     startSpotifyAuthorization: () => post('/admin/settings/spotify/authorize'),

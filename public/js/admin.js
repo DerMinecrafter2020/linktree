@@ -2295,6 +2295,16 @@
         w.step = step;
         w.stepSet = true;
       },
+      // Assistent bei einem Schritt oeffnen, auch wenn der Dienst schon eingerichtet ist
+      open(step) {
+        prefs.update({ manual: false });
+        w.forced = true;
+        w.finishing = false;
+        w.step = step;
+        w.stepSet = true;
+        root.hidden = true;
+        updateView();
+      },
     };
   }
 
@@ -2935,6 +2945,376 @@
     }
   }
 
+  // ---------- Instagram-Profilabgleich ----------
+  // Profilbild, Bio und auf Wunsch Namen aus dem eigenen Instagram-Konto (Business/Creator).
+  const IG_APP_ID_RE = /^\d{6,25}$/;
+  const IG_SECRET_RE = /^[A-Za-z0-9]{16,64}$/;
+  const INSTAGRAM_RETURN_MESSAGES = {
+    connected: ['✅ Mit Instagram verbunden', false],
+    denied: ['Die Anmeldung bei Instagram wurde abgebrochen. Du kannst es jederzeit erneut versuchen.', true],
+    invalid: ['Die Instagram-Anmeldung ist abgelaufen oder ungültig. Bitte erneut verbinden.', true],
+    error: ['Instagram hat die Anmeldung abgelehnt. Prüfe Redirect-URI, App-ID und App-Secret.', true],
+  };
+  let instagramWizard = null;
+  let instagramReturnResult = null;
+  let instagramLastSync = null;
+
+  function formatDateTime(value) {
+    if (!value) return '';
+    const d = new Date(value);
+    return d.toLocaleDateString('de-DE') + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // Hinweise im Profilformular: welche Felder Instagram ueberschreibt
+  function renderInstagramProfileHints() {
+    const cfg = state.instagram || {};
+    const active = !!(cfg.connected && cfg.enabled);
+    const who = cfg.username ? ` (@${cfg.username})` : '';
+    const fields = {
+      avatar: active && cfg.sync_avatar,
+      bio: active && cfg.sync_bio && cfg.bio_available !== false,
+      name: active && cfg.sync_name,
+    };
+    $$('.ig-sync-hint').forEach((hint) => {
+      const on = !!fields[hint.dataset.igField];
+      hint.hidden = !on;
+      hint.textContent = on ? `🔄 Wird täglich aus Instagram übernommen${who} – Änderungen hier werden dabei überschrieben.` : '';
+    });
+  }
+
+  function renderInstagramForm() {
+    const form = $('#instagram-form');
+    if (!form) return;
+    const cfg = state.instagram || {};
+    form.enabled.checked = !!cfg.enabled;
+    form.sync_avatar.checked = cfg.sync_avatar !== false;
+    form.sync_bio.checked = cfg.sync_bio !== false;
+    form.sync_name.checked = !!cfg.sync_name;
+    form.appId.value = cfg.app_id || '';
+    form.appSecret.value = '';
+    form.appSecret.placeholder = cfg.has_app_secret ? '•••••••• (gespeichert)' : 'App-Secret aus der Meta-App';
+    $('#instagram-redirect-uri').textContent = cfg.redirect_uri || '–';
+
+    const connection = $('#instagram-connection');
+    if (cfg.connected) {
+      const until = cfg.token_expires_at ? ` · Zugriff gültig bis ${new Date(cfg.token_expires_at).toLocaleDateString('de-DE')} (wird automatisch verlängert)` : '';
+      connection.textContent = `✅ Verbunden${cfg.username ? ' als @' + cfg.username : ''}${until}`;
+    } else {
+      connection.textContent = cfg.has_app_secret ? 'Nicht verbunden – jetzt „Mit Instagram verbinden“ klicken.' : 'Nicht verbunden';
+    }
+    const last = $('#instagram-last-sync');
+    if (cfg.last_sync_at) {
+      last.textContent = `${cfg.last_sync_ok ? '🔄' : '⚠️'} Letzter Abgleich: ${formatDateTime(cfg.last_sync_at)} – ${cfg.last_sync_message || ''}`;
+    } else {
+      last.textContent = '';
+    }
+    $('#instagram-connect-btn').textContent = cfg.connected ? 'Neu verbinden' : 'Mit Instagram verbinden';
+    $('#instagram-disconnect-btn').hidden = !cfg.connected;
+    $('#instagram-sync-btn').disabled = !cfg.connected;
+    renderInstagramProfileHints();
+  }
+
+  async function loadInstagramSettings(updateView = true) {
+    try {
+      state.instagram = await window.api.getInstagramSettings();
+      renderInstagramForm();
+      if (updateView) instagramWizard?.updateView();
+    } catch (err) {
+      console.warn('[admin] Instagram-Settings konnten nicht geladen werden:', err.message);
+    }
+  }
+
+  // Abgleich ausfuehren; uebernommene Werte sofort im Profilformular anzeigen
+  async function runInstagramSync() {
+    const result = await window.api.syncInstagram();
+    if (result?.settings) {
+      state.instagram = result.settings;
+      renderInstagramForm();
+    }
+    if (result?.ok && result.changed?.length) {
+      state.profile = await window.api.getAdminProfile();
+      renderProfile();
+    }
+    return result;
+  }
+
+  function renderInstagramRedirectCheck() {
+    const cfg = state.instagram || {};
+    $('#instagram-wizard-redirect').textContent = cfg.redirect_uri || '–';
+    const check = '#instagram-wizard-redirect-check';
+    if (cfg.redirect_uri_localhost) {
+      wizardCheck(check, '⚠️ Meta akzeptiert „localhost“ nicht. Setze APP_URL in der .env auf deine öffentliche https-Domain.', 'warn');
+    } else if (!cfg.redirect_uri_secure) {
+      wizardCheck(check, '⚠️ Meta verlangt https. Setze APP_URL in der .env auf deine https-Adresse (z. B. https://links.deine-domain.de) und starte OpenWeb neu.', 'warn');
+    } else if (!cfg.redirect_uri_configured) {
+      wizardCheck(check, '⚠️ APP_URL ist nicht gesetzt – die Adresse wurde aus dem aktuellen Aufruf abgeleitet. Setze APP_URL in der .env, damit sie sich nicht ändert.', 'warn');
+    } else {
+      wizardCheck(check, '✅ Die Adresse kommt aus APP_URL und nutzt https.', 'ok');
+    }
+  }
+
+  async function saveInstagramWizardCredentials() {
+    const idInput = $('#instagram-wizard-app-id');
+    const secretInput = $('#instagram-wizard-app-secret');
+    const check = '#instagram-wizard-cred-check';
+    const appId = idInput.value.trim();
+    const appSecret = secretInput.value.trim();
+    const fail = (msg, field) => {
+      wizardCheck(check, '⚠️ ' + msg, 'warn');
+      field?.focus();
+      return false;
+    };
+    if (!IG_APP_ID_RE.test(appId)) return fail('Die Instagram-App-ID besteht nur aus Ziffern (meist 15–17 Stellen).', idInput);
+    const keepSecret = !appSecret && state.instagram?.has_app_secret && appId === state.instagram?.app_id;
+    if (!keepSecret && !IG_SECRET_RE.test(appSecret)) return fail('Das App-Secret besteht aus 32 Buchstaben und Ziffern – klicke in der Meta-App auf „Anzeigen“ und kopiere es.', secretInput);
+    try {
+      state.instagram = await window.api.saveInstagramSettings({ appId, appSecret });
+      secretInput.value = '';
+      wizardCheck(check, '');
+      renderInstagramForm();
+      instagramReturnResult = null;
+      return true;
+    } catch (err) {
+      return fail(err.message || 'Speichern fehlgeschlagen');
+    }
+  }
+
+  async function startInstagramLogin(statusEl) {
+    try {
+      const { url } = await window.api.startInstagramAuthorization();
+      if (typeof url !== 'string' || !url.startsWith('https://www.instagram.com/oauth/authorize')) throw new Error('Ungültige Anmelde-URL');
+      location.href = url;
+    } catch (err) {
+      if (statusEl) statusEl.textContent = '❌ ' + (err.message || 'Anmeldung konnte nicht gestartet werden');
+    }
+  }
+
+  function renderInstagramResult() {
+    const result = instagramLastSync;
+    const box = '#instagram-wizard-result';
+    if (!result) {
+      wizardCheck(box, '');
+    } else if (result.ok) {
+      wizardCheck(box, `✅ ${result.message}. Ab jetzt wird ${state.instagram?.enabled ? 'täglich automatisch' : 'auf Knopfdruck („Jetzt abgleichen“)'} abgeglichen.`, 'ok');
+    } else {
+      wizardCheck(box, '⚠️ ' + (result.message || 'Abgleich fehlgeschlagen'), 'warn');
+    }
+    const p = result?.profile;
+    const preview = $('#instagram-wizard-preview');
+    preview.hidden = !p;
+    if (!p) return;
+    const img = $('#instagram-wizard-preview-img');
+    img.hidden = !p.avatar_url;
+    if (p.avatar_url) img.src = p.avatar_url;
+    $('#instagram-wizard-preview-name').textContent = p.name || '';
+    $('#instagram-wizard-preview-handle').textContent = p.handle || '';
+    $('#instagram-wizard-preview-bio').textContent = p.bio || '';
+  }
+
+  function initInstagramWizard() {
+    instagramWizard = createSetupWizard({
+      name: 'instagram',
+      root: '#instagram-wizard',
+      form: '#instagram-form',
+      startButton: '#instagram-wizard-start-btn',
+      isConfigured: () => !!state.instagram?.connected,
+      firstStep: () => {
+        if (state.instagram?.connected) return 5;
+        if (state.instagram?.app_id && state.instagram?.has_app_secret) return 4;
+        return instagramWizard.savedStep(3);
+      },
+      steps: [
+        { label: 'Vorbereiten', next: 'Erledigt – weiter' },
+        { label: 'Redirect-URI', next: 'Eingetragen – weiter', render: renderInstagramRedirectCheck },
+        {
+          label: 'Zugangsdaten',
+          next: 'Speichern & weiter',
+          onEnter() {
+            const idInput = $('#instagram-wizard-app-id');
+            if (!idInput.value && state.instagram?.app_id) idInput.value = state.instagram.app_id;
+            $('#instagram-wizard-app-secret').placeholder = state.instagram?.has_app_secret
+              ? '•••••••• (gespeichert – leer lassen zum Behalten)'
+              : 'App-Secret (über „Anzeigen“ sichtbar)';
+          },
+          onNext: saveInstagramWizardCredentials,
+        },
+        {
+          label: 'Verbinden',
+          next: null,
+          persist: false,
+          render() {
+            const ret = instagramReturnResult;
+            const showError = !!ret && ret !== 'connected';
+            $('#instagram-wizard-error').hidden = !showError;
+            if (showError) $('#instagram-wizard-error-text').textContent = INSTAGRAM_RETURN_MESSAGES[ret]?.[0] || 'Die Anmeldung ist fehlgeschlagen.';
+          },
+        },
+        {
+          label: 'Auswahl',
+          next: 'Übernehmen & weiter',
+          persist: false,
+          onEnter() {
+            const cfg = state.instagram || {};
+            $('#instagram-wizard-account').textContent = cfg.username ? `✅ Verbunden als @${cfg.username}` : '✅ Mit Instagram verbunden';
+            $('#instagram-wizard-sync-avatar').checked = cfg.sync_avatar !== false;
+            $('#instagram-wizard-sync-bio').checked = cfg.sync_bio !== false;
+            $('#instagram-wizard-sync-name').checked = !!cfg.sync_name;
+            $('#instagram-wizard-auto').checked = cfg.enabled !== false || !cfg.last_sync_at;
+            wizardCheck('#instagram-wizard-sync-check', cfg.bio_available === false
+              ? 'ℹ️ Instagram gibt die Beschreibung für dieses Konto über die API nicht heraus – sie bleibt dann unverändert.'
+              : '');
+          },
+          async onNext() {
+            const check = '#instagram-wizard-sync-check';
+            const selection = {
+              enabled: $('#instagram-wizard-auto').checked,
+              sync_avatar: $('#instagram-wizard-sync-avatar').checked,
+              sync_bio: $('#instagram-wizard-sync-bio').checked,
+              sync_name: $('#instagram-wizard-sync-name').checked,
+            };
+            if (!selection.sync_avatar && !selection.sync_bio && !selection.sync_name) {
+              wizardCheck(check, '⚠️ Bitte mindestens ein Feld auswählen.', 'warn');
+              return false;
+            }
+            wizardCheck(check, 'Übernehme dein Profil von Instagram …');
+            try {
+              state.instagram = await window.api.saveInstagramSettings(selection);
+              instagramLastSync = await runInstagramSync();
+              wizardCheck(check, '');
+              return true;
+            } catch (err) {
+              wizardCheck(check, '⚠️ ' + (err.message || 'Abgleich fehlgeschlagen'), 'warn');
+              return false;
+            }
+          },
+        },
+        { label: 'Fertig', next: 'Fertig', persist: false, onEnter: renderInstagramResult },
+      ],
+    });
+    if (!instagramWizard) return;
+    $('#instagram-wizard-copy')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      try {
+        await navigator.clipboard.writeText(state.instagram?.redirect_uri || '');
+        btn.textContent = 'Kopiert ✓';
+      } catch {
+        const range = document.createRange();
+        range.selectNodeContents($('#instagram-wizard-redirect'));
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        btn.textContent = 'Markiert – Strg+C';
+      }
+      setTimeout(() => { btn.textContent = 'Kopieren'; }, 2000);
+    });
+    $('#instagram-wizard-connect')?.addEventListener('click', () => startInstagramLogin($('#instagram-wizard-error-text')));
+  }
+
+  // Rueckkehr vom Instagram-Login (/admin?instagram=...): Ergebnis merken, Profil-Tab oeffnen
+  function readInstagramReturn() {
+    const params = new URLSearchParams(location.search);
+    const result = params.get('instagram');
+    if (!result) return null;
+    params.delete('instagram');
+    const query = params.toString();
+    history.replaceState(null, '', location.pathname + (query ? '?' + query : '') + location.hash);
+    if (!INSTAGRAM_RETURN_MESSAGES[result]) return null;
+    switchTab('profile');
+    const [message, isError] = INSTAGRAM_RETURN_MESSAGES[result];
+    toast(message, isError);
+    return result;
+  }
+
+  async function bindInstagram() {
+    const form = $('#instagram-form');
+    if (!form || !window.api) return;
+    const status = $('#instagram-status');
+    instagramReturnResult = readInstagramReturn();
+    initInstagramWizard();
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const appId = (form.appId.value || '').trim();
+      const appSecret = (form.appSecret.value || '').trim();
+      const enabled = !!form.enabled.checked;
+      if (enabled && (!appId || (!appSecret && !state.instagram?.has_app_secret))) {
+        toast('App-ID und App-Secret sind Pflicht, wenn der Abgleich aktiviert ist', true);
+        return;
+      }
+      const credentialsChanged = appId !== (state.instagram?.app_id || '') || !!appSecret;
+      if (credentialsChanged && state.instagram?.connected &&
+          !confirm('Neue App-Zugangsdaten trennen die bestehende Instagram-Verbindung. Fortfahren?')) {
+        return;
+      }
+      try {
+        state.instagram = await window.api.saveInstagramSettings({
+          enabled,
+          appId,
+          appSecret,
+          sync_avatar: !!form.sync_avatar.checked,
+          sync_bio: !!form.sync_bio.checked,
+          sync_name: !!form.sync_name.checked,
+        });
+        renderInstagramForm();
+        toast('📸 Instagram-Einstellungen gespeichert');
+        status.textContent = state.instagram.connected || !state.instagram.has_app_secret
+          ? ''
+          : 'Gespeichert. Klicke jetzt auf „Mit Instagram verbinden“.';
+      } catch (err) {
+        toast('Fehler: ' + (err.message || 'Speichern fehlgeschlagen'), true);
+      }
+    });
+
+    $('#instagram-connect-btn')?.addEventListener('click', () => {
+      const appId = (form.appId.value || '').trim();
+      if (form.appSecret.value || appId !== (state.instagram?.app_id || '')) {
+        status.textContent = 'Speichere zuerst die geänderte App-ID bzw. das Secret.';
+        return;
+      }
+      if (!state.instagram?.has_app_secret) {
+        status.textContent = 'Trage zuerst App-ID und App-Secret ein und speichere.';
+        return;
+      }
+      startInstagramLogin(status);
+    });
+
+    $('#instagram-sync-btn')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      status.textContent = 'Gleiche mit Instagram ab …';
+      try {
+        const result = await runInstagramSync();
+        status.textContent = (result.ok ? '✅ ' : '⚠️ ') + (result.message || '');
+      } catch (err) {
+        status.textContent = '❌ ' + (err.message || 'Abgleich fehlgeschlagen');
+      } finally {
+        btn.disabled = !state.instagram?.connected;
+      }
+    });
+
+    $('#instagram-disconnect-btn')?.addEventListener('click', async () => {
+      if (!confirm('Instagram-Verbindung trennen? Das Profil bleibt so, wie es zuletzt übernommen wurde.')) return;
+      try {
+        state.instagram = await window.api.disconnectInstagram();
+        renderInstagramForm();
+        status.textContent = 'Verbindung getrennt. Entferne den Zugriff bei Bedarf auch in Instagram unter „Apps und Websites“.';
+      } catch (err) {
+        status.textContent = '❌ ' + (err.message || 'Trennen fehlgeschlagen');
+      }
+    });
+
+    await loadInstagramSettings(false);
+    if (!instagramWizard) return;
+    const ret = instagramReturnResult;
+    if (ret === 'connected' && state.instagram?.connected) {
+      // Direkt nach dem Verbinden: Auswahl der Felder zeigen
+      instagramWizard.open(5);
+    } else {
+      if (ret && ret !== 'connected' && !state.instagram?.connected && state.instagram?.has_app_secret) instagramWizard.reopen(4);
+      instagramWizard.updateView();
+    }
+  }
+
   async function reloadCategories() { state.categories = await window.api.getAdminLinkCategories(); }
   async function reloadLinks() { state.links = await window.api.getAdminLinks(); renderLinks(); }
   async function reloadAll() {
@@ -3423,6 +3803,7 @@
     bindNavidrome();
     bindMusicAssistant();
     bindSpotify();
+    bindInstagram();
     bindMonitor();
 
     if (!appInitialized) {

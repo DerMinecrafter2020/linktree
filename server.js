@@ -640,6 +640,12 @@ async function finalizeApp() {
       setInterval(() => { runBackup(); runCleanup(); }, 24 * 60 * 60 * 1000);
     }, next3am - now);
     
+    // Instagram-Profilabgleich: stuendlich pruefen, abgeglichen wird hoechstens einmal pro Tag
+    // (nur wenn im Admin aktiviert und verbunden; verlaengert dabei auch den Zugriffstoken)
+    const { syncIfDue: syncInstagramIfDue } = require('./lib/instagram');
+    setTimeout(syncInstagramIfDue, 60 * 1000);
+    setInterval(syncInstagramIfDue, 60 * 60 * 1000);
+
     // Discord Webhook initialisieren
     const { initDiscordWebhook } = require('./lib/discord');
     initDiscordWebhook();

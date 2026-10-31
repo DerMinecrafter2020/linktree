@@ -48,6 +48,16 @@
     <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
 
     <div class="changelog-entry">
+      <h2>2026-10-31 — OpenWeb v3.4.0 (Profil von Instagram übernehmen)</h2>
+      <ul>
+        <li><strong>Instagram:</strong> Profilbild und Beschreibung – auf Wunsch auch Name und Untertitel – können jetzt aus dem eigenen Instagram-Konto übernommen werden, automatisch einmal täglich oder per „Jetzt abgleichen“. Voraussetzung ist ein Business- oder Creator-Konto und eine eigene Meta-App.</li>
+        <li><strong>Einrichtung:</strong> Ein Assistent im Admin unter „Profil“ führt durch Meta-App, Redirect-URI, Zugangsdaten, Anmeldung bei Instagram und die Auswahl der Felder und zeigt das übernommene Profil als Vorschau.</li>
+        <li><strong>Profil:</strong> Felder, die von Instagram übernommen werden, sind im Profilformular gekennzeichnet. Das Profilbild wird lokal gespeichert, damit es auch nach Ablauf der Instagram-Bildlinks erhalten bleibt.</li>
+        <li><strong>Sicherheit:</strong> App-Secret und Zugriffstoken werden nur verschlüsselt gespeichert; der Zugriff wird automatisch verlängert. Läuft er ab oder wird er widerrufen, trennt OpenWeb die Verbindung und weist im Admin darauf hin.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <h2>2026-10-31 — OpenWeb v3.3.3 (Login-Seite hinter Zugriffsschutz)</h2>
       <ul>
         <li><strong>Login:</strong> Die Admin-Login-Seite wird jetzt auch dann korrekt dargestellt, wenn ein vorgeschalteter Zugriffsschutz (z. B. ein Reverse Proxy mit Anmeldung) alle Adressen sperrt, die mit „/admin“ beginnen. Das Stylesheet von Admin und Login liegt dafür unter /css/admin.css.</li>

@@ -148,6 +148,7 @@
                 <span>Fallback-Buchstaben verwenden (statt Bild)</span>
               </label>
               <input name="avatar" type="text" maxlength="2" placeholder="CA" class="avatar-text-input" />
+              <small class="hint ig-sync-hint" data-ig-field="avatar" hidden></small>
             </div>
           </div>
 
@@ -158,10 +159,12 @@
           <label>
             <span>Handle (Untertitel)</span>
             <input name="handle" type="text" placeholder="Cornelius Ahner" />
+            <small class="hint ig-sync-hint" data-ig-field="name" hidden></small>
           </label>
           <label>
             <span>Bio</span>
             <textarea name="bio" rows="3" placeholder="Azubi, 21 Jahre alt"></textarea>
+            <small class="hint ig-sync-hint" data-ig-field="bio" hidden></small>
           </label>
           <label class="row">
             <input name="is_public" type="checkbox" checked />
@@ -187,6 +190,133 @@
             <button type="submit" class="btn primary">Speichern</button>
           </div>
         </form>
+
+        <div class="card-block" id="instagram-block">
+          <h3>📸 Profil von Instagram übernehmen</h3>
+          <p>
+            Übernimmt Profilbild und Beschreibung – auf Wunsch auch Name und Untertitel – einmal täglich aus deinem
+            Instagram-Konto. Das funktioniert nur mit <strong>Business- oder Creator-Konten</strong>.
+            App-Secret und Zugriffstoken werden ausschließlich verschlüsselt in der Datenbank gespeichert.
+          </p>
+
+          <!-- Einrichtungsassistent: erscheint, solange Instagram nicht verbunden ist (Logik in js/admin.js) -->
+          <div id="instagram-wizard" class="setup-wizard" hidden>
+            <ol class="wizard-progress" aria-label="Fortschritt der Einrichtung"></ol>
+
+            <section class="wizard-step" data-step="1" hidden>
+              <h4>Konto und Meta-App vorbereiten</h4>
+              <ol class="wizard-list">
+                <li>Stelle dein Instagram-Konto auf ein <strong>professionelles Konto</strong> um (Instagram-App → Einstellungen → „Kontotyp und Tools“ → „Zu professionellem Konto wechseln“, z. B. Creator). Das ist kostenlos.</li>
+                <li>Öffne <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer">Meta for Developers</a> und klicke auf <strong>„App erstellen“</strong>.</li>
+                <li>Wähle als Anwendungsfall <strong>„Nachrichten und Inhalte auf Instagram verwalten“</strong> und als App-Typ <strong>„Business“</strong>.</li>
+                <li>Öffne in der App <strong>„Instagram → API-Einrichtung mit Instagram-Login“</strong>.</li>
+              </ol>
+              <p class="wizard-note">Die App kann im Entwicklungsmodus bleiben – für dein eigenes Konto ist keine App-Prüfung durch Meta nötig. OpenWeb fragt nur Lesezugriff auf die Profil-Grunddaten an.</p>
+            </section>
+
+            <section class="wizard-step" data-step="2" hidden>
+              <h4>Redirect-URI eintragen</h4>
+              <p>Trage diese Adresse unter <strong>„Business-Login einrichten“</strong> bei <strong>„OAuth-Weiterleitungs-URIs“</strong> ein und speichere:</p>
+              <div class="wizard-copy">
+                <code id="instagram-wizard-redirect">–</code>
+                <button type="button" class="btn ghost" id="instagram-wizard-copy">Kopieren</button>
+              </div>
+              <p class="wizard-check" id="instagram-wizard-redirect-check"></p>
+            </section>
+
+            <section class="wizard-step" data-step="3" hidden>
+              <h4>Instagram-App-ID und -Secret eintragen</h4>
+              <p>Beide stehen oben auf der Seite „API-Einrichtung mit Instagram-Login“. Achtung: Gemeint ist die <strong>Instagram</strong>-App-ID, nicht die Facebook-App-ID aus den Grundeinstellungen.</p>
+              <div class="form wizard-fields">
+                <label>
+                  <span>Instagram-App-ID</span>
+                  <input id="instagram-wizard-app-id" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="z. B. 1234567890123456" />
+                </label>
+                <label>
+                  <span>Instagram-App-Secret</span>
+                  <input id="instagram-wizard-app-secret" type="password" autocomplete="new-password" placeholder="App-Secret (über „Anzeigen“ sichtbar)" />
+                </label>
+              </div>
+              <p class="wizard-check" id="instagram-wizard-cred-check" aria-live="polite"></p>
+            </section>
+
+            <section class="wizard-step" data-step="4" hidden>
+              <h4>Mit Instagram verbinden</h4>
+              <p>Du wirst zu Instagram weitergeleitet, meldest dich mit deinem Konto an und erlaubst den Zugriff. Danach kommst du automatisch hierher zurück.</p>
+              <button type="button" class="btn primary" id="instagram-wizard-connect">Mit Instagram verbinden</button>
+              <div class="wizard-help" id="instagram-wizard-error" hidden>
+                <p class="wizard-check is-error" id="instagram-wizard-error-text"></p>
+                <p>Häufige Ursachen:</p>
+                <ul>
+                  <li>Die Redirect-URI weicht ab – sie muss exakt wie in Schritt 2 lauten (Meta hängt beim Speichern manchmal einen Schrägstrich an).</li>
+                  <li>App-ID oder App-Secret stammen nicht aus „API-Einrichtung mit Instagram-Login“ – in Schritt 3 neu eintragen.</li>
+                  <li>Das Instagram-Konto ist kein Business-/Creator-Konto.</li>
+                  <li>Meta verlangt, dass das Konto eine Rolle in der App hat: Füge es unter „App-Rollen → Rollen“ als Instagram-Tester hinzu und nimm die Einladung in Instagram an.</li>
+                </ul>
+              </div>
+            </section>
+
+            <section class="wizard-step" data-step="5" hidden>
+              <h4>Was soll übernommen werden?</h4>
+              <p id="instagram-wizard-account" class="wizard-check is-ok"></p>
+              <div class="form wizard-fields">
+                <label class="row"><input type="checkbox" id="instagram-wizard-sync-avatar" checked /><span>Profilbild</span></label>
+                <label class="row"><input type="checkbox" id="instagram-wizard-sync-bio" checked /><span>Beschreibung (Bio)</span></label>
+                <label class="row"><input type="checkbox" id="instagram-wizard-sync-name" /><span>Name (@Benutzername) und Untertitel (Anzeigename)</span></label>
+                <label class="row"><input type="checkbox" id="instagram-wizard-auto" checked /><span>Täglich automatisch abgleichen</span></label>
+              </div>
+              <p class="wizard-note">Übernommene Felder werden beim Abgleich überschrieben. Was du nicht auswählst, pflegst du weiterhin selbst im Profil.</p>
+              <p class="wizard-check" id="instagram-wizard-sync-check" aria-live="polite"></p>
+            </section>
+
+            <section class="wizard-step" data-step="6" hidden>
+              <h4>Geschafft!</h4>
+              <p class="wizard-check" id="instagram-wizard-result" aria-live="polite"></p>
+              <div class="instagram-preview" id="instagram-wizard-preview" hidden>
+                <img id="instagram-wizard-preview-img" alt="Übernommenes Profilbild" hidden />
+                <div>
+                  <strong id="instagram-wizard-preview-name"></strong>
+                  <span id="instagram-wizard-preview-handle"></span>
+                  <p id="instagram-wizard-preview-bio"></p>
+                </div>
+              </div>
+            </section>
+
+            <div class="wizard-nav">
+              <button type="button" class="btn ghost wizard-skip">Manuell einrichten</button>
+              <span class="wizard-spacer"></span>
+              <button type="button" class="btn ghost wizard-back">Zurück</button>
+              <button type="button" class="btn primary wizard-next">Weiter</button>
+            </div>
+          </div>
+
+          <form id="instagram-form" class="form">
+            <p class="hint" id="instagram-connection" aria-live="polite">Nicht verbunden</p>
+            <p class="hint" id="instagram-last-sync"></p>
+            <label class="row"><input type="checkbox" name="enabled" /><span>Täglich automatisch abgleichen</span></label>
+            <label class="row"><input type="checkbox" name="sync_avatar" /><span>Profilbild übernehmen</span></label>
+            <label class="row"><input type="checkbox" name="sync_bio" /><span>Beschreibung (Bio) übernehmen</span></label>
+            <label class="row"><input type="checkbox" name="sync_name" /><span>Name (@Benutzername) und Untertitel übernehmen</span></label>
+            <label>
+              <span>Instagram-App-ID</span>
+              <input name="appId" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" />
+            </label>
+            <label>
+              <span>Instagram-App-Secret</span>
+              <input name="appSecret" type="password" autocomplete="new-password" placeholder="••••••••" />
+              <small class="hint">Nur ausfüllen, wenn du das Secret ändern willst.</small>
+            </label>
+            <p class="hint">Redirect-URI für die Meta-App: <code id="instagram-redirect-uri">–</code></p>
+            <div class="form-actions">
+              <button type="button" id="instagram-wizard-start-btn" class="btn ghost">Assistent</button>
+              <button type="button" id="instagram-sync-btn" class="btn ghost">Jetzt abgleichen</button>
+              <button type="button" id="instagram-disconnect-btn" class="btn ghost" hidden>Trennen</button>
+              <button type="button" id="instagram-connect-btn" class="btn ghost">Mit Instagram verbinden</button>
+              <button type="submit" class="btn primary">Speichern</button>
+            </div>
+            <p id="instagram-status" class="hint" aria-live="polite"></p>
+          </form>
+        </div>
       </section>
 
       <!-- TAB: MUSIK (NAVIDROME) -->
