@@ -289,6 +289,10 @@ Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
 **Ressourcenmonitor (`lib/metrics.js`, Admin-Tab „Monitor“):** Messpunkt alle 10 s, 360 Punkte
 (1 h) nur im Arbeitsspeicher; `GET /api/admin/metrics?since=<ts>` liefert nur neue Punkte. Die
 Middleware zählt jede Anfrage (Dauer, 5xx) – sie muss vor allen Routen stehen.
+Diagramme (`bindMonitor` in `public/js/admin.js`): Definition je Diagramm in `CHARTS` (Reihen mit
+`value` für die Achse und `format` für die Werte-Box). Zeitachse über `t` der Messpunkte, Lücken über
+30 s unterbrechen die Linie. Fadenkreuz per Maus/Touch/Pfeiltasten (`hoverT`, für alle Diagramme
+gleich); die Werte-Box (`.monitor-tooltip`) wird per `textContent` befüllt.
 
 **Profil nicht öffentlich (`profile.is_public = false`):** `/`, `/api/profile`, `/api/links` und
 `/api/links/categories` liefern dann nur für eingeloggte Admins (Vorschau) Inhalte.

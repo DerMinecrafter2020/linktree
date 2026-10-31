@@ -3638,64 +3638,276 @@
       ? new Date(sample.t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
       : null;
 
-    // Einfaches Liniendiagramm (mehrere Reihen, gefuellte Flaeche fuer die erste)
-    function drawChart(canvas, series, { unit = '', min = 0 } = {}) {
-      const dpr = window.devicePixelRatio || 1;
-      const w = canvas.clientWidth || 300;
-      const h = canvas.clientHeight || 140;
-      canvas.width = Math.round(w * dpr);
-      canvas.height = Math.round(h * dpr);
-      const ctx = canvas.getContext('2d');
-      ctx.scale(dpr, dpr);
-      ctx.clearRect(0, 0, w, h);
+    // ---------- Diagramme ----------
+    // Zeitbasierte Liniendiagramme mit Fadenkreuz: Beim Ueberfahren (Maus, Touch, Pfeiltasten)
+    // zeigen alle vier Diagramme denselben Zeitpunkt, das ueberfahrene zusaetzlich die Werte.
+    const SAMPLE_MS = 10000;
+    const GAP_MS = SAMPLE_MS * 3; // laengere Luecke (z. B. Neustart) = Linie unterbrechen
+    const MB = 1048576;
+    const fmtNum = (v, digits = 1) => Number(v || 0).toLocaleString('de-DE', { maximumFractionDigits: digits });
+    const fmtClock = (t, seconds = false) => new Date(t).toLocaleTimeString('de-DE',
+      seconds ? { hour: '2-digit', minute: '2-digit', second: '2-digit' } : { hour: '2-digit', minute: '2-digit' });
 
-      const pad = { l: 48, r: 8, t: 8, b: 20 };
-      const all = series.flatMap(sr => sr.values);
-      const rawMax = Math.max(...all, 0);
-      const max = rawMax <= 0 ? 1 : rawMax * 1.15;
-      const n = Math.max(...series.map(sr => sr.values.length), 2);
-      const x = (i) => pad.l + (i / (n - 1)) * (w - pad.l - pad.r);
-      const y = (v) => pad.t + (1 - (v - min) / (max - min || 1)) * (h - pad.t - pad.b);
+    const CHARTS = [
+      {
+        id: 'monitor-chart-cpu', unit: ' %', title: 'CPU-Last',
+        series: [{ label: 'Prozess', color: '--md-primary', value: s => s.cpu, format: s => `${fmtNum(s.cpu)} %` }],
+      },
+      {
+        id: 'monitor-chart-mem', unit: ' MB', title: 'Arbeitsspeicher',
+        series: [
+          { label: 'RSS', color: '--md-primary', value: s => s.rss / MB, format: s => formatBytes(s.rss) },
+          { label: 'V8-Heap', color: '--md-tertiary', value: s => s.heapUsed / MB, format: s => formatBytes(s.heapUsed) },
+        ],
+      },
+      {
+        id: 'monitor-chart-req', unit: '', title: 'Anfragen pro Minute',
+        series: [
+          { label: 'Anfragen', color: '--md-primary', value: s => s.reqPerMin, format: s => `${fmtNum(s.reqPerMin, 0)}/min` },
+          { label: '5xx-Fehler', color: '--md-error', value: s => s.errPerMin, format: s => `${fmtNum(s.errPerMin, 0)}/min` },
+        ],
+      },
+      {
+        id: 'monitor-chart-resp', unit: ' ms', title: 'Antwortzeit',
+        series: [
+          { label: 'Durchschnitt', color: '--md-primary', value: s => s.respAvgMs, format: s => `${fmtNum(s.respAvgMs, 0)} ms` },
+          { label: '95. Perzentil', color: '--md-tertiary', value: s => s.respP95Ms, format: s => `${fmtNum(s.respP95Ms, 0)} ms` },
+        ],
+      },
+    ];
 
-      // Hilfslinien + Beschriftung
-      ctx.strokeStyle = css('--md-outline-variant');
-      ctx.fillStyle = css('--md-on-surface-variant');
-      ctx.font = '11px ' + (css('--md-font') || 'sans-serif');
-      ctx.lineWidth = 1;
-      for (let g = 0; g <= 2; g++) {
-        const v = min + ((max - min) * g) / 2;
-        const gy = y(v);
-        ctx.globalAlpha = 0.5;
-        ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(w - pad.r, gy); ctx.stroke();
-        ctx.globalAlpha = 1;
-        const label = v >= 100 ? Math.round(v) : Math.round(v * 10) / 10;
-        ctx.fillText(`${label}${unit}`, 4, gy + 4);
-      }
-      ctx.fillText(`vor ${Math.max(1, Math.round((n * 10) / 60))} min`, pad.l, h - 4);
-      const nowLabel = 'jetzt';
-      ctx.fillText(nowLabel, w - pad.r - ctx.measureText(nowLabel).width, h - 4);
+    let hoverT = null;       // Zeitstempel des markierten Messpunkts (null = keiner)
+    let hoverChart = null;   // Diagramm, ueber dem gerade der Zeiger/Fokus ist
+    let drawQueued = false;
 
-      series.forEach((sr, idx) => {
-        const vals = sr.values;
-        if (!vals.length) return;
-        const offset = n - vals.length;
-        ctx.beginPath();
-        vals.forEach((v, i) => { const px = x(i + offset), py = y(v); if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); });
-        ctx.strokeStyle = sr.color;
-        ctx.lineWidth = 2;
-        ctx.lineJoin = 'round';
-        ctx.stroke();
-        if (idx === 0) {
-          ctx.lineTo(x(n - 1), y(min));
-          ctx.lineTo(x(offset), y(min));
-          ctx.closePath();
-          ctx.globalAlpha = 0.18;
-          ctx.fillStyle = sr.color;
-          ctx.fill();
-          ctx.globalAlpha = 1;
-        }
-      });
+    // "Schoene" Achsenschritte: 1, 2, 2.5, 5 x 10^n
+    function niceStep(range, ticks) {
+      const raw = range / Math.max(1, ticks);
+      const mag = Math.pow(10, Math.floor(Math.log10(raw || 1)));
+      const norm = raw / mag;
+      const nice = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10;
+      return nice * mag;
     }
+
+    // Index des Messpunkts, der dem Zeitpunkt t am naechsten liegt (history ist nach t sortiert)
+    function nearestIndex(t) {
+      let lo = 0, hi = history.length - 1;
+      if (hi < 0) return -1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (history[mid].t < t) lo = mid + 1; else hi = mid;
+      }
+      if (lo > 0 && Math.abs(history[lo - 1].t - t) <= Math.abs(history[lo].t - t)) lo--;
+      return lo;
+    }
+
+    function chartGeometry(chart) {
+      const canvas = chart.canvas;
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      if (!w || !h || !history.length) return null;
+      const t1 = history[history.length - 1].t;
+      const t0 = Math.min(history[0].t, t1 - SAMPLE_MS * 6); // mind. 1 min Breite
+      const values = history.flatMap(s => chart.series.map(sr => sr.value(s)));
+      const rawMax = Math.max(0, ...values);
+      const step = niceStep(rawMax > 0 ? rawMax * 1.1 : 1, 4);
+      const max = Math.max(step, Math.ceil((rawMax * 1.05) / step) * step);
+      const ctx = canvas.getContext('2d');
+      ctx.font = '11px ' + (css('--md-font') || 'sans-serif');
+      const tickLabels = [];
+      for (let v = 0; v <= max + step / 2; v += step) tickLabels.push({ v, text: `${fmtNum(v, step < 1 ? 1 : 0)}${chart.unit}` });
+      const left = Math.ceil(Math.max(...tickLabels.map(l => ctx.measureText(l.text).width))) + 12;
+      const pad = { l: left, r: 12, t: 10, b: 24 };
+      const plotW = Math.max(10, w - pad.l - pad.r), plotH = Math.max(10, h - pad.t - pad.b);
+      return {
+        w, h, pad, plotW, plotH, t0, t1, max, step, tickLabels,
+        x: (t) => pad.l + ((t - t0) / Math.max(1, t1 - t0)) * plotW,
+        y: (v) => pad.t + (1 - v / max) * plotH,
+        tAt: (px) => t0 + ((px - pad.l) / plotW) * (t1 - t0),
+      };
+    }
+
+    function drawChart(chart) {
+      const canvas = chart.canvas;
+      const dpr = window.devicePixelRatio || 1;
+      const g = chartGeometry(chart);
+      if (!g) return;
+      canvas.width = Math.round(g.w * dpr);
+      canvas.height = Math.round(g.h * dpr);
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, g.w, g.h);
+      ctx.font = '11px ' + (css('--md-font') || 'sans-serif');
+      const muted = css('--md-on-surface-variant');
+
+      // Y-Achse + Hilfslinien
+      ctx.lineWidth = 1;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'right';
+      g.tickLabels.forEach(({ v, text }) => {
+        const gy = Math.round(g.y(v)) + 0.5;
+        ctx.strokeStyle = css('--md-outline-variant');
+        ctx.globalAlpha = v === 0 ? 0.9 : 0.45;
+        ctx.beginPath(); ctx.moveTo(g.pad.l, gy); ctx.lineTo(g.w - g.pad.r, gy); ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = muted;
+        ctx.fillText(text, g.pad.l - 8, gy);
+      });
+
+      // X-Achse: Uhrzeiten auf runden Minuten, so viele wie mit ~70 px Abstand passen
+      const spanMin = (g.t1 - g.t0) / 60000;
+      const maxLabels = Math.max(2, Math.floor(g.plotW / 70));
+      const stepMin = [1, 2, 5, 10, 15, 20, 30, 60].find(m => spanMin / m <= maxLabels) || 60;
+      const first = Math.ceil(g.t0 / (stepMin * 60000)) * stepMin * 60000;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      for (let t = first; t <= g.t1; t += stepMin * 60000) {
+        const px = g.x(t);
+        if (px < g.pad.l + 14 || px > g.w - g.pad.r - 14) continue;
+        ctx.strokeStyle = css('--md-outline-variant');
+        ctx.globalAlpha = 0.25;
+        ctx.beginPath(); ctx.moveTo(Math.round(px) + 0.5, g.pad.t); ctx.lineTo(Math.round(px) + 0.5, g.h - g.pad.b); ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = muted;
+        ctx.fillText(fmtClock(t), px, g.h - 6);
+      }
+
+      // Reihen; Luecken > GAP_MS unterbrechen die Linie
+      const segments = [];
+      let seg = [];
+      history.forEach((s, i) => {
+        if (i && s.t - history[i - 1].t > GAP_MS) { segments.push(seg); seg = []; }
+        seg.push(s);
+      });
+      if (seg.length) segments.push(seg);
+
+      chart.series.forEach((sr, idx) => {
+        const color = css(sr.color);
+        segments.forEach(points => {
+          ctx.beginPath();
+          points.forEach((s, i) => {
+            const px = g.x(s.t), py = g.y(sr.value(s));
+            if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+          });
+          if (points.length === 1) ctx.lineTo(g.x(points[0].t) + 1, g.y(sr.value(points[0])));
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+          if (idx === 0) {
+            ctx.lineTo(g.x(points[points.length - 1].t), g.y(0));
+            ctx.lineTo(g.x(points[0].t), g.y(0));
+            ctx.closePath();
+            ctx.globalAlpha = 0.16;
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
+        });
+      });
+
+      // Fadenkreuz am markierten Messpunkt
+      const tip = chart.tooltip;
+      const i = hoverT == null ? -1 : nearestIndex(hoverT);
+      if (i < 0) { tip.hidden = true; return; }
+      const sample = history[i];
+      const px = g.x(sample.t);
+      ctx.strokeStyle = css('--md-on-surface');
+      ctx.globalAlpha = 0.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(Math.round(px) + 0.5, g.pad.t); ctx.lineTo(Math.round(px) + 0.5, g.h - g.pad.b); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      chart.series.forEach(sr => {
+        const py = g.y(sr.value(sample));
+        ctx.beginPath();
+        ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+        ctx.fillStyle = css(sr.color);
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = css('--md-surface-container-low') || css('--md-surface');
+        ctx.stroke();
+      });
+
+      if (chart !== hoverChart) { tip.hidden = true; return; }
+      tip.replaceChildren(
+        el('div', { class: 'monitor-tooltip-time', text: fmtClock(sample.t, true) }),
+        ...chart.series.map(sr => el('div', { class: 'monitor-tooltip-row' },
+          el('span', { class: 'monitor-tooltip-dot', style: `background: var(${sr.color})` }),
+          el('span', { text: sr.label }),
+          el('strong', { text: sr.format(sample) })
+        ))
+      );
+      tip.hidden = false;
+      // Box neben das Fadenkreuz setzen, am Rand auf die andere Seite wechseln
+      const tw = tip.offsetWidth, th = tip.offsetHeight;
+      let left = px + 14;
+      if (left + tw > g.w - 4) left = px - 14 - tw;
+      tip.style.left = `${Math.max(4, left)}px`;
+      tip.style.top = `${Math.max(4, Math.min(g.pad.t + 4, g.h - th - 4))}px`;
+    }
+
+    function drawCharts() {
+      drawQueued = false;
+      CHARTS.forEach(drawChart);
+    }
+    function queueDraw() {
+      if (drawQueued) return;
+      drawQueued = true;
+      requestAnimationFrame(drawCharts);
+    }
+
+    function setHover(chart, t) {
+      hoverChart = chart;
+      hoverT = t;
+      queueDraw();
+    }
+
+    CHARTS.forEach(chart => {
+      chart.canvas = $(`#${chart.id}`);
+      if (!chart.canvas) return;
+      // Box fuer die Werte, positioniert ueber dem Diagramm
+      const wrap = el('div', { class: 'monitor-plot' });
+      chart.canvas.parentNode.insertBefore(wrap, chart.canvas);
+      wrap.appendChild(chart.canvas);
+      chart.tooltip = el('div', { class: 'monitor-tooltip', 'aria-live': 'polite', hidden: true });
+      wrap.appendChild(chart.tooltip);
+      chart.canvas.tabIndex = 0;
+      chart.canvas.setAttribute('aria-description', 'Mit der Maus oder den Pfeiltasten einen Zeitpunkt auswählen, um die genauen Werte zu sehen.');
+
+      const fromPointer = (e) => {
+        const g = chartGeometry(chart);
+        if (!g) return;
+        const rect = chart.canvas.getBoundingClientRect();
+        const px = Math.min(g.w - g.pad.r, Math.max(g.pad.l, e.clientX - rect.left));
+        setHover(chart, g.tAt(px));
+      };
+      chart.canvas.addEventListener('pointermove', fromPointer);
+      chart.canvas.addEventListener('pointerdown', fromPointer);
+      chart.canvas.addEventListener('pointerleave', (e) => {
+        if (e.pointerType === 'mouse' && hoverChart === chart) setHover(null, null);
+      });
+      chart.canvas.addEventListener('keydown', (e) => {
+        if (!history.length) return;
+        let i = hoverT == null ? history.length - 1 : nearestIndex(hoverT);
+        const jump = e.shiftKey ? 6 : 1; // Umschalt = 1 Minute
+        if (e.key === 'ArrowLeft') i = Math.max(0, i - jump);
+        else if (e.key === 'ArrowRight') i = Math.min(history.length - 1, i + jump);
+        else if (e.key === 'Home') i = 0;
+        else if (e.key === 'End') i = history.length - 1;
+        else if (e.key === 'Escape') { setHover(null, null); return; }
+        else return;
+        e.preventDefault();
+        setHover(chart, history[i].t);
+      });
+      chart.canvas.addEventListener('focus', () => {
+        if (history.length) setHover(chart, hoverT ?? history[history.length - 1].t);
+      });
+      chart.canvas.addEventListener('blur', () => { if (hoverChart === chart) setHover(null, null); });
+    });
+    // Tippen ausserhalb der Diagramme blendet die Markierung auf Touch-Geraeten aus
+    document.addEventListener('pointerdown', (e) => {
+      if (hoverT != null && !e.target.closest?.('.monitor-plot')) setHover(null, null);
+    });
 
     function card(label, value, sub = '', level = '') {
       return el('div', { class: `stat-card monitor-card ${level}`.trim() },
@@ -3724,21 +3936,7 @@
         card('Laufzeit', fmtUptime(info.uptimeSec), `Node ${info.node}`)
       );
 
-      const primary = css('--md-primary');
-      const tertiary = css('--md-tertiary');
-      drawChart($('#monitor-chart-cpu'), [{ values: history.map(s => s.cpu), color: primary }], { unit: ' %' });
-      drawChart($('#monitor-chart-mem'), [
-        { values: history.map(s => s.rss / 1048576), color: primary },
-        { values: history.map(s => s.heapUsed / 1048576), color: tertiary },
-      ], { unit: ' MB' });
-      drawChart($('#monitor-chart-req'), [
-        { values: history.map(s => s.reqPerMin), color: primary },
-        { values: history.map(s => s.errPerMin), color: css('--md-error') },
-      ]);
-      drawChart($('#monitor-chart-resp'), [
-        { values: history.map(s => s.respAvgMs), color: primary },
-        { values: history.map(s => s.respP95Ms), color: tertiary },
-      ], { unit: ' ms' });
+      drawCharts();
 
       const details = [
         ['Prozess', `PID ${info.pid} · ${info.platform}`],
