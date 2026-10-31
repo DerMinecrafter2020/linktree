@@ -16,6 +16,7 @@ const audit = require('../lib/audit');
 const alert = require('../lib/alert');
 const contact = require('../lib/contact');
 const og = require('../lib/og');
+const botguard = require('../lib/botguard');
 const icons = require('../lib/icons');
 const encryptionKeyBackup = require('../lib/encryption-key-backup');
 const { getAvailableUsers: getMusicAssistantUsers } = require('../lib/musicassistant');
@@ -713,6 +714,47 @@ router.post('/alert-settings/test', async (req, res, next) => {
   try {
     const result = await alert.notify('test', 'Dies ist eine Testbenachrichtigung von OpenWeb.', { time: new Date().toISOString() });
     res.json({ ok: result.sent, results: result.results });
+  } catch (err) { next(err); }
+});
+
+// ---------- Bot-Schutz (lib/botguard.js) ----------
+router.get('/settings/botguard', async (req, res, next) => {
+  try {
+    await botguard.load();
+    res.json({ ok: true, data: botguard.publicView() });
+  } catch (err) { next(err); }
+});
+
+router.post('/settings/botguard', async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const data = await botguard.saveSettings({
+      enabled: b.enabled !== false,
+      challenge_enabled: b.challenge_enabled !== false,
+      mode: b.mode,
+      difficulty: b.difficulty,
+      clearance_days: b.clearance_days,
+      rate_per_min: b.rate_per_min,
+      allowlist: typeof b.allowlist === 'string' ? b.allowlist : '',
+      manual_blocklist: typeof b.manual_blocklist === 'string' ? b.manual_blocklist : '',
+      ufw_enabled: b.ufw_enabled === true,
+      ufw_url: typeof b.ufw_url === 'string' ? b.ufw_url : '',
+      ufw_token: b.remove_ufw_token === true ? null : (typeof b.ufw_token === 'string' ? b.ufw_token : undefined),
+      ufw_lists: typeof b.ufw_lists === 'string' ? b.ufw_lists : '',
+      ufw_interval_min: b.ufw_interval_min,
+    });
+    await audit.log(req, 'update', 'botguard_settings', 1, { enabled: data.enabled, mode: data.mode, ufw: data.ufw_enabled });
+    res.json({ ok: true, data });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ ok: false, error: err.message });
+    next(err);
+  }
+});
+
+router.post('/settings/botguard/sync', async (req, res, next) => {
+  try {
+    const result = await botguard.syncUfw();
+    res.json({ ok: true, data: { ...result, settings: botguard.publicView() } });
   } catch (err) { next(err); }
 });
 

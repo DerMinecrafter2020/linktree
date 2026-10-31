@@ -1010,6 +1010,94 @@
                   <button type="button" id="webauthn-register-btn" class="btn primary">Neuen Schlüssel registrieren</button>
                 </div>
               </div>
+
+              <div class="card-block" id="botguard-card">
+                <h3>🤖 Bot-Schutz</h3>
+                <p class="hint">Gesperrte IP-Adressen werden vor allem anderen abgelehnt. Verdächtige Seitenaufrufe (z. B. Skripte, Headless-Browser, fehlende Browser-Merkmale oder sehr viele Aufrufe) bekommen eine kurze Prüfseite mit einer unsichtbaren Rechenaufgabe – ohne Captcha. Link-Vorschauen (Discord, WhatsApp …), Suchmaschinen, Monitoring und interne Adressen (LAN, NetBird) werden nie geprüft.</p>
+                <div class="botguard-stats" id="botguard-stats" aria-live="polite"></div>
+                <form id="botguard-form" class="form">
+                  <label class="row">
+                    <input name="enabled" type="checkbox" checked />
+                    <span>Bot-Schutz aktiv</span>
+                  </label>
+                  <label class="row">
+                    <input name="challenge_enabled" type="checkbox" checked />
+                    <span>Browser-Prüfung für verdächtige Seitenaufrufe</span>
+                  </label>
+                  <div class="botguard-grid">
+                    <label>
+                      <span>Wer wird geprüft?</span>
+                      <select name="mode">
+                        <option value="suspicious">Nur bei Verdacht (empfohlen)</option>
+                        <option value="all">Jeder Besucher einmal (bei Angriffen)</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Schwierigkeit der Rechenaufgabe</span>
+                      <select name="difficulty">
+                        <option value="low">Niedrig (kaum spürbar)</option>
+                        <option value="medium">Mittel (unter 1 Sekunde)</option>
+                        <option value="high">Hoch (einige Sekunden)</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Freigabe gilt (Tage)</span>
+                      <input name="clearance_days" type="number" min="1" max="90" value="7" />
+                    </label>
+                    <label>
+                      <span>Prüfen ab … Seitenaufrufen pro Minute und IP</span>
+                      <input name="rate_per_min" type="number" min="5" max="1000" value="30" />
+                    </label>
+                  </div>
+
+                  <h4 class="botguard-sub">Sperrliste aus dem UFW Manager</h4>
+                  <p class="hint">Übernimmt alle im UFW Manager gesperrten Adressen (auch automatisch gesperrte) über dessen API. Im UFW Manager unter <em>API-Tokens</em> einen Token mit Leserecht für „Gesperrte Adressen“ (und ggf. „Adresslisten“) anlegen. Fällt der UFW Manager aus, bleibt die zuletzt abgerufene Liste aktiv.</p>
+                  <label class="row">
+                    <input name="ufw_enabled" type="checkbox" />
+                    <span>Gesperrte Adressen regelmäßig vom UFW Manager holen</span>
+                  </label>
+                  <div class="botguard-grid">
+                    <label>
+                      <span>Adresse des UFW Managers</span>
+                      <input name="ufw_url" type="url" placeholder="https://ufw.example.com" />
+                    </label>
+                    <label>
+                      <span>API-Token</span>
+                      <input name="ufw_token" type="password" autocomplete="off" placeholder="ufwm_api_…" />
+                      <small class="hint" id="botguard-token-hint"></small>
+                    </label>
+                    <label>
+                      <span>Zusätzlich diese Adresslisten sperren (optional, Namen mit Komma)</span>
+                      <input name="ufw_lists" type="text" placeholder="z. B. blacklist, scanner" />
+                    </label>
+                    <label>
+                      <span>Abgleich alle … Minuten</span>
+                      <input name="ufw_interval_min" type="number" min="1" max="1440" value="5" />
+                    </label>
+                  </div>
+                  <p class="botguard-sync" id="botguard-sync-status"></p>
+
+                  <h4 class="botguard-sub">Eigene Listen</h4>
+                  <div class="botguard-grid">
+                    <label>
+                      <span>Eigene Sperrliste (IPs oder Netze, eine pro Zeile)</span>
+                      <textarea name="manual_blocklist" rows="4" placeholder="203.0.113.7&#10;198.51.100.0/24&#10;2001:db8::/32"></textarea>
+                    </label>
+                    <label>
+                      <span>Freigabeliste – nie sperren oder prüfen (z. B. eigene IP)</span>
+                      <textarea name="allowlist" rows="4" placeholder="Eigene feste IP, Büro-Netz …"></textarea>
+                    </label>
+                  </div>
+                  <div class="form-actions">
+                    <button type="button" id="botguard-sync-btn" class="btn ghost">Jetzt abgleichen</button>
+                    <button type="submit" class="btn primary">Speichern</button>
+                  </div>
+                </form>
+                <details class="botguard-events">
+                  <summary>Letzte Ereignisse</summary>
+                  <ul id="botguard-events" class="botguard-event-list"></ul>
+                </details>
+              </div>
             </div>
             
             <div class="sub-tab-panel" id="panel-legal">

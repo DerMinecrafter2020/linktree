@@ -88,6 +88,11 @@ app.use((req, res, next) => {
   next();
 });
 
+// Bot-Schutz: gesperrte IPs ablehnen, verdaechtige Seitenaufrufe pruefen (lib/botguard.js).
+// Steht vor Static/Routen; bis zum Laden der Einstellungen in finalizeApp laesst er alles durch.
+const botguard = require('./lib/botguard');
+app.use(botguard.middleware);
+
 // admin.html/index.html in keiner Schreibweise direkt ausliefern (z. B. /%61dmin.html, //admin.html,
 // /ADMIN.HTML), sonst werden IP-Allowlist bzw. Sichtbarkeitseinstellung umgangen
 app.use((req, res, next) => {
@@ -257,6 +262,8 @@ async function finalizeApp() {
       console.error('[server] Fehler bei der Datenbank-Migration:', err.message);
       // Wir setzen fort, aber es könnte zu Problemen führen
     }
+
+    await botguard.init({ versionAssets });
 
     const session = require('express-session');
     const PgSession = require('connect-pg-simple')(session);

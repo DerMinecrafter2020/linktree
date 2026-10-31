@@ -1588,3 +1588,36 @@ body.icons-color .link-icon .icon-generic { fill: var(--ow-icon-color-fg); opaci
   .avatar-wrap { width: 124px; height: 124px; }
   .name { font-size: 28px; line-height: 36px; }
 }
+
+/* ---------- Bot-Pruefung (lib/botguard.js, js/botguard.js) ---------- */
+body.botguard-page { align-items: center; }
+.botguard-card { width: min(420px, 100%); text-align: center; }
+.botguard-spinner {
+  width: 44px;
+  height: 44px;
+  margin: 4px auto 18px;
+  border-radius: 50%;
+  border: 4px solid var(--md-surface-container-highest);
+  border-top-color: var(--md-primary);
+  animation: botguard-spin 0.9s linear infinite;
+}
+@keyframes botguard-spin { to { transform: rotate(360deg); } }
+.botguard-title { margin: 0 0 8px; font-size: 22px; line-height: 28px; font-weight: 500; }
+.botguard-text { margin: 0 0 16px; color: var(--md-on-surface-variant); font-size: 14px; line-height: 20px; }
+.botguard-bar {
+  height: 4px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-highest);
+  overflow: hidden;
+}
+.botguard-bar span {
+  display: block;
+  width: 4%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--md-primary);
+  transition: width var(--md-dur-medium) var(--md-ease);
+}
+.botguard-bar.error span { background: var(--md-error); }
+.botguard-foot { margin: 18px 0 0; font-size: 12px; color: var(--md-on-surface-variant); opacity: 0.8; }
+@media (prefers-reduced-motion: reduce) { .botguard-spinner { animation-duration: 3s; } }

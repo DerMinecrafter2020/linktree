@@ -50,6 +50,16 @@
     <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
 
     <div class="changelog-entry">
+      <h2>2026-10-31 — OpenWeb v3.8.0 (Bot-Schutz & IP-Sperrliste)</h2>
+      <ul>
+        <li><strong>Bot-Schutz:</strong> Verdächtige Seitenaufrufe – etwa Skripte, Headless-Browser, Anfragen ohne typische Browser-Merkmale oder sehr viele Aufrufe in kurzer Zeit – bekommen vor der Seite eine kurze Prüfung mit einer unsichtbaren Rechenaufgabe (kein Captcha, keine Dienste von Drittanbietern). Danach gilt die Freigabe für einige Tage. Normale Besucher merken davon nichts.</li>
+        <li><strong>IP-Sperrliste:</strong> Gesperrte Adressen werden auf allen Seiten und Schnittstellen abgelehnt. Die Liste kommt auf Wunsch automatisch aus dem UFW Manager (alle dort gesperrten Adressen, auch automatisch gesperrte, sowie ausgewählte Adresslisten) und lässt sich um eigene Einträge ergänzen. Fällt der UFW Manager aus, bleibt die letzte Liste aktiv.</li>
+        <li><strong>Ausnahmen:</strong> Link-Vorschauen (Discord, WhatsApp …), Suchmaschinen, Monitoring-Dienste und interne Adressen (LAN, NetBird) werden nie geprüft; eine eigene Freigabeliste schützt z. B. die eigene IP. Der Admin-Bereich und die Login-Seite sind von der Prüfung ausgenommen.</li>
+        <li><strong>Admin:</strong> Einstellungen, Zähler und die letzten Ereignisse unter Einstellungen → Sicherheit → „Bot-Schutz“; bei Angriffen lässt sich auf „Jeder Besucher einmal“ umstellen.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <h2>2026-10-31 — OpenWeb v3.7.0 (Link-Vorschau für Discord, WhatsApp & Co.)</h2>
       <ul>
         <li><strong>Link-Vorschau:</strong> Beim Teilen der Seite in Discord, WhatsApp, Telegram, X und Co. erscheint jetzt eine große Vorschau mit eigenem Vorschaubild. Bisher war als Bild eine SVG-Datei hinterlegt, die diese Dienste nicht anzeigen.</li>

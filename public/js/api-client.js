@@ -88,6 +88,9 @@
 
     getAlertSettings: () => get('/admin/alert-settings'),
     saveAlertSettings: (settings) => post('/admin/alert-settings', settings),
+    getBotguardSettings: () => get('/admin/settings/botguard'),
+    saveBotguardSettings: (settings) => post('/admin/settings/botguard', settings),
+    syncBotguardUfw: () => post('/admin/settings/botguard/sync', {}),
     getOgSettings: () => get('/admin/og'),
     saveOgImage: (image, key, custom = false) => post('/admin/og/image', { image, key, custom }),
     deleteOgImage: () => del('/admin/og/image'),

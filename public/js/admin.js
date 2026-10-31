@@ -3662,6 +3662,113 @@
     document.addEventListener('visibilitychange', () => { if (musicVisible()) tick(); });
   }
 
+  // ---------- Bot-Schutz (lib/botguard.js) ----------
+  function bindBotguard() {
+    const form = $('#botguard-form');
+    if (!form) return;
+    const statsEl = $('#botguard-stats');
+    const syncEl = $('#botguard-sync-status');
+    const tokenHint = $('#botguard-token-hint');
+    const eventsEl = $('#botguard-events');
+    const fmt = (d) => d ? new Date(d).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '–';
+    const EVENT_LABEL = { blocked: 'Gesperrt', challenged: 'Prüfung', solved: 'Bestanden', failed: 'Fehlgeschlagen' };
+    const REASON = {
+      'all': 'alle prüfen', 'no-ua': 'kein User-Agent', 'bot-ua': 'Bot-/Skript-User-Agent', 'no-accept-language': 'ohne Sprache',
+      'odd-accept': 'ungewöhnlicher Accept-Header', 'no-fetch-metadata': 'fehlende Browser-Header', 'non-browser-ua': 'kein Browser', 'rate': 'zu viele Aufrufe',
+    };
+
+    function render(s) {
+      form.enabled.checked = s.enabled !== false;
+      form.challenge_enabled.checked = s.challenge_enabled !== false;
+      form.mode.value = s.mode === 'all' ? 'all' : 'suspicious';
+      form.difficulty.value = s.difficulty || 'medium';
+      form.clearance_days.value = s.clearance_days || 7;
+      form.rate_per_min.value = s.rate_per_min || 30;
+      form.ufw_enabled.checked = !!s.ufw_enabled;
+      form.ufw_url.value = s.ufw_url || '';
+      form.ufw_token.value = '';
+      form.ufw_token.placeholder = s.has_ufw_token ? '•••••••• gespeichert' : 'ufwm_api_…';
+      tokenHint.textContent = s.has_ufw_token ? 'Verschlüsselt gespeichert – leer lassen, um ihn zu behalten.' : '';
+      form.ufw_lists.value = s.ufw_lists || '';
+      form.ufw_interval_min.value = s.ufw_interval_min || 5;
+      form.manual_blocklist.value = s.manual_blocklist || '';
+      form.allowlist.value = s.allowlist || '';
+
+      const st = s.stats || {};
+      const chip = (value, label, cls = '') => el('div', { class: `botguard-stat ${cls}`.trim() }, el('strong', { text: Number(value || 0).toLocaleString('de-DE') }), el('span', { text: label }));
+      statsEl.replaceChildren(
+        chip(s.blocked_networks, 'gesperrte Adressen/Netze aktiv'),
+        chip(st.blocked, 'Anfragen abgelehnt', st.blocked ? 'warn' : ''),
+        chip(st.challenged, 'Prüfungen gezeigt'),
+        chip(st.solved, 'Prüfungen bestanden', 'ok'),
+        el('p', { class: 'hint botguard-since', text: `Zähler seit dem letzten Serverstart (${fmt(st.since)})${s.enabled ? '' : ' · Bot-Schutz ist ausgeschaltet'}` })
+      );
+
+      syncEl.className = 'botguard-sync';
+      if (!s.ufw_url && !s.ufw_enabled) {
+        syncEl.textContent = 'Noch nicht verbunden.';
+      } else if (s.ufw_last_sync_at) {
+        syncEl.classList.add(s.ufw_last_ok ? 'ok' : 'warn');
+        syncEl.textContent = `${s.ufw_last_ok ? '✅' : '⚠️'} Letzter Abgleich ${fmt(s.ufw_last_sync_at)}: ${s.ufw_last_message || ''}${!s.ufw_last_ok && s.ufw_count ? ` – weiterhin aktiv: ${s.ufw_count} Einträge vom letzten erfolgreichen Abgleich.` : ''}`;
+      } else {
+        syncEl.textContent = s.ufw_enabled ? 'Abgleich startet in Kürze …' : 'Abgleich ist ausgeschaltet.';
+      }
+
+      const events = (st.events || []);
+      eventsEl.replaceChildren(...(events.length ? events.map(e => el('li', {},
+        el('span', { class: `botguard-ev ${e.type}`, text: EVENT_LABEL[e.type] || e.type }),
+        el('code', { text: e.ip || '–' }),
+        el('span', { class: 'hint', text: `${fmt(e.t)} · ${REASON[e.detail] || e.detail || ''}` })
+      )) : [el('li', { class: 'hint', text: 'Noch keine Ereignisse seit dem Serverstart.' })]));
+    }
+
+    async function load() {
+      try { render(await window.api.getBotguardSettings()); } catch (err) { syncEl.textContent = 'Bot-Schutz konnte nicht geladen werden: ' + err.message; }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        enabled: form.enabled.checked,
+        challenge_enabled: form.challenge_enabled.checked,
+        mode: form.mode.value,
+        difficulty: form.difficulty.value,
+        clearance_days: form.clearance_days.value,
+        rate_per_min: form.rate_per_min.value,
+        ufw_enabled: form.ufw_enabled.checked,
+        ufw_url: form.ufw_url.value.trim(),
+        ufw_lists: form.ufw_lists.value,
+        ufw_interval_min: form.ufw_interval_min.value,
+        manual_blocklist: form.manual_blocklist.value,
+        allowlist: form.allowlist.value,
+      };
+      if (form.ufw_token.value.trim()) payload.ufw_token = form.ufw_token.value.trim();
+      try {
+        const s = await window.api.saveBotguardSettings(payload);
+        render(s);
+        toast('✅ Bot-Schutz gespeichert');
+        if (s.ufw_enabled) setTimeout(load, 3500); // erster Abgleich laeuft im Hintergrund
+      } catch (err) { toast('Fehler: ' + err.message, true); }
+    });
+
+    $('#botguard-sync-btn').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      syncEl.textContent = 'Gleiche mit dem UFW Manager ab …';
+      try {
+        const r = await window.api.syncBotguardUfw();
+        render(r.settings);
+        toast(r.ok ? `✅ ${r.count} Einträge vom UFW Manager` : `⚠️ ${r.message}`, !r.ok);
+      } catch (err) {
+        toast('Fehler: ' + err.message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    onTabShown('settings', load);
+  }
+
   // ---------- Link-Vorschau (Open Graph): Vorschaubild erzeugen ----------
   // Zeichnet ein 1200x630-Bild im Standard-Design der Startseite (Farben aus css/themes.css,
   // per kurzem Umschalten von data-theme gelesen) und laedt es als JPEG hoch (lib/og.js).
@@ -4513,6 +4620,7 @@
     bindSpotify();
     bindInstagram();
     bindOgPreview();
+    bindBotguard();
     bindMonitor();
 
     if (!appInitialized) {

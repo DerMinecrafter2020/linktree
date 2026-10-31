@@ -67,6 +67,8 @@ lib/
   alert.js                Benachrichtigungen (Webhook / SMTP) bei Login, Passwortwechsel, Backup-Fehler
   mailer.js               SMTP-Versand (nodemailer, Timeouts) fuer Alerts und Kontaktformular; Absender = SMTP-Benutzer
   contact.js              Kontaktformular: Einstellungen, Formular-Token, Pruefung, Versand (nichts wird gespeichert)
+  botguard.js             Bot-Schutz: IP-Sperrliste (UFW Manager, Listen), Pruefung bei Verdacht (Proof-of-Work), Freigabe-Cookie
+  iprange.js              IPv4/IPv6/CIDR-Listen (BigInt-Bereiche, binaere Suche), interne Netze
   og.js                   Link-Vorschau: Meta-Tags (applyMetaTags), Vorschaubild speichern/pruefen, Crawler-Erkennung, Song-Zeile
   backup.js               Tägliche JSON-Backups nach ./backups (Rechte 600)
   maintenance.js          Aufräumen alter Sessions / Klickdaten und Monitor-Messpunkte (30 Tage)
@@ -76,11 +78,12 @@ lib/
   analytics.js            User-Agent-/Länder-Parsing für Statistiken
 db/
   migrate.js              Führt db/migrations/*.sql der Reihe nach aus (Tabelle `migrations`)
-  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 023: og_settings)
+  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 024: botguard_settings)
   seed.js / reset.js      Initialdaten / Datenbank leeren
 public/                   Statische Dateien (werden 1:1 ausgeliefert!)
   index.html, admin.html, login.html, setup.html, changelog.html, impressum.html, datenschutz.html …
   css/themes.css          Alle Themes ausser "Dunkel" (Farbrollen + --ow-Material-Tokens), Farbfelder des Design-Waehlers
+  js/botguard.js          Bot-Pruefung im Browser (startet js/botguard-worker.js, schickt Loesung an /__botguard/verify)
   js/theme-init.js        Theme frueh setzen (kein Aufblitzen), Theme-Liste window.OpenWebThemes
   js/api-client.js        window.api – einziger Weg, wie das Frontend das Backend aufruft
   js/app.js               Öffentliche Seite
@@ -291,6 +294,20 @@ Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
 - Statistik (`GET /api/admin/stats/links?days=&tz=`): Zeitraum = volle Kalendertage inkl. heute in
   der Browser-Zeitzone `tz` (nur Namen aus `pg_timezone_names`, sonst UTC); `timeline[].day` kommt
   als Text `YYYY-MM-DD`, nie als DATE (würde in JSON um einen Tag verrutschen).
+
+**Bot-Schutz (`lib/botguard.js`, Karte in Admin > Einstellungen > Sicherheit):** Middleware direkt nach
+Helmet/Security-Headern (vor CSRF, Body-Parser, Static, Routen), aktiv erst nach `botguard.init()` in
+`finalizeApp`. Reihenfolge: (1) IP in Sperrliste → 403 (HTML bzw. JSON fuer `/api`), gilt fuer alles ausser
+`/health`; (2) `POST /__botguard/verify` (Proof-of-Work-Loesung → Cookie `ow_bg`, HMAC aus `SESSION_SECRET`,
+an User-Agent gebunden, HttpOnly/SameSite=Lax/Secure in Produktion); (3) Pruefseite nur fuer Seitenaufrufe
+(GET ohne Dateiendung oder `.html`, nicht `/api`, `/admin*`, `/login`) bei Verdacht (`suspicionReason`: Bot-UA,
+kein UA, fehlendes Accept-Language, Chrome ohne `Sec-Fetch-Mode`, > `rate_per_min` Seitenaufrufe/IP) oder
+Modus „alle“. Nie geprueft/gesperrt: interne Netze (`iprange.isInternal`: LAN, 100.64/10, ULA, Loopback) und
+die Freigabeliste; `GOOD_BOTS` (Vorschau, Suche, Monitoring) nur ohne Pruefung, Sperrliste gilt. **Neue
+Seiten/Vorschau-Crawler/Monitoring-Dienste beachten** (`isNavigation`, `GOOD_BOTS`), sonst sehen sie die Pruefseite.
+UFW Manager: `GET <url>/api/v1/blocked` (+ optional `/api/v1/lists`) mit `Authorization: Bearer ufwm_api_…`
+(Token verschluesselt), Intervall `ufw_interval_min`; letzte Liste in `ufw_entries` (bleibt bei Fehlern aktiv).
+Setzt korrektes `TRUST_PROXY` voraus (sonst sieht der Schutz nur die Proxy-IP, die als intern gilt).
 
 **Link-Vorschau / Open Graph (`lib/og.js`, Karte in Admin > Profil):** `/` setzt Titel, Beschreibung,
 `og:*`/`twitter:*` und `theme-color` (Akzentfarbe des Standard-Designs = Embed-Farbe in Discord) ueber
