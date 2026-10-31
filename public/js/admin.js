@@ -939,7 +939,7 @@
       }
       const max = Math.max(1, ...counts);
 
-      // Farben aus den M3-Farbrollen (admin.css) lesen
+      // Farben aus den M3-Farbrollen (css/admin.css) lesen
       const css = getComputedStyle(document.documentElement);
       const color = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
       const primary = color('--md-primary', '#d0bcff');

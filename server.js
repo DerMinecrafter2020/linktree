@@ -195,7 +195,7 @@ app.use('/api', apiLimiter);
 // Eigene CSS/JS-Verweise in HTML-Seiten mit ?v=<Version> versehen (Cache-Busting bei Updates)
 const APP_VERSION = require('./package.json').version;
 function versionAssets(html) {
-  return html.replace(/(href|src)="(\/(?:js\/[a-z0-9._-]+\.js|[a-z0-9_-]+\.css))"/gi,
+  return html.replace(/(href|src)="(\/(?:js\/[a-z0-9._-]+\.js|(?:css\/)?[a-z0-9_-]+\.css))"/gi,
     (m, attr, url) => `${attr}="${url}?v=${encodeURIComponent(APP_VERSION)}"`);
 }
 

@@ -208,8 +208,13 @@ Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
 
 **Performance & Caching (nicht aushebeln):**
 - HTML-Seiten mit eigenen CSS/JS-Verweisen über `sendHtml()` (bzw. `versionAssets()` beim
-  Startseiten-Template) ausliefern: hängt `?v=<Version>` an, solche Dateien bekommen
-  `Cache-Control: max-age=1 Jahr, immutable`. Neue Seiten also **nicht** per `res.sendFile`.
+  Startseiten-Template) ausliefern: hängt `?v=<Version>` an (`/js/*.js`, `/*.css`, `/css/*.css`),
+  solche Dateien bekommen `Cache-Control: max-age=1 Jahr, immutable`. Neue Seiten also **nicht** per
+  `res.sendFile`.
+- **Keine öffentlich benötigten Dateien unter Pfaden, die mit `/admin` beginnen.** Produktiv sperrt ein
+  vorgeschalteter Zugriffsschutz (NetBird) per Präfix alles ab `/admin` – auch `/admin.css`. Die
+  Login-Seite (`/login`) und ihre Assets müssen ohne diesen Schutz erreichbar sein; deshalb liegt das
+  Admin-/Login-Stylesheet unter `/css/admin.css`.
 - „Now Playing“ (`lib/navidrome.js`, `lib/musicassistant.js`) ist per `shortCache` 2,5 s gecacht,
   Spotify (`lib/spotify.js`) 4 s (Rate-Limit; bei HTTP 429 wird `Retry-After` abgewartet und der letzte
   Stand weitergegeben). Alles wird von allen Besuchern geteilt; das Frontend fragt nur bei sichtbarem
@@ -320,7 +325,7 @@ Middleware zählt jede Anfrage (Dauer, 5xx) – sie muss vor allen Routen stehen
 - **Design: Material 3 (Dark).** Farben nur über die M3-Farbrollen (`--md-primary`,
   `--md-surface-container-*`, `--md-on-surface-variant`, `--md-outline` …) – keine festen Hex-Werte
   in Komponenten oder JavaScript. Definiert in `public/styles.css` (öffentliche Seite inkl. der
-  Themes Dunkel/Midnight/Sunset), `public/admin.css` (Admin + Login) und inline in `setup.html`.
+  Themes Dunkel/Midnight/Sunset), `public/css/admin.css` (Admin + Login) und inline in `setup.html`.
   Formen über `--md-shape-*`, Hover/Pressed über State Layer (`::before`, 8 %/12 %), Bewegung über
   `--md-ease*`/`--md-dur-*`. Die alten Variablen (`--neon-*`, `--text-dim`, `--bg-*` …) sind nur
   noch Aliase für ältere Unterseiten und sollen in neuem Code nicht mehr verwendet werden.
