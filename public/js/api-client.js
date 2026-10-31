@@ -101,7 +101,13 @@
     getNavidromeSettings: () => get('/admin/settings/navidrome'),
     saveNavidromeSettings: (cfg) => post('/admin/settings/navidrome', cfg),
     testNavidromeConnection: () => post('/admin/settings/navidrome/test'),
-    testNavidromeDiscordWebhook: () => post('/admin/settings/navidrome/discord-test'),
+    testNavidromeDiscordWebhook: (source) => post('/admin/settings/navidrome/discord-test', source ? { source } : {}),
+
+    getSpotifySettings: () => get('/admin/settings/spotify'),
+    saveSpotifySettings: (cfg) => post('/admin/settings/spotify', cfg),
+    startSpotifyAuthorization: () => post('/admin/settings/spotify/authorize'),
+    disconnectSpotify: () => post('/admin/settings/spotify/disconnect'),
+    testSpotifyConnection: () => post('/admin/settings/spotify/test'),
 
     getMusicAssistantSettings: () => get('/admin/settings/musicassistant'),
     saveMusicAssistantSettings: (cfg) => post('/admin/settings/musicassistant', cfg),

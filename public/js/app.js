@@ -358,7 +358,14 @@
     }
   }
 
-  // Navidrome Player
+  // Musik-Quellen: Anzeigename + Logo (Dashboard Icons ueber den eigenen Proxy)
+  const MUSIC_SOURCES = {
+    navidrome: { name: 'Navidrome', icon: 'navidrome' },
+    musicassistant: { name: 'Music Assistant', icon: 'music-assistant' },
+    spotify: { name: 'Spotify', icon: 'spotify' },
+  };
+
+  // Now-Playing-Player (Music Assistant, Spotify, Navidrome)
   const np = {
     pollTimer: null,
     progressTimer: null,
@@ -523,7 +530,8 @@
         wrap.hidden = false;
       }
       setText('.np-title', 'Momentan läuft nichts', wrap);
-      setText('.np-artist', 'Starte Musik in Navidrome, dann erscheint sie hier', wrap);
+      setText('.np-artist', 'Sobald Musik läuft, erscheint sie hier', wrap);
+      this.renderSource(null);
       const albumEl = wrap?.querySelector('.np-album');
       if (albumEl) { albumEl.textContent = ''; albumEl.hidden = true; }
       const progressEl = $('#np-progress');
@@ -554,10 +562,39 @@
       link.href = coverUrl || this.defaultFavicon;
     },
 
+    // Logo der Quelle am Plattenspieler; Name zusaetzlich fuer Screenreader
+    renderSource(source) {
+      const wrap = $('#navidrome-player');
+      const badge = wrap?.querySelector('.np-source');
+      const label = wrap?.querySelector('.np-source-label');
+      const meta = MUSIC_SOURCES[source];
+      if (label) label.textContent = meta ? `Quelle: ${meta.name}` : '';
+      if (!badge) return;
+      if (!meta) {
+        badge.hidden = true;
+        badge.replaceChildren();
+        delete badge.dataset.source;
+        return;
+      }
+      badge.title = meta.name;
+      if (badge.dataset.source !== source) {
+        const img = document.createElement('img');
+        img.src = `/api/icon/dashboardicon/${meta.icon}/svg`;
+        img.alt = '';
+        img.decoding = 'async';
+        img.referrerPolicy = 'no-referrer';
+        img.onerror = () => { badge.hidden = true; };
+        badge.replaceChildren(img);
+        badge.dataset.source = source;
+      }
+      badge.hidden = false;
+    },
+
     renderTrack(data, state = 'playing') {
       this.setState(state);
       const wrap = $('#navidrome-player');
       if (wrap) wrap.hidden = false;
+      this.renderSource(data.source);
 
       // Radio-Klasse setzen/entfernen
       if (data.isRadio) {

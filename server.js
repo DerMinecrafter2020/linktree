@@ -600,21 +600,12 @@ async function finalizeApp() {
     let lastRecordedTrack = null;
     const recordMusicHistory = async () => {
       try {
-        const { getNowPlaying: getNavidromePlaying } = require('./lib/navidrome');
-        const { getNowPlaying: getMAPlaying } = require('./lib/musicassistant');
+        const { getActiveTrack } = require('./lib/nowplaying');
         const db = require('./lib/db');
-        
-        let track = null;
-        try {
-          track = await getMAPlaying();
-        } catch (e) {}
-        
-        if (!track || !track.playing) {
-          try {
-            track = await getNavidromePlaying();
-          } catch (e) {}
-        }
-        
+
+        // Gleiche Quellenauswahl wie die Startseite (Music Assistant, Spotify, Navidrome)
+        const track = await getActiveTrack();
+
         if (track && track.playing && !track.paused) {
           const trackKey = track.id || (track.title + track.artist);
           if (trackKey !== lastRecordedTrack) {
@@ -624,8 +615,8 @@ async function finalizeApp() {
             const tArtist = (track.artist || '').substring(0, 255);
             const tAlbum = (track.album || '').substring(0, 255);
             await db.query(
-              'INSERT INTO music_history (track_id, title, artist, album) VALUES ($1, $2, $3, $4)',
-              [tId, tTitle, tArtist, tAlbum]
+              'INSERT INTO music_history (track_id, title, artist, album, source) VALUES ($1, $2, $3, $4, $5)',
+              [tId, tTitle, tArtist, tAlbum, track.source || null]
             );
           }
         } else if (!track || !track.playing) {

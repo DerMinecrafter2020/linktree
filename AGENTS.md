@@ -10,7 +10,7 @@ KI-Coding-Agenten (Claude Code, Codex, Cursor, Copilot …) und an Menschen, die
 
 OpenWeb ist eine selbst gehostete **Link-in-Bio-Seite** (à la Linktree) im **Material-3-Design** (dunkel) mit
 Admin-Oberfläche, Klick-Statistiken und Musik-Integration („Now Playing“ über Navidrome/Subsonic
-oder Music Assistant, inkl. Discord-Webhook und Musik-Verlauf).
+, Music Assistant oder Spotify, inkl. Discord-Webhook und Musik-Verlauf).
 
 | Bereich   | Technik |
 |-----------|---------|
@@ -40,7 +40,7 @@ routes/
   public.js               Öffentliche API (/api/...): Profil, Rechtstexte, Links, Klicks, Icons, QR, Login + 2FA-Login
   admin.js                Admin-API (/api/admin/...), komplett hinter requireAdminSession
   navidrome.js            /api/navidrome: Now-Playing + Cover-Proxy (öffentlich), /control (Admin)
-  api/status.js           /api/status/now-playing (Music Assistant → Navidrome-Fallback)
+  api/status.js           /api/status/now-playing (Quellenauswahl lib/nowplaying.js), Cover-Proxys MA/Spotify
   setup.js                /api/setup (nur im Setup-Modus aktiv)
 lib/
   auth.js                 bcrypt, requireAdminSession, IP-Allowlist (IPv4/CIDR)
@@ -48,6 +48,8 @@ lib/
   visibility.js           Gemeinsame Link-Sichtbarkeit (Zeitsteuerung/Ablauf/Profil) fuer alle oeffentlichen Pfade
   webauthn-rp.js          WebAuthn RP-ID/Origin aus APP_URL (nicht aus Request-Headern)
   nowplaying-public.js    Oeffentliche Feld-Allowlist fuer Now-Playing (keine internen Server-URLs)
+  nowplaying.js           Aktive Quelle fuer Startseite, Verlauf und Discord (MA → Spotify → Navidrome)
+  spotify.js              Spotify-Web-API-Client: OAuth (Authorization Code), Token-Refresh, Now Playing, Cover
   crypto.js               AES-256-GCM encrypt/decrypt/isEncrypted (Key: NAVIDROME_ENCRYPTION_KEY)
   encryption-key-backup.js Verschlüsseltes Backup/Wiederherstellung des Anwendungsschlüssels
   totp.js                 TOTP-Helfer (otplib v13, ±30 s, Replay-Schutz über afterTimeStep)
@@ -67,7 +69,7 @@ lib/
   analytics.js            User-Agent-/Länder-Parsing für Statistiken
 db/
   migrate.js              Führt db/migrations/*.sql der Reihe nach aus (Tabelle `migrations`)
-  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 018: api_keys.key_lookup)
+  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 019: spotify_settings, music_history.source)
   seed.js / reset.js      Initialdaten / Datenbank leeren
 public/                   Statische Dateien (werden 1:1 ausgeliefert!)
   index.html, admin.html, login.html, setup.html, changelog.html, impressum.html, datenschutz.html …
@@ -126,7 +128,7 @@ Vorlage: `.env.example`. Die `.env` enthält Secrets → **niemals committen, lo
 |----------|---------|-----------|
 | `NODE_ENV` | – | Standard **`production`** (sichere Voreinstellung). Nur lokal `development` setzen. |
 | `PORT` | – | Standard 3000 |
-| `APP_URL`, `PUBLIC_DOMAIN` | – | Öffentliche URL/Domain (Sitemap, OG-Tags, erlaubte Origins für CSRF-Prüfung) |
+| `APP_URL`, `PUBLIC_DOMAIN` | – | Öffentliche URL/Domain (Sitemap, OG-Tags, erlaubte Origins für CSRF-Prüfung, WebAuthn-RP, Spotify-Redirect-URI) |
 | `DATABASE_URL` | ja* | PostgreSQL-URL (*alternativ `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`) |
 | `POSTGRES_PASSWORD` | Docker | Passwort des Postgres-Containers (muss zu `DATABASE_URL` passen) |
 | `SESSION_SECRET` | ja | Zufälliger 64-Hex-Wert, Server startet sonst nicht |
@@ -208,8 +210,24 @@ Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
 - HTML-Seiten mit eigenen CSS/JS-Verweisen über `sendHtml()` (bzw. `versionAssets()` beim
   Startseiten-Template) ausliefern: hängt `?v=<Version>` an, solche Dateien bekommen
   `Cache-Control: max-age=1 Jahr, immutable`. Neue Seiten also **nicht** per `res.sendFile`.
-- „Now Playing“ (`lib/navidrome.js`, `lib/musicassistant.js`) ist per `shortCache` 2,5 s gecacht
-  und wird von allen Besuchern geteilt; das Frontend fragt nur bei sichtbarem Tab alle 3 s nach.
+- „Now Playing“ (`lib/navidrome.js`, `lib/musicassistant.js`) ist per `shortCache` 2,5 s gecacht,
+  Spotify (`lib/spotify.js`) 4 s (Rate-Limit; bei HTTP 429 wird `Retry-After` abgewartet und der letzte
+  Stand weitergegeben). Alles wird von allen Besuchern geteilt; das Frontend fragt nur bei sichtbarem
+  Tab alle 3 s nach.
+- **Quellenauswahl** nur über `lib/nowplaying.getActiveTrack()` (Startseite, Musik-Verlauf, Discord):
+  laufende Wiedergabe vor pausierter, dann Music Assistant → Spotify → Navidrome. Jeder Track trägt
+  `source` (`musicassistant`|`spotify`|`navidrome`); das Frontend zeigt daraus das Quellen-Logo
+  (Dashboard Icons über den eigenen Proxy). Neue Quellen in `lib/nowplaying.js`,
+  `lib/nowplaying-public.js` (`PUBLIC_SOURCES`), `lib/discord.js` (`SOURCE_META`) und `MUSIC_SOURCES`
+  in `public/js/app.js` + `public/js/admin.js` eintragen.
+- **Spotify:** eigene App im Spotify Developer Dashboard (Development Mode verlangt seit 2026 ein
+  Premium-Konto, max. 5 Nutzer). Redirect-URI ist `<APP_URL>/api/admin/spotify/callback` und muss dort
+  exakt eingetragen sein. Ablauf: `POST /api/admin/settings/spotify/authorize` legt einen einmaligen
+  `state` in der Admin-Session ab (10 min gültig) → Spotify → `GET /api/admin/spotify/callback` prüft
+  `state`, tauscht den Code und speichert den Refresh-Token verschlüsselt. Access-Tokens bleiben nur im
+  Speicher; ein widerrufener Refresh-Token (`invalid_grant`) trennt die Verbindung. Neue
+  Client-ID/-Secret verwerfen die bestehende Anmeldung. Cover nur von `https://i.scdn.co` über
+  `/api/status/spotify-cover`; der Spotify-Link (`spotifyUrl`) ist intern und geht nur an Discord.
 - Music Assistant: `musicassistant_settings.user_id` bestimmt den Benutzer für „Now Playing“.
   Die Player-Zuordnung stammt aus `player_filter` der Music-Assistant-API; ohne eingeschränkte
   Player-Zuordnung wird vorsichtshalber keine Music-Assistant-Wiedergabe ausgegeben.
@@ -257,7 +275,7 @@ Middleware zählt jede Anfrage (Dauer, 5xx) – sie muss vor allen Routen stehen
 8. **Neue öffentliche Endpunkte** brauchen eine Begründung, Eingabeprüfung und ggf. eigenes
    Rate-Limit. Zustandsändernde Endpunkte sind POST/PATCH/PUT/DELETE (CSRF-Prüfung greift nur dort).
 9. **Proxys auf Fremd-Inhalte** (Cover, Icons) nur mit festem Ziel-Host und festen Content-Types
-   durchreichen; SVGs mit Sandbox-CSP.
+   durchreichen; SVGs mit Sandbox-CSP. (Music Assistant: Origin des MA-Servers; Spotify: `i.scdn.co`.)
 10. **Keine Dateien mit Secrets oder Debug-Resten** unter `public/` ablegen – alles dort ist öffentlich.
 11. **Link-Sichtbarkeit** (aktiv, Zeitsteuerung, Ablaufdatum, Passwortschutz, „Profil nicht öffentlich“)
     immer über `lib/visibility.js` prüfen – auf **jedem** Pfad, der einen Link anzeigt oder auflöst

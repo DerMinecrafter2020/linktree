@@ -1694,6 +1694,35 @@ input[type="checkbox"] {
   background: var(--md-warning-container);
   color: var(--md-on-warning-container);
 }
+/* Quellen-Logo im Status-Chip */
+#admin-np-badge { gap: 6px; }
+#admin-np-badge .np-badge-icon {
+  width: 16px;
+  height: 16px;
+  margin-left: -4px;
+  padding: 1px;
+  border-radius: 50%;
+  background: var(--md-on-surface);
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* Musik-Verlauf: Logo der Quelle vor dem Titel */
+.stat-row.has-source { justify-content: flex-start; }
+.stat-row.has-source .stat-info { flex: 1; }
+.history-source-icon {
+  width: 22px;
+  height: 22px;
+  padding: 2px;
+  border-radius: 50%;
+  background: var(--md-on-surface);
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* Spotify-Einrichtung */
+.spotify-steps { margin: 0 0 12px; padding-left: 20px; line-height: 1.6; }
+.spotify-steps code { word-break: break-all; user-select: all; }
 
 .admin-np-info {
   display: flex;

@@ -48,6 +48,17 @@
     <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
 
     <div class="changelog-entry">
+      <h2>2026-10-31 — OpenWeb v3.3.0 (Spotify als Musikquelle)</h2>
+      <ul>
+        <li><strong>Spotify:</strong> Der Player auf der Startseite kann jetzt auch anzeigen, was gerade auf Spotify läuft – inklusive Cover, Fortschritt und Podcast-Folgen. Die Anmeldung erfolgt im Admin unter „Musik“ über die eigene Spotify-App (Client-ID/-Secret) und „Mit Spotify verbinden“; Zugangsdaten werden nur verschlüsselt gespeichert.</li>
+        <li><strong>Player:</strong> Am Plattenspieler erscheint jetzt das Logo der aktiven Quelle (Music Assistant, Spotify oder Navidrome). Laufen mehrere Quellen, hat laufende Wiedergabe Vorrang vor pausierter, danach gilt Music Assistant → Spotify → Navidrome.</li>
+        <li><strong>Discord:</strong> „Now Playing“-Meldungen enthalten Spotify-Titel mit Link direkt zum Song und Cover und zeigen bei allen Quellen, woher der Titel kommt. Der Discord-Test ist auch in der Spotify-Karte verfügbar.</li>
+        <li><strong>Musik-Verlauf:</strong> Spotify-Titel werden mitgezählt; neue Einträge im Verlauf zeigen das Logo ihrer Quelle.</li>
+        <li><strong>Admin:</strong> Die Live-Vorschau zeigt Quelle und Status mit Logo.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <h2>2026-10-31 — OpenWeb v3.2.0 (Sicherheits-Audit umgesetzt)</h2>
       <ul>
         <li><strong>Installation:</strong> Bei der systemd-Variante liegen Konfiguration und Backups jetzt getrennt vom Programmcode (<code>/var/lib/openweb</code>). Der Code gehört dem Systembenutzer <code>root</code> und ist für den Dienst nur lesbar. Bestehende Installationen werden beim nächsten <code>update</code> automatisch umgestellt. Die <code>.env</code> wird bei Wartungsbefehlen nur noch als Datei gelesen, nicht mehr als Skript ausgeführt.</li>

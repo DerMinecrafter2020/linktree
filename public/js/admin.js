@@ -12,7 +12,29 @@
   const DASHBOARD_ICON_IDS = ['instagram','youtube','github','discord','spotify','tiktok','x','linkedin','whatsapp','telegram','twitch','reddit','navidrome','jellyfin','plex','nextcloud'];
   const TAB_TITLES = { links: 'Links', stats: 'Statistik', apikeys: 'API-Keys', profile: 'Profil', music: 'Musik', data: 'Daten', settings: 'Einstellungen', audit: 'Audit-Log', monitor: 'Monitor' };
 
-  const state = { profile: null, links: [], navidrome: null, musicassistant: null, musicassistantUsers: [] };
+  const state = { profile: null, links: [], navidrome: null, musicassistant: null, musicassistantUsers: [], spotify: null };
+
+  // Musik-Quellen: Anzeigename + Logo (Dashboard Icons ueber den eigenen Proxy)
+  const MUSIC_SOURCES = {
+    navidrome: { name: 'Navidrome', icon: 'navidrome' },
+    musicassistant: { name: 'Music Assistant', icon: 'music-assistant' },
+    spotify: { name: 'Spotify', icon: 'spotify' },
+  };
+  function sourceIcon(source, cls = 'np-source-icon') {
+    const meta = MUSIC_SOURCES[source];
+    if (!meta) return null;
+    return el('img', {
+      src: `/api/icon/dashboardicon/${meta.icon}/svg`,
+      alt: '',
+      title: meta.name,
+      class: cls,
+      width: 16,
+      height: 16,
+      loading: 'lazy',
+      decoding: 'async',
+      referrerpolicy: 'no-referrer',
+    });
+  }
   const TAB_STORAGE_KEY = 'openweb-admin-active-tab';
 
   // Seiten aus dem Back-Forward-Cache fuehren DOMContentLoaded nicht erneut aus.
@@ -1851,7 +1873,10 @@
           timeEl.appendChild(el('span', { class: 'stat-unique' }, dateStr));
         }
 
-        return el('li', { class: 'stat-row' },
+        const icon = sourceIcon(item.source, 'history-source-icon');
+        if (icon) icon.setAttribute('aria-label', `Quelle: ${MUSIC_SOURCES[item.source].name}`);
+        return el('li', { class: 'stat-row' + (icon ? ' has-source' : '') },
+          icon,
           el('div', { class: 'stat-info' },
             el('span', { class: 'stat-title', title: item.title }, item.title),
             el('span', { class: 'stat-url', title: item.artist || 'Unbekannt' }, item.artist || 'Unbekannt')
@@ -2120,6 +2145,156 @@
     });
   }
 
+  // ---------- Spotify ----------
+  const SPOTIFY_RETURN_MESSAGES = {
+    connected: ['✅ Mit Spotify verbunden', false],
+    denied: ['Anmeldung bei Spotify abgebrochen', true],
+    invalid: ['Spotify-Anmeldung abgelaufen oder ungültig – bitte erneut verbinden', true],
+    error: ['Spotify-Anmeldung fehlgeschlagen – Redirect-URI, Client-ID und Secret prüfen', true],
+  };
+
+  function renderSpotifyForm() {
+    const form = $('#spotify-form');
+    if (!form) return;
+    const cfg = state.spotify || { enabled: false, client_id: '', connected: false };
+    form.enabled.checked = !!cfg.enabled;
+    form.clientId.value = cfg.client_id || '';
+    form.clientSecret.value = '';
+    form.clientSecret.placeholder = cfg.has_client_secret ? '•••••••• (gespeichert)' : 'Client-Secret aus dem Dashboard';
+    const redirect = $('#spotify-redirect-uri');
+    if (redirect) redirect.textContent = cfg.redirect_uri || '–';
+    const connection = $('#spotify-connection');
+    if (connection) {
+      if (cfg.connected) {
+        const since = cfg.connected_at ? ` seit ${new Date(cfg.connected_at).toLocaleDateString('de-DE')}` : '';
+        connection.textContent = `✅ Verbunden${cfg.account_name ? ' als ' + cfg.account_name : ''}${since}`;
+      } else {
+        connection.textContent = cfg.has_client_secret ? 'Nicht verbunden – jetzt „Mit Spotify verbinden“ klicken.' : 'Nicht verbunden';
+      }
+    }
+    const connectBtn = $('#spotify-connect-btn');
+    if (connectBtn) connectBtn.textContent = cfg.connected ? 'Neu verbinden' : 'Mit Spotify verbinden';
+    const disconnectBtn = $('#spotify-disconnect-btn');
+    if (disconnectBtn) disconnectBtn.hidden = !cfg.connected;
+  }
+
+  async function loadSpotifySettings() {
+    try {
+      state.spotify = await window.api.getSpotifySettings();
+      renderSpotifyForm();
+    } catch (err) {
+      console.warn('[admin] Spotify-Settings konnten nicht geladen werden:', err.message);
+    }
+  }
+
+  // Rueckkehr vom Spotify-Login (/admin?spotify=...): Meldung zeigen, Musik-Tab oeffnen, URL bereinigen
+  function handleSpotifyReturn() {
+    const params = new URLSearchParams(location.search);
+    const result = params.get('spotify');
+    if (!result) return;
+    params.delete('spotify');
+    const query = params.toString();
+    history.replaceState(null, '', location.pathname + (query ? '?' + query : '') + location.hash);
+    const message = SPOTIFY_RETURN_MESSAGES[result];
+    if (!message) return;
+    switchTab('music');
+    toast(message[0], message[1]);
+    const status = $('#spotify-status');
+    if (status) status.textContent = message[0];
+  }
+
+  function bindSpotify() {
+    const form = $('#spotify-form');
+    if (!form || !window.api) return;
+    loadSpotifySettings();
+    handleSpotifyReturn();
+    const status = $('#spotify-status');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const clientId = (form.clientId.value || '').trim();
+      const clientSecret = (form.clientSecret.value || '').trim();
+      if (form.enabled.checked && (!clientId || (!clientSecret && !state.spotify?.has_client_secret))) {
+        toast('Client-ID und Client-Secret sind Pflicht, wenn der Player aktiviert ist', true);
+        return;
+      }
+      const credentialsChanged = clientId !== (state.spotify?.client_id || '') || !!clientSecret;
+      if (credentialsChanged && state.spotify?.connected &&
+          !confirm('Neue App-Zugangsdaten trennen die bestehende Spotify-Verbindung. Fortfahren?')) {
+        return;
+      }
+      try {
+        state.spotify = await window.api.saveSpotifySettings({ enabled: !!form.enabled.checked, clientId, clientSecret });
+        renderSpotifyForm();
+        toast('🎵 Spotify-Einstellungen gespeichert');
+        status.textContent = state.spotify.connected || !state.spotify.has_client_secret
+          ? ''
+          : 'Gespeichert. Klicke jetzt auf „Mit Spotify verbinden“.';
+      } catch (err) {
+        toast('Fehler: ' + (err.message || 'Speichern fehlgeschlagen'), true);
+      }
+    });
+
+    $('#spotify-connect-btn')?.addEventListener('click', async () => {
+      const clientId = (form.clientId.value || '').trim();
+      if (form.clientSecret.value || clientId !== (state.spotify?.client_id || '')) {
+        status.textContent = 'Speichere zuerst die geänderte Client-ID bzw. das Secret.';
+        return;
+      }
+      if (!state.spotify?.has_client_secret) {
+        status.textContent = 'Trage zuerst Client-ID und Client-Secret ein und speichere.';
+        return;
+      }
+      try {
+        const { url } = await window.api.startSpotifyAuthorization();
+        if (typeof url !== 'string' || !url.startsWith('https://accounts.spotify.com/')) throw new Error('Ungültige Anmelde-URL');
+        location.href = url;
+      } catch (err) {
+        status.textContent = '❌ ' + (err.message || 'Anmeldung konnte nicht gestartet werden');
+      }
+    });
+
+    $('#spotify-disconnect-btn')?.addEventListener('click', async () => {
+      if (!confirm('Spotify-Verbindung trennen? Die Anzeige von Spotify-Titeln endet sofort.')) return;
+      try {
+        state.spotify = await window.api.disconnectSpotify();
+        renderSpotifyForm();
+        status.textContent = 'Verbindung getrennt. Entferne den Zugriff bei Bedarf auch unter spotify.com/account/apps.';
+      } catch (err) {
+        status.textContent = '❌ ' + (err.message || 'Trennen fehlgeschlagen');
+      }
+    });
+
+    $('#spotify-test-btn')?.addEventListener('click', async () => {
+      status.textContent = 'Prüfe…';
+      try {
+        const s = await window.api.testSpotifyConnection();
+        if (!s?.configured) {
+          status.textContent = '❌ Spotify ist noch nicht verbunden';
+        } else if (!s.connected) {
+          status.textContent = '❌ ' + (s.error || 'Spotify nicht erreichbar');
+        } else {
+          const who = s.account ? ` als ${s.account}` : '';
+          const playing = s.playing ? `spielt: ${s.title}${s.artist ? ' (' + s.artist + ')' : ''}` : 'momentan läuft nichts';
+          status.textContent = `✅ Verbunden${who} — ${playing}${s.enabled ? '' : ' (Player ist deaktiviert)'}`;
+          await loadSpotifySettings();
+        }
+      } catch (err) {
+        status.textContent = '❌ ' + (err.message || 'Netzwerkfehler');
+      }
+    });
+
+    $('#spotify-discord-test-btn')?.addEventListener('click', async () => {
+      status.textContent = 'Sende Discord-Test…';
+      try {
+        await window.api.testNavidromeDiscordWebhook('spotify');
+        status.textContent = '✅ Discord-Test gesendet (prüfe deinen Kanal)';
+      } catch (err) {
+        status.textContent = '❌ ' + (err.message || 'Netzwerkfehler');
+      }
+    });
+  }
+
   async function reloadCategories() { state.categories = await window.api.getAdminLinkCategories(); }
   async function reloadLinks() { state.links = await window.api.getAdminLinks(); renderLinks(); }
   async function reloadAll() {
@@ -2188,7 +2363,7 @@
     function renderIdle() {
       currentTrack = null;
       setState('idle');
-      badge.textContent = 'Not playing';
+      badge.replaceChildren(el('span', { class: 'np-badge-text' }, 'Nichts läuft'));
       clearMarquee(titleEl);
       titleEl.textContent = 'Momentan läuft nichts';
       clearMarquee(metaEl);
@@ -2206,8 +2381,12 @@
     function renderTrack(track) {
       const state = track.paused ? 'paused' : 'playing';
       setState(state);
-      const sourceName = track.source === 'musicassistant' ? 'MA' : 'ND';
-      badge.textContent = `${sourceName} | ${track.paused ? 'Stopped' : (track.isRadio ? '📡 LIVE' : 'Playing')}`;
+      const source = MUSIC_SOURCES[track.source];
+      const stateText = track.paused ? 'Pausiert' : (track.isRadio ? '📡 LIVE' : 'Spielt');
+      badge.replaceChildren(
+        ...[sourceIcon(track.source, 'np-badge-icon'),
+          el('span', { class: 'np-badge-text' }, source ? `${source.name} · ${stateText}` : stateText)].filter(Boolean)
+      );
       applyMarquee(titleEl, escapeHtml(track.title || 'Unbekannt'));
 
       const parts = [];
@@ -2592,6 +2771,7 @@
     bindAuditLog();
     bindNavidrome();
     bindMusicAssistant();
+    bindSpotify();
     bindMonitor();
 
     if (!appInitialized) {

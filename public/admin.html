@@ -233,8 +233,8 @@
         <div class="card-block">
           <h3>🎵 Music Assistant</h3>
           <p>
-            Verwende Music Assistant als primären Player. Wenn aktiv und etwas abgespielt wird, 
-            wird dies anstelle von Navidrome angezeigt.
+            Verwende Music Assistant als primären Player. Wenn aktiv und etwas abgespielt wird,
+            wird dies vor Spotify und Navidrome angezeigt.
           </p>
 
           <form id="musicassistant-form" class="form">
@@ -268,6 +268,46 @@
         </div>
 
         <div class="card-block">
+          <h3>🎵 Spotify</h3>
+          <p>
+            Zeigt an, was du gerade auf Spotify hörst. Dafür brauchst du eine eigene Spotify-App im
+            <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener noreferrer">Spotify Developer Dashboard</a>
+            (Spotify verlangt dafür ein Premium-Konto). Client-Secret und Anmeldung werden nur verschlüsselt in der Datenbank gespeichert.
+          </p>
+          <ol class="hint spotify-steps">
+            <li>Im Dashboard „Create app“ wählen, als API „Web API“ ankreuzen.</li>
+            <li>Diese Redirect-URI exakt eintragen: <code id="spotify-redirect-uri">–</code></li>
+            <li>Client-ID und Client-Secret hier eintragen, speichern und „Mit Spotify verbinden“ klicken.</li>
+          </ol>
+
+          <form id="spotify-form" class="form">
+            <label class="row">
+              <input type="checkbox" name="enabled" />
+              <span>Player aktivieren</span>
+            </label>
+            <label>
+              <span>Client-ID</span>
+              <input name="clientId" type="text" autocomplete="off" spellcheck="false" placeholder="32 Zeichen aus dem Dashboard" />
+            </label>
+            <label>
+              <span>Client-Secret</span>
+              <input name="clientSecret" type="password" autocomplete="new-password" placeholder="••••••••" />
+              <small class="hint" id="spotify-secret-hint">Nur ausfüllen, wenn du das Secret ändern willst.</small>
+            </label>
+            <p class="hint" id="spotify-connection" aria-live="polite">Nicht verbunden</p>
+
+            <div class="form-actions">
+              <button type="button" id="spotify-discord-test-btn" class="btn ghost" title="Testet den Discord Webhook für 'Now Playing' mit einem Spotify-Beispiel (nutzt URL aus dem Tab Admin)">Discord-Test</button>
+              <button type="button" id="spotify-test-btn" class="btn ghost">Verbindung testen</button>
+              <button type="button" id="spotify-disconnect-btn" class="btn ghost" hidden>Trennen</button>
+              <button type="button" id="spotify-connect-btn" class="btn ghost">Mit Spotify verbinden</button>
+              <button type="submit" class="btn primary">Speichern</button>
+            </div>
+            <p id="spotify-status" class="hint" aria-live="polite"></p>
+          </form>
+        </div>
+
+        <div class="card-block">
           <h3>🎛️ Player-Anzeige</h3>
           <p>Wähle, wie der Fortschritt des Musik-Players auf der Startseite dargestellt wird.</p>
           <form id="player-progress-form" class="form">
@@ -277,7 +317,7 @@
                 <option value="time">Minuten und Sekunden (0:42 / 3:18)</option>
                 <option value="line">Wellenform + Minuten und Sekunden</option>
               </select>
-              <small class="hint">Die Wellenform ist stilisiert; der Fortschritt läuft synchron zur Wiedergabe.</small>
+              <small class="hint">Die Wellenform ist stilisiert; der Fortschritt läuft synchron zur Wiedergabe. Das Logo der Quelle (Music Assistant, Spotify, Navidrome) erscheint am Plattenspieler.</small>
             </label>
             <div class="form-actions">
               <button type="submit" class="btn primary">Speichern</button>
@@ -301,9 +341,9 @@
               </div>
             </div>
             <div class="np-info">
-              <span class="np-badge" id="admin-np-badge">🎶</span>
+              <span class="np-badge" id="admin-np-badge"><span class="np-badge-text">🎶</span></span>
               <div class="np-title" id="admin-np-title">Momentan läuft nichts</div>
-              <div class="np-album" id="admin-np-meta">Starte Musik in Navidrome, um die Vorschau zu sehen.</div>
+              <div class="np-album" id="admin-np-meta">Starte Musik im aktiven Player, um die Vorschau zu sehen.</div>
               <div class="np-progress" id="admin-np-progress">00:00 / 00:00</div>
               <div class="np-progress-line" id="admin-np-progress-line" role="progressbar" aria-label="Wiedergabefortschritt" aria-valuemin="0" aria-valuemax="100">
                 <div class="np-waveform-layer np-waveform-base"></div>

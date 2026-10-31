@@ -295,7 +295,7 @@ router.get('/stats/links', async (req, res, next) => {
     `, [days]);
     const musicHistoryRes = await db.query(`
       SELECT * FROM (
-        SELECT DISTINCT ON (title, artist) title, artist, album, played_at
+        SELECT DISTINCT ON (title, artist) title, artist, album, source, played_at
         FROM music_history 
         WHERE played_at > NOW() - $1 * INTERVAL '1 day'
         ORDER BY title, artist, played_at DESC
@@ -776,16 +776,19 @@ router.post('/settings/navidrome/discord-test', async (req, res, next) => {
     if (!settings.discord_webhook_url) {
       return res.status(400).json({ ok: false, error: 'Keine Discord-Webhook-URL im Tab "Admin" hinterlegt' });
     }
-    
-    // Fake track for testing
+
+    // Test-Track; die Quelle bestimmt Quellen-Anzeige und Link in der Discord-Nachricht
+    const source = ['navidrome', 'musicassistant', 'spotify'].includes(req.body?.source) ? req.body.source : 'navidrome';
     const testTrack = {
       title: 'Test Song (Now Playing)',
       artist: 'OpenWeb Test',
       album: 'Webhook Integration',
-      coverId: null, 
+      coverId: null,
       testCoverUrl: 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ef?auto=format&fit=crop&w=800&q=80', // Dummy Vinyl Bild für Discord
-      url: settings.url || 'https://demo.navidrome.org',
-      albumId: 'test-album-id',
+      source,
+      ...(source === 'spotify'
+        ? { spotifyUrl: 'https://open.spotify.com/' }
+        : { url: settings.url || 'https://demo.navidrome.org', albumId: 'test-album-id' }),
     };
 
     const appUrl = process.env.APP_URL ? process.env.APP_URL.replace(/\/$/, '') : null;
@@ -920,6 +923,177 @@ router.post('/settings/musicassistant', async (req, res, next) => {
     res.json({ ok: true, data: rows[0] });
   } catch (err) {
     next(err);
+  }
+});
+
+// ---------- Spotify (Admin) ----------
+// Eigene Spotify-App (developer.spotify.com) mit Client-ID/-Secret; Anmeldung per OAuth.
+// Client-Secret und Refresh-Token werden nur verschluesselt gespeichert und nie ausgegeben.
+const spotify = require('../lib/spotify');
+const SPOTIFY_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+
+function spotifySettingsView(row, req) {
+  const s = row || {};
+  return {
+    enabled: !!s.enabled,
+    client_id: s.client_id || '',
+    has_client_secret: !!s.client_secret_encrypted,
+    connected: spotify.isConnected(s),
+    account_name: s.account_name || null,
+    connected_at: s.connected_at || null,
+    redirect_uri: spotify.getRedirectUri(req),
+  };
+}
+
+router.get('/settings/spotify', async (req, res, next) => {
+  try {
+    res.json({ ok: true, data: spotifySettingsView(await spotify.getSettings(), req) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/settings/spotify', async (req, res, next) => {
+  try {
+    const enabled = !!req.body.enabled;
+    const clientId = typeof req.body.clientId === 'string' ? req.body.clientId.trim() : '';
+    const clientSecret = typeof req.body.clientSecret === 'string' ? req.body.clientSecret.trim() : '';
+    if (clientId && !spotify.ID_RE.test(clientId)) {
+      return res.status(400).json({ ok: false, error: 'Ungültige Client-ID (nur Buchstaben und Ziffern)' });
+    }
+    if (clientSecret && !spotify.ID_RE.test(clientSecret)) {
+      return res.status(400).json({ ok: false, error: 'Ungültiges Client-Secret (nur Buchstaben und Ziffern)' });
+    }
+
+    const current = await spotify.getSettings() || {};
+    // Neue App-Zugangsdaten: bestehende Anmeldung gehoert zur alten App und wird verworfen
+    const credentialsChanged = (clientId || null) !== (current.client_id || null) || !!clientSecret;
+    const secretEnc = clientSecret ? encrypt(clientSecret) : (clientId ? current.client_secret_encrypted || null : null);
+    if (enabled && (!clientId || !secretEnc)) {
+      return res.status(400).json({ ok: false, error: 'Client-ID und Client-Secret sind Pflicht, wenn Spotify aktiviert ist' });
+    }
+
+    await db.query(`
+      INSERT INTO spotify_settings (id, enabled, client_id, client_secret_encrypted, refresh_token_encrypted, account_name, connected_at)
+      VALUES (1, $1, $2, $3, NULL, NULL, NULL)
+      ON CONFLICT (id) DO UPDATE SET
+        enabled = EXCLUDED.enabled,
+        client_id = EXCLUDED.client_id,
+        client_secret_encrypted = EXCLUDED.client_secret_encrypted,
+        refresh_token_encrypted = CASE WHEN $4 THEN NULL ELSE spotify_settings.refresh_token_encrypted END,
+        account_name = CASE WHEN $4 THEN NULL ELSE spotify_settings.account_name END,
+        connected_at = CASE WHEN $4 THEN NULL ELSE spotify_settings.connected_at END,
+        updated_at = NOW()
+    `, [enabled, clientId || null, secretEnc, credentialsChanged]);
+    if (credentialsChanged) spotify.resetState();
+    await audit.log(req, 'settings_update', 'spotify', 1, { enabled, credentials_changed: credentialsChanged });
+
+    res.json({ ok: true, data: spotifySettingsView(await spotify.getSettings(), req) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Startet die Anmeldung: liefert die Spotify-URL (POST, damit die CSRF-Pruefung greift)
+router.post('/settings/spotify/authorize', async (req, res, next) => {
+  try {
+    const settings = await spotify.getSettings();
+    if (!spotify.isConfigured(settings)) {
+      return res.status(400).json({ ok: false, error: 'Bitte zuerst Client-ID und Client-Secret speichern' });
+    }
+    const state = crypto.randomBytes(32).toString('hex');
+    const redirectUri = spotify.getRedirectUri(req);
+    req.session.spotifyOAuth = { state, redirectUri, createdAt: Date.now() };
+    req.session.save((err) => {
+      if (err) return next(err);
+      res.json({ ok: true, data: { url: spotify.buildAuthorizeUrl(settings, state, redirectUri) } });
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Rueckkehr von Spotify (GET, von Spotify aufgerufen). Schutz ueber den einmaligen state-Wert,
+// der an die Admin-Session gebunden ist.
+router.get('/spotify/callback', async (req, res) => {
+  const pending = req.session.spotifyOAuth;
+  delete req.session.spotifyOAuth;
+  const done = (status) => res.redirect(`/admin?spotify=${status}`);
+
+  const state = typeof req.query.state === 'string' ? req.query.state : '';
+  const stateOk = pending && typeof pending.state === 'string' && state.length === pending.state.length &&
+    crypto.timingSafeEqual(Buffer.from(state), Buffer.from(pending.state)) &&
+    Date.now() - pending.createdAt < SPOTIFY_STATE_MAX_AGE_MS;
+  if (!stateOk) return done('invalid');
+  if (req.query.error) return done('denied');
+
+  const code = typeof req.query.code === 'string' ? req.query.code : '';
+  if (!code || code.length > 2000) return done('invalid');
+
+  try {
+    const settings = await spotify.getSettings();
+    if (!spotify.isConfigured(settings)) return done('error');
+    const tokens = await spotify.exchangeCode(settings, code, pending.redirectUri);
+    const refreshEnc = encrypt(tokens.refresh_token);
+    await db.query(
+      'UPDATE spotify_settings SET refresh_token_encrypted = $1, connected_at = NOW(), updated_at = NOW() WHERE id = 1',
+      [refreshEnc]
+    );
+    spotify.resetState();
+    const connected = { ...settings, refresh_token_encrypted: refreshEnc };
+    spotify.primeToken(connected, tokens.access_token, tokens.expires_in);
+    try {
+      const profile = await spotify.getProfile(connected);
+      await db.query('UPDATE spotify_settings SET account_name = $1 WHERE id = 1', [profile.name || profile.id || null]);
+    } catch (err) {
+      console.warn('[spotify] Profil konnte nicht geladen werden:', err.message);
+    }
+    await audit.log(req, 'connect', 'spotify', 1);
+    done('connected');
+  } catch (err) {
+    console.error('[spotify] Anmeldung fehlgeschlagen:', err.message);
+    done('error');
+  }
+});
+
+router.post('/settings/spotify/disconnect', async (req, res, next) => {
+  try {
+    await db.query('UPDATE spotify_settings SET refresh_token_encrypted = NULL, account_name = NULL, connected_at = NULL, updated_at = NOW() WHERE id = 1');
+    spotify.resetState();
+    await audit.log(req, 'disconnect', 'spotify', 1);
+    res.json({ ok: true, data: spotifySettingsView(await spotify.getSettings(), req) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/settings/spotify/test', async (req, res) => {
+  try {
+    const settings = await spotify.getSettings();
+    if (!spotify.isConnected(settings)) return res.json({ ok: true, data: { configured: false } });
+    const profile = await spotify.getProfile(settings);
+    if (profile.name && profile.name !== settings.account_name) {
+      await db.query('UPDATE spotify_settings SET account_name = $1 WHERE id = 1', [profile.name]);
+    }
+    const track = await spotify.getNowPlaying();
+    res.json({
+      ok: true,
+      data: {
+        configured: true,
+        connected: true,
+        account: profile.name || profile.id || null,
+        enabled: !!settings.enabled,
+        playing: !!(track && track.playing),
+        title: track?.title || null,
+        artist: track?.artist || null,
+      },
+    });
+  } catch (err) {
+    console.error('[admin spotify/test]', err.message);
+    const error = err.status === 429
+      ? 'Spotify-Rate-Limit erreicht, bitte später erneut testen'
+      : 'Spotify nicht erreichbar oder Anmeldung abgelaufen';
+    res.json({ ok: true, data: { configured: true, connected: false, error } });
   }
 });
 
