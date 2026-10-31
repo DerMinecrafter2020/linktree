@@ -87,6 +87,8 @@ db/
 public/                   Statische Dateien (werden 1:1 ausgeliefert!)
   index.html, admin.html, login.html, setup.html, changelog.html, impressum.html, datenschutz.html …
   css/themes.css          Alle Themes ausser "Dunkel" (Farbrollen + --ow-Material-Tokens), Farbfelder des Design-Waehlers
+  css/admin-ds.css        Design-System nur fuer Admin + Login (--ds-*-Tokens, Seitenleiste, Karten, Kacheln, Inter); Startseite nie
+  fonts/inter/            Inter 400/500/600/700 (Latin-Subset, WOFF2, OFL – LICENSE.txt) fuer Admin + Login
   maintenance.html        Template der Wartungsseite (Platzhalter __MT_…__, nie direkt ausgeliefert)
   js/maintenance.js       Countdown + Neuladen auf der Wartungsseite
   js/botguard.js          Bot-Pruefung im Browser (startet js/botguard-worker.js, schickt Loesung an /__botguard/verify)
@@ -96,6 +98,7 @@ public/                   Statische Dateien (werden 1:1 ausgeliefert!)
   js/app.js               Öffentliche Seite
   js/legal.js             Rechtstexte: sichere Ausgabe, Absätze und Zeilenumbrüche
   js/icons.js             Icon-Darstellung (createResolved, Material-Symbole, Stil weiß/bunt)
+  js/admin-ui.js          Admin-Rahmen ohne Fachlogik: Seitenleisten-Gruppen, Offcanvas, Benutzermenue, einklappbare Karten, Kachel-Symbole, Footer
   js/admin.js             Admin-Oberfläche (eine große IIFE)
   js/login.js             Login-Seite inkl. TOTP/WebAuthn
   js/sw-register*.js      Service-Worker-Registrierung
@@ -465,6 +468,24 @@ bleiben Deutsch. Neue Besucherseiten: `js/i18n.js` einbinden und per `sendHtml()
   Formen über `--md-shape-*`, Hover/Pressed über State Layer (`::before`, 8 %/12 %), Bewegung über
   `--md-ease*`/`--md-dur-*`. Die alten Variablen (`--neon-*`, `--text-dim`, `--bg-*` …) sind nur
   noch Aliase für ältere Unterseiten und sollen in neuem Code nicht mehr verwendet werden.
+- **Admin-Design-System (`public/css/admin-ds.css` + `public/js/admin-ui.js`, ab v4.0.0):** gilt nur fuer
+  `admin.html` und `login.html`, nie fuer die Startseite oder andere oeffentliche Seiten. Wird nach
+  `admin.css`/`themes.css` geladen. Zentrale Tokens `--ds-*` unter `:root` (Flaechen, Rahmen, Text, Akzent,
+  Status + Soft-Varianten 15–18 %, Radien, Hoehen, Schriftgroessen, Seitenleistenbreite). Fuer „Dunkel“ werden
+  die M3-/`--ow-*`-Variablen unter `:root:not([data-theme]):not(.ow-raw-tokens)` auf die DS-Werte gelegt;
+  andere Themes leiten `--ds-*` in `:root[data-theme]` aus ihren M3-Farben ab. Keine Schatten, keine
+  Verlaeufe (ausser Logo), einheitliche Radien – neue Admin-Komponenten nur ueber `--ds-*` bzw. M3-Rollen.
+  **`.ow-raw-tokens`:** `readThemeTokens()` (OG-Vorschaubild) setzt die Klasse kurz auf `<html>`, damit die
+  Original-Farben der oeffentlichen Themes gelesen werden – Selektoren mit Admin-Umfaerbungen muessen
+  `:not(.ow-raw-tokens)` behalten, sonst aendert sich das Vorschaubild.
+  **Markup:** Bereiche in der Seitenleiste als `.side-btn[data-tab]` (Gruppen `.sb-group[data-group]`, Zustand
+  `localStorage` `openweb-admin-nav`), Werkzeuge als `.side-link`; Unterzeile je Bereich in `SUBTITLES`
+  (`admin-ui.js`). Eine `.card-block`, deren erstes Kind ein `<h3>` (oder `.monitor-head`) ist, wird
+  automatisch einklappbar (Zustand `openweb-admin-cards`); Knoepfe/Links/Schalter im Kopf loesen kein
+  Einklappen aus. Kennzahl-Symbole ueber `TILE_ICONS` (Beschriftung -> Symbol). Symbole kommen aus dem
+  SVG-Sprite oben in `admin.html` (`<use href="#i-…">`, in `admin.js` per `lineIcon(name)`); Ueberschriften,
+  Reiter und Knoepfe im Admin tragen **keine Emojis**. `onTabShown`/`admin-tab-change` bleiben unveraendert
+  der Weg zum Nachladen.
 - Zeilenenden: LF (per `.gitattributes` erzwungen). Keine BOMs (haben schon Migrationen zerstört).
 - **Migrationen:** neue Datei `db/migrations/NNN_beschreibung.sql` mit nächster freier Nummer,
   idempotent schreiben (`IF NOT EXISTS`), bestehende Migrationen nie ändern.

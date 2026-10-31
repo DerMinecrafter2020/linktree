@@ -15,13 +15,14 @@
   
   
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <!-- Hauptschrift (Space Grotesk 400/500/600, lateinisch) sofort laden statt erst nach fonts.css -->
-  <link rel="preload" href="/fonts/font-14.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="/fonts/font-17.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="/fonts/font-20.woff2" as="font" type="font/woff2" crossorigin />
+  <!-- Schrift Inter (lokal, css/admin-ds.css) sofort laden -->
+  <link rel="preload" href="/fonts/inter/inter-latin-400.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/inter/inter-latin-500.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/inter/inter-latin-600.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/fonts.css" />
   <link rel="stylesheet" href="/css/admin.css" />
   <link rel="stylesheet" href="/css/themes.css" />
+  <link rel="stylesheet" href="/css/admin-ds.css" />
   <script src="/js/theme-init.js" data-scope="admin"></script>
 </head>
 <body>
@@ -34,45 +35,119 @@
     </filter>
   </svg>
 
-  <div id="app" class="app">
-    <aside class="sidebar">
-      <div class="brand">
-        <span class="brand-dot"></span>
-        <span>Link Admin</span>
-      </div>
-      <nav class="side-nav">
-        <button class="side-btn active" data-tab="links">🔗 Links</button>
-        <button class="side-btn" data-tab="stats">📊 Statistik</button>
-        <button class="side-btn" data-tab="apikeys">🔑 API</button>
-        <button class="side-btn" data-tab="profile">👤 Profil</button>
-        <button class="side-btn" data-tab="music">🎵 Musik</button>
-        <button class="side-btn" data-tab="data">💾 Daten</button>
-        <button class="side-btn" data-tab="settings">⚙️ Einstellungen</button>
-        <button class="side-btn" data-tab="audit">📝 Audit-Log</button>
-        <button class="side-btn" data-tab="monitor">📈 Monitor</button>
-      </nav>
-      <div class="side-footer">
-        <a href="/" target="_blank" class="side-link">↗ Seite öffnen</a>
-        <a href="/sitemap.xml" target="_blank" class="side-link">🗺 Sitemap</a>
-        <a href="/api-docs" target="_blank" class="side-link">📖 API-Doku</a>
-        <span class="side-link" id="preview-toggle" style="cursor:pointer;">👁 Vorschau</span>
-        <span class="side-link" id="qr-toggle" style="cursor:pointer;">📱 QR-Code</span>
-        <button type="button" id="whats-new-btn" class="side-link">✨ Was ist neu?</button>
-        <button id="logout-btn" class="side-link">↩ Abmelden</button>
-      </div>
-    </aside>
+  <!-- Symbole (Linien-Icons im Stil von Lucide, ISC-Lizenz) fuer Navigation und Admin-Oberflaeche -->
+  <svg class="svg-defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></symbol>
+    <symbol id="i-music" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></symbol>
+    <symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-qr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></symbol>
+    <symbol id="i-sitemap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-updown" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a10 10 0 1 1 10-10c0 2.8-2.2 4-4 4h-1.8a2 2 0 0 0-1.4 3.4A1.5 1.5 0 0 1 12 22Z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16.5" cy="10.5" r="1"/></symbol>
+    <symbol id="i-arrow-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+    <symbol id="i-arrow-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></symbol>
+  </svg>
 
-    <main class="content">
-      <header class="content-head">
-        <h2 id="tab-title">Links</h2>
-        <div class="content-head-actions">
-          <label class="admin-theme-control" for="admin-theme-select">
+  <!-- Mobil: schmale Leiste mit Menueknopf + Logo, die Seitenleiste wird zum Offcanvas -->
+  <header class="topbar">
+    <button type="button" class="topbar-menu" id="sidebar-open" aria-label="Menü öffnen" aria-controls="sidebar" aria-expanded="false"><svg class="nav-icon" aria-hidden="true"><use href="#i-menu"/></svg></button>
+    <span class="sb-logo" aria-hidden="true"><svg><use href="#i-link"/></svg></span>
+    <span class="topbar-title">OpenWeb</span>
+  </header>
+  <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
+
+  <div id="app" class="app">
+    <aside class="sidebar" id="sidebar" aria-label="Navigation">
+      <div class="brand">
+        <span class="sb-logo" aria-hidden="true"><svg><use href="#i-link"/></svg></span>
+        <span class="sb-name">OpenWeb</span>
+        <span class="sb-tag">Admin</span>
+        <button type="button" class="sidebar-close" id="sidebar-close" aria-label="Menü schließen"><svg class="nav-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+      </div>
+      <nav class="side-nav" aria-label="Admin-Bereiche">
+        <div class="sb-main">
+          <button type="button" class="side-btn active" data-tab="links"><svg class="nav-icon" aria-hidden="true"><use href="#i-link"/></svg><span>Links</span></button>
+          <button type="button" class="side-btn" data-tab="stats"><svg class="nav-icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Statistik</span></button>
+          <button type="button" class="side-btn" data-tab="profile"><svg class="nav-icon" aria-hidden="true"><use href="#i-user"/></svg><span>Profil</span></button>
+        </div>
+        <div class="sb-group" data-group="integrations">
+          <button type="button" class="sb-group-toggle" aria-expanded="true" aria-controls="sbg-integrations"><span>Integrationen</span><svg class="sb-chevron" aria-hidden="true"><use href="#i-chevron"/></svg></button>
+          <div class="sb-group-items" id="sbg-integrations">
+          <button type="button" class="side-btn" data-tab="music"><svg class="nav-icon" aria-hidden="true"><use href="#i-music"/></svg><span>Musik</span></button>
+          <button type="button" class="side-btn" data-tab="apikeys"><svg class="nav-icon" aria-hidden="true"><use href="#i-key"/></svg><span>API</span></button>
+          </div>
+        </div>
+        <div class="sb-group" data-group="system">
+          <button type="button" class="sb-group-toggle" aria-expanded="true" aria-controls="sbg-system"><span>System</span><svg class="sb-chevron" aria-hidden="true"><use href="#i-chevron"/></svg></button>
+          <div class="sb-group-items" id="sbg-system">
+          <button type="button" class="side-btn" data-tab="settings"><svg class="nav-icon" aria-hidden="true"><use href="#i-settings"/></svg><span>Einstellungen</span></button>
+          <button type="button" class="side-btn" data-tab="data"><svg class="nav-icon" aria-hidden="true"><use href="#i-database"/></svg><span>Daten</span></button>
+          <button type="button" class="side-btn" data-tab="audit"><svg class="nav-icon" aria-hidden="true"><use href="#i-file"/></svg><span>Audit-Log</span></button>
+          <button type="button" class="side-btn" data-tab="monitor"><svg class="nav-icon" aria-hidden="true"><use href="#i-activity"/></svg><span>Monitor</span></button>
+          </div>
+        </div>
+        <div class="sb-group" data-group="tools">
+          <button type="button" class="sb-group-toggle" aria-expanded="true" aria-controls="sbg-tools"><span>Werkzeuge</span><svg class="sb-chevron" aria-hidden="true"><use href="#i-chevron"/></svg></button>
+          <div class="sb-group-items" id="sbg-tools">
+            <a href="/" target="_blank" rel="noopener" class="side-link"><svg class="nav-icon" aria-hidden="true"><use href="#i-external"/></svg><span>Seite öffnen</span></a>
+            <button type="button" class="side-link" id="preview-toggle"><svg class="nav-icon" aria-hidden="true"><use href="#i-eye"/></svg><span>Vorschau</span></button>
+            <button type="button" class="side-link" id="qr-toggle"><svg class="nav-icon" aria-hidden="true"><use href="#i-qr"/></svg><span>QR-Code</span></button>
+            <a href="/sitemap.xml" target="_blank" rel="noopener" class="side-link"><svg class="nav-icon" aria-hidden="true"><use href="#i-sitemap"/></svg><span>Sitemap</span></a>
+            <a href="/api-docs" target="_blank" rel="noopener" class="side-link"><svg class="nav-icon" aria-hidden="true"><use href="#i-book"/></svg><span>API-Doku</span></a>
+            <button type="button" id="whats-new-btn" class="side-link"><svg class="nav-icon" aria-hidden="true"><use href="#i-sparkles"/></svg><span>Was ist neu?</span></button>
+          </div>
+        </div>
+      </nav>
+      <div class="sb-user">
+        <button type="button" class="sb-user-btn" id="user-menu-btn" aria-haspopup="true" aria-expanded="false" aria-controls="user-menu">
+          <span class="sb-avatar" id="user-avatar" aria-hidden="true">A</span>
+          <span class="sb-user-text"><span class="sb-user-name" id="user-name">Admin</span><span class="sb-user-role">Administrator</span></span>
+          <svg class="sb-chevron" aria-hidden="true"><use href="#i-updown"/></svg>
+        </button>
+        <div class="sb-user-menu" id="user-menu" hidden>
+          <label class="sb-menu-item admin-theme-control" for="admin-theme-select">
+            <svg class="nav-icon" aria-hidden="true"><use href="#i-palette"/></svg>
             <span>Theme</span>
             <select id="admin-theme-select">
               <option value="dark">Dunkel</option>
             </select>
           </label>
-          <button type="button" id="maintenance-badge" class="connection-state maintenance-badge" title="Wartungsmodus ist aktiv – zu den Einstellungen" hidden>🚧 Wartung</button>
+          <div class="sb-menu-sep" role="separator"></div>
+          <button type="button" id="logout-btn" class="sb-menu-item"><svg class="nav-icon" aria-hidden="true"><use href="#i-logout"/></svg><span>Abmelden</span></button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="content-head">
+        <div class="content-head-text">
+          <h2 id="tab-title">Links</h2>
+          <p class="content-subtitle" id="tab-subtitle"></p>
+        </div>
+        <div class="content-head-actions">
+          <button type="button" id="maintenance-badge" class="connection-state maintenance-badge" title="Wartungsmodus ist aktiv – zu den Einstellungen" hidden>Wartung aktiv</button>
           <span id="connection-state" class="connection-state">…</span>
         </div>
       </header>
@@ -80,13 +155,13 @@
       <!-- TAB: LINKS -->
       <section class="tab" data-tab="links">
         <div class="toolbar">
-          <button id="add-link-btn" class="btn primary">+ Neuer Link</button>
+          <button id="add-link-btn" class="btn primary"><svg class="nav-icon" aria-hidden="true"><use href="#i-plus"/></svg>Neuer Link</button>
           <input id="link-search" type="search" placeholder="Links suchen…" class="search-input" />
-          <button id="archive-toggle-btn" class="btn ghost">🗑 Archiv</button>
+          <button id="archive-toggle-btn" class="btn ghost"><svg class="nav-icon" aria-hidden="true"><use href="#i-archive"/></svg>Archiv</button>
         </div>
         <ul id="links-list" class="links-list"></ul>
         <div id="archive-panel" class="archive-panel" hidden>
-          <h3>🗑 Inaktive Links (Archiv)</h3>
+          <h3>Inaktive Links (Archiv)</h3>
           <ul id="archive-list" class="links-list"></ul>
         </div>
       </section>
@@ -94,7 +169,7 @@
       <!-- TAB: STATISTIK -->
       <section class="tab" data-tab="stats" hidden>
         <div class="card-block">
-          <h3>📊 Statistiken</h3>
+          <h3>Statistiken</h3>
           <p class="hint">Klicks, Aufrufe und Hörverlauf im Überblick.</p>
           <div class="toolbar">
             <div class="btn-group" id="stats-range">
@@ -102,7 +177,7 @@
               <button type="button" class="btn primary" data-days="30">30 Tage</button>
               <button type="button" class="btn" data-days="90">90 Tage</button>
             </div>
-            <button type="button" id="stats-export-csv" class="btn ghost">📄 CSV-Export</button>
+            <button type="button" id="stats-export-csv" class="btn ghost"><svg class="nav-icon" aria-hidden="true"><use href="#i-download"/></svg>CSV-Export</button>
           </div>
           <div id="stats-summary" class="stats-summary"></div>
           <canvas id="stats-chart" width="600" height="240"></canvas>
@@ -128,12 +203,14 @@
           <div id="stats-utm"></div>
           <h4 class="stats-subtitle">Links nach Klicks</h4>
           <ul id="stats-list" class="stats-list"></ul>
-          <h4 class="stats-subtitle">🎵 Musik-Verlauf</h4>
+          <h4 class="stats-subtitle">Musik-Verlauf</h4>
           <ul id="music-history-list" class="stats-list" style="max-height: 500px; overflow-y: auto; padding-right: 8px;"></ul>
         </div>
       </section>
       <!-- TAB: PROFIL -->
       <section class="tab" data-tab="profile" hidden>
+        <div class="card-block" id="profile-card">
+          <h3>Profil</h3>
         <form id="profile-form" class="form">
           <div class="avatar-upload">
             <div class="avatar-preview" id="avatar-preview" aria-label="Avatar-Vorschau">
@@ -142,7 +219,7 @@
               <button type="button" class="avatar-remove" id="avatar-remove" title="Bild entfernen" hidden>✕</button>
             </div>
             <div class="avatar-upload-controls">
-              <label for="avatar-file" class="btn">📷 Bild hochladen</label>
+              <label for="avatar-file" class="btn"><svg class="nav-icon" aria-hidden="true"><use href="#i-upload"/></svg>Bild hochladen</label>
               <input id="avatar-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
               <p class="hint">PNG, JPG, WebP oder GIF · max. 5 MB · wird automatisch auf 512×512 verkleinert</p>
               <label class="avatar-fallback-row">
@@ -199,9 +276,10 @@
             <button type="submit" class="btn primary">Speichern</button>
           </div>
         </form>
+        </div>
 
         <div class="card-block" id="instagram-block">
-          <h3>📸 Profil von Instagram übernehmen</h3>
+          <h3>Profil von Instagram übernehmen</h3>
           <p>
             Übernimmt Profilbild und Beschreibung – auf Wunsch auch Name und Untertitel – einmal täglich aus deinem
             Instagram-Konto. Das funktioniert nur mit <strong>Business- oder Creator-Konten</strong>.
@@ -328,7 +406,7 @@
         </div>
 
         <div class="card-block" id="og-block">
-          <h3>🔗 Link-Vorschau (Discord, WhatsApp …)</h3>
+          <h3>Link-Vorschau (Discord, WhatsApp …)</h3>
           <p>
             So erscheint deine Seite, wenn du den Link teilst. Das Vorschaubild wird automatisch aus Profilbild,
             Name, Bio, deinen ersten Links und dem Standard-Design erzeugt und bei Änderungen aktualisiert –
@@ -365,7 +443,7 @@
       <!-- TAB: MUSIK (NAVIDROME) -->
       <section class="tab" data-tab="music" hidden>
         <div class="card-block">
-          <h3>🎵 Navidrome / Subsonic</h3>
+          <h3>Navidrome / Subsonic</h3>
           <p>
             Die Navidrome-Anmeldedaten werden <strong>ausschließlich verschlüsselt in der PostgreSQL-Datenbank</strong>
             gespeichert (Benutzername und Passwort). Sie sind weder im Browser noch in <code>localStorage</code> sichtbar.
@@ -457,7 +535,7 @@
         </div>
 
         <div class="card-block">
-          <h3>🎵 Music Assistant</h3>
+          <h3>Music Assistant</h3>
           <p>
             Verwende Music Assistant als primären Player. Wenn aktiv und etwas abgespielt wird,
             wird dies vor Spotify und Navidrome angezeigt.
@@ -561,7 +639,7 @@
         </div>
 
         <div class="card-block">
-          <h3>🎵 Spotify</h3>
+          <h3>Spotify</h3>
           <p>
             Zeigt an, was du gerade auf Spotify hörst. Dafür brauchst du eine eigene Spotify-App im
             <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener noreferrer">Spotify Developer Dashboard</a>
@@ -672,7 +750,7 @@
         </div>
 
         <div class="card-block">
-          <h3>🎛️ Player-Anzeige</h3>
+          <h3>Player-Anzeige</h3>
           <p>Wähle, wie der Fortschritt des Musik-Players auf der Startseite dargestellt wird.</p>
           <form id="player-progress-form" class="form">
             <label>
@@ -692,7 +770,7 @@
 
 
         <div class="card-block" id="navidrome-preview-block">
-          <h3>👁️ Live-Vorschau</h3>
+          <h3>Live-Vorschau</h3>
           <div id="admin-np-player" class="np-player idle" data-progress-style="time" aria-label="Aktuell gespielter Track">
             <div class="np-turntable-wrap" aria-hidden="true">
               <div class="np-turntable-base">
@@ -724,7 +802,7 @@
       <!-- TAB: API KEYS -->
       <section class="tab" data-tab="apikeys" hidden>
         <div class="card-block">
-          <h3>🔑 API-Keys</h3>
+          <h3>API-Keys</h3>
           <p class="hint">API-Keys erlauben externen Lesezugriff auf /api/public/profile und /api/public/links (Header: X-API-Key).</p>
           <ul id="api-key-list" class="api-key-list"></ul>
           <div class="form inline">
@@ -738,7 +816,7 @@
       <!-- TAB: AUDIT-LOG -->
       <section class="tab" data-tab="audit" hidden>
         <div class="card-block">
-          <h3>📝 Audit-Log</h3>
+          <h3>Audit-Log</h3>
           <p class="hint">Protokoll wichtiger Admin-Aktionen: Login, Logout, Link-Änderungen, Imports, Backups, API-Keys, Passwortwechsel.</p>
           <div id="audit-log-table" class="audit-log-table"></div>
         </div>
@@ -749,7 +827,7 @@
         <div class="card-block">
           <div class="monitor-head">
             <div>
-              <h3>📈 Ressourcenmonitor</h3>
+              <h3>Ressourcenmonitor</h3>
               <p class="hint">Verbrauch dieser App (Node.js-Prozess und Datenbankverbindungen), alle 10 Sekunden aktualisiert. Messpunkte werden 30 Tage zentral in PostgreSQL gespeichert und sind auf allen Admin-Geräten verfügbar.</p>
             </div>
             <span id="monitor-live" class="badge">Pausiert</span>
@@ -826,16 +904,16 @@
           <input type="radio" name="settings-tab" id="settings-legal" class="sub-tab-radio" />
 
           <div class="sub-tabs">
-            <label for="settings-status" class="sub-tab">🛡️ Status</label>
-            <label for="settings-notifications" class="sub-tab">🔔 Benachrichtigungen</label>
-            <label for="settings-security" class="sub-tab">🔑 Sicherheit</label>
-            <label for="settings-legal" class="sub-tab">⚖️ Rechtliches</label>
+            <label for="settings-status" class="sub-tab">Status</label>
+            <label for="settings-notifications" class="sub-tab">Benachrichtigungen</label>
+            <label for="settings-security" class="sub-tab">Sicherheit</label>
+            <label for="settings-legal" class="sub-tab">Rechtliches</label>
           </div>
 
           <div class="sub-tab-panels">
             <div class="sub-tab-panel" id="panel-status">
               <div class="card-block" id="maintenance-card">
-                <h3>🚧 Wartungsmodus</h3>
+                <h3>Wartungsmodus</h3>
                 <p class="hint">Besucher sehen statt der Startseite eine Wartungsseite. Solange du angemeldet bist, siehst du weiter die normale Startseite (mit Hinweis). Impressum, Datenschutz, Kurzlinks und die API bleiben erreichbar.</p>
                 <p id="maintenance-status" class="contact-status" aria-live="polite">Lade Status …</p>
                 <form id="maintenance-form" class="form" novalidate>
@@ -889,19 +967,19 @@
                 </form>
               </div>
               <div class="card-block" id="admin-status-block">
-                <h3>🛡️ Admin-Bereich</h3>
+                <h3>Admin-Bereich</h3>
                 <p id="admin-status-text">Status wird geladen…</p>
                 <p id="admin-status-hint" class="hint">
                   Aktivieren/Deaktivieren nur auf dem Server via Umgebungsvariable <code>ADMIN_ENABLED</code>.
                 </p>
               </div>
               <div class="card-block">
-                <h3>📊 Server-Info</h3>
+                <h3>Server-Info</h3>
                 <p id="server-info-status">Status wird geladen…</p>
                 <ul id="server-info-list" class="hint steps"></ul>
               </div>
               <div class="card-block">
-                <h3>🔌 Datenbank</h3>
+                <h3>Datenbank</h3>
                 <p id="db-info-status">Status wird geladen…</p>
                 <ul id="db-info-list" class="hint steps"></ul>
               </div>
@@ -909,7 +987,7 @@
 
             <div class="sub-tab-panel" id="panel-notifications">
               <div class="card-block">
-                <h3>🔔 Discord-Benachrichtigungen</h3>
+                <h3>Discord-Benachrichtigungen</h3>
                 <form id="discord-form" class="form">
                   <label class="row">
                     <input name="discord_webhook_enabled" type="checkbox" />
@@ -930,7 +1008,7 @@
                 </form>
               </div>
               <div class="card-block">
-                <h3>🚨 Alert-Einstellungen</h3>
+                <h3>Alert-Einstellungen</h3>
                 <p class="hint">Benachrichtigungen bei kritischen Ereignissen per E-Mail (SMTP) oder generischem Webhook.</p>
                 <form id="alert-form" class="form">
                   <label class="row">
@@ -985,7 +1063,7 @@
                 </form>
               </div>
               <div class="card-block" id="contact-card">
-                <h3>✉️ Kontaktformular</h3>
+                <h3>Kontaktformular</h3>
                 <p class="hint">Besucher können dir über einen Knopf auf der Startseite eine Nachricht schreiben. Versendet wird über die SMTP-Daten aus den Alert-Einstellungen oben; „Antworten“ geht direkt an den Absender. Nachrichten werden nicht gespeichert.</p>
                 <p id="contact-smtp-status" class="contact-status" aria-live="polite">Lade Status …</p>
                 <form id="contact-settings-form" class="form">
@@ -1012,7 +1090,7 @@
 
             <div class="sub-tab-panel" id="panel-security">
               <div class="card-block">
-                <h3>🔑 Passwort ändern</h3>
+                <h3>Passwort ändern</h3>
                 <form id="change-password-form" class="form">
                   <label>
                     <span>Aktuelles Passwort</span>
@@ -1029,7 +1107,7 @@
               </div>
 
               <div class="card-block">
-                <h3>🛡️ Zwei-Faktor-Authentifizierung (TOTP)</h3>
+                <h3>Zwei-Faktor-Authentifizierung (TOTP)</h3>
                 <p class="hint">Erhöhe die Sicherheit deines Kontos mit einer Authenticator-App (z.B. Google Authenticator, Authy, Aegis).</p>
                 <div id="totp-status-container" style="margin-bottom: 1rem;">
                   <span class="badge" id="totp-status-badge">Status wird geladen...</span>
@@ -1059,7 +1137,7 @@
               </div>
               
               <div class="card-block">
-                <h3>🔐 Security Keys (YubiKey / WebAuthn)</h3>
+                <h3>Security Keys (YubiKey / WebAuthn)</h3>
                 <p class="hint">Nutze einen Hardware-Sicherheitsschlüssel (z.B. YubiKey) oder Windows Hello / Touch ID für die Anmeldung.</p>
                 <ul id="webauthn-list" class="category-list" style="margin-bottom: 1rem;"></ul>
                 <div class="form-actions">
@@ -1068,7 +1146,7 @@
               </div>
 
               <div class="card-block" id="botguard-card">
-                <h3>🤖 Bot-Schutz</h3>
+                <h3>Bot-Schutz</h3>
                 <p class="hint">Gesperrte IP-Adressen werden vor allem anderen abgelehnt. Verdächtige Seitenaufrufe (z. B. Skripte, Headless-Browser, fehlende Browser-Merkmale oder sehr viele Aufrufe) bekommen eine kurze Prüfseite mit einer unsichtbaren Rechenaufgabe – ohne Captcha. Link-Vorschauen (Discord, WhatsApp …), Suchmaschinen, Monitoring und interne Adressen (LAN, NetBird) werden nie geprüft.</p>
                 <div class="botguard-stats" id="botguard-stats" aria-live="polite"></div>
                 <form id="botguard-form" class="form">
@@ -1158,7 +1236,7 @@
             
             <div class="sub-tab-panel" id="panel-legal">
               <div class="card-block">
-                <h3>⚖️ Rechtliche Angaben</h3>
+                <h3>Rechtliche Angaben</h3>
                   <p class="hint">Diese Texte werden auf den Unterseiten /impressum und /datenschutz angezeigt. Leerzeilen trennen Absätze, einzelne Zeilenumbrüche bleiben erhalten; eingefügtes HTML wird sicher in Text und Absätze umgewandelt.</p>
                   <form id="legal-form" class="form">
                     <label>
@@ -1182,7 +1260,7 @@
       <!-- TAB: DATEN -->
       <section class="tab" data-tab="data" hidden>
         <div class="card-block" id="category-panel">
-          <h3>🏷️ Kategorien</h3>
+          <h3>Kategorien</h3>
           <p class="hint">Kategorien gruppieren Links auf der Startseite.</p>
           <ul id="category-list" class="category-list"></ul>
           <div class="form inline">
@@ -1191,7 +1269,7 @@
           </div>
         </div>
         <div class="card-block">
-          <h3>💾 Automatische Backups</h3>
+          <h3>Automatische Backups</h3>
           <p class="hint">Täglich um 03:00 Uhr wird automatisch ein Backup erstellt.</p>
           <ul id="backup-list" class="backup-list"></ul>
           <div class="toolbar">
@@ -1199,7 +1277,7 @@
           </div>
         </div>
         <div class="card-block">
-          <h3>🔐 Verschlüsselungsschlüssel sichern</h3>
+          <h3>Verschlüsselungsschlüssel sichern</h3>
           <p>Die Schlüsseldatei wird mit einer eigenen Wiederherstellungs-Passphrase geschützt. Bewahre Datei und Passphrase getrennt und außerhalb dieses Servers auf. Ohne beides können gespeicherte Zugangsdaten nach einem Schlüsselverlust nicht wiederhergestellt werden.</p>
           <form id="encryption-key-backup-form" class="form">
             <label>
@@ -1221,7 +1299,7 @@
           </form>
         </div>
         <div class="card-block">
-          <h3>♻️ Verschlüsselungsschlüssel wiederherstellen</h3>
+          <h3>Verschlüsselungsschlüssel wiederherstellen</h3>
           <p class="hint">Die Wiederherstellung ersetzt den Schlüssel in der <code>.env</code> und aktiviert ihn sofort. Verwende nur ein Backup dieser Installation. Bei einem fehlenden oder ungültigen Schlüssel nutze stattdessen den Offline-Befehl unten.</p>
           <form id="encryption-key-restore-form" class="form">
             <label>
@@ -1244,28 +1322,29 @@
           <p class="hint">Offline-Wiederherstellung im Projektverzeichnis: <code>node scripts/restore-encryption-key.js /pfad/zum/openweb-encryption-key-backup.json</code></p>
         </div>
         <div class="card-block">
-          <h3>📤 Export</h3>
+          <h3>Export</h3>
           <p>Alle Einstellungen und Links als JSON herunterladen.</p>
           <button id="export-btn" class="btn">JSON exportieren</button>
         </div>
         <div class="card-block">
-          <h3>📥 Import</h3>
+          <h3>Import</h3>
           <p>Eine exportierte JSON-Datei wieder einspielen.</p>
           <input type="file" id="import-input" accept="application/json" hidden />
           <button id="import-btn" class="btn">JSON importieren</button>
         </div>
         <div class="card-block">
-          <h3>📤 CSV Import</h3>
+          <h3>CSV Import</h3>
           <p>Links aus einer Linktree-CSV importieren.</p>
           <input type="file" id="linktree-import-input" accept=".csv,text/csv" hidden />
           <button id="linktree-import-btn" class="btn">CSV auswählen</button>
         </div>
         <div class="card-block danger">
-          <h3>🗑️ Zurücksetzen</h3>
+          <h3>Zurücksetzen</h3>
           <p>Setzt alle Links und das Profil auf den Auslieferungszustand zurück.</p>
           <button id="reset-btn" class="btn danger">Alles zurücksetzen</button>
         </div>
       </section>
+      <footer class="admin-footer" id="admin-footer"><span id="admin-footer-version">OpenWeb</span><span id="admin-footer-load"></span></footer>
     </main>
   </div>
 
@@ -1294,7 +1373,7 @@
         <span>Icon (leer = automatisch passend zur URL, Dashboard-Icon-Name oder Bild-URL)</span>
         <div class="icon-picker">
           <input name="icon" type="text" placeholder="leer = automatisch · instagram · https://…" autocomplete="off" />
-          <button type="button" id="icon-picker-toggle" class="icon-picker-btn" title="Icon auswählen">🎨</button>
+          <button type="button" id="icon-picker-toggle" class="icon-picker-btn" title="Icon auswählen" aria-label="Icon auswählen"><svg class="nav-icon" aria-hidden="true"><use href="#i-palette"/></svg></button>
         </div>
         <div id="icon-picker-panel" class="icon-picker-panel" hidden>
           <input type="text" id="icon-search" class="icon-search" placeholder="In Dashboard Icons suchen: instagram, jellyfin …" />
@@ -1373,8 +1452,8 @@
       </label>
 
       <div class="form-actions">
-        <button type="button" id="link-check" class="btn ghost">🔗 Erreichbarkeit prüfen</button>
-        <button type="button" id="link-qr" class="btn ghost">📱 QR-Code</button>
+        <button type="button" id="link-check" class="btn ghost">Erreichbarkeit prüfen</button>
+        <button type="button" id="link-qr" class="btn ghost">QR-Code</button>
         <button type="button" id="link-cancel" class="btn ghost">Abbrechen</button>
         <button type="submit" class="btn primary">Speichern</button>
       </div>
@@ -1388,7 +1467,7 @@
       <div id="qr-container" class="qr-container"></div>
       <p class="hint">Scanne den Code, um direkt zu cornyriegel.de zu gelangen.</p>
       <div class="form-actions">
-        <button type="button" id="qr-download" class="btn primary">⬇ Herunterladen</button>
+        <button type="button" id="qr-download" class="btn primary">Herunterladen</button>
         <button type="button" id="qr-close" class="btn ghost">Schließen</button>
       </div>
     </form>
@@ -1413,13 +1492,13 @@
   <!-- Vorschau Dialog -->
   <dialog id="preview-dialog" class="dialog preview-dialog">
     <form method="dialog" class="form">
-      <h3>👁 Live-Vorschau</h3>
+      <h3>Live-Vorschau</h3>
       <div class="preview-frame-wrap">
         <!-- src wird erst beim Oeffnen der Vorschau gesetzt (sonst laedt der Admin die ganze Startseite mit) -->
           <iframe id="preview-frame" title="Live-Vorschau der Startseite" sandbox="allow-scripts allow-same-origin"></iframe>
       </div>
       <div class="form-actions">
-        <button type="button" id="preview-refresh" class="btn ghost">🔄 Aktualisieren</button>
+        <button type="button" id="preview-refresh" class="btn ghost">Aktualisieren</button>
         <button type="button" id="preview-close" class="btn ghost">Schließen</button>
       </div>
     </form>
@@ -1432,6 +1511,7 @@
   <script src="/js/api-client.js"></script>
   <script src="/js/icons.js"></script>
   <script src="/js/navidrome.js"></script>
+  <script src="/js/admin-ui.js"></script>
   <script src="/js/admin.js"></script>
   <script src="/js/sw-register.js"></script>
 </body>

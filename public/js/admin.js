@@ -188,7 +188,9 @@
     const el = $('#connection-state');
     if (el) {
       el.className = 'connection-state ' + connState;
-      el.textContent = { ok: '● DB', err: '● Offline' }[connState] || '● Offline';
+      // Status als Punkt (CSS) + kurzer Text
+      el.textContent = { ok: 'Verbunden', err: 'Offline' }[connState] || 'Offline';
+      el.title = connState === 'ok' ? 'Datenbank verbunden' : 'Keine Verbindung zum Server';
     }
   }
 
@@ -197,6 +199,8 @@
       const me = await window.api.me();
       if (!me || !me.id) throw new Error('Nicht angemeldet');
       setConnection('ok');
+      // Benutzer-Menue in der Seitenleiste (js/admin-ui.js)
+      document.dispatchEvent(new CustomEvent('admin-session', { detail: me }));
       return true;
     } catch {
       setConnection('err');
@@ -361,6 +365,8 @@
   }
 
   function renderProfile() {
+    // Name im Benutzer-Menue der Seitenleiste (js/admin-ui.js)
+    if (state.profile) document.dispatchEvent(new CustomEvent('admin-profile', { detail: state.profile }));
     if (!state.profile) return;
     const f = $('#profile-form');
     if (f) {
@@ -446,16 +452,28 @@
     });
   }
 
+  // Linien-Symbol aus dem Sprite in admin.html (<symbol id="i-…">)
+  function lineIcon(name) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('class', 'nav-icon');
+    svg.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS(ns, 'use');
+    use.setAttribute('href', `#i-${name}`);
+    svg.appendChild(use);
+    return svg;
+  }
+
   function buildLinkRow(link) {
     const badgeCls = link.is_active ? 'on' : 'off';
     const expired = link.expires_at && new Date(link.expires_at) < new Date();
     const actions = [
-      { act: 'qr', title: 'QR-Code anzeigen', text: '📱' },
-      { act: 'check', title: 'Erreichbarkeit prüfen', text: '🔗' },
-      { act: 'up', title: 'Nach oben', text: '↑' },
-      { act: 'down', title: 'Nach unten', text: '↓' },
-      { act: 'edit', title: 'Bearbeiten', text: '✎' },
-      { act: 'del', title: 'Löschen', text: '🗑', cls: 'danger' }
+      { act: 'qr', title: 'QR-Code anzeigen', icon: 'qr' },
+      { act: 'check', title: 'Erreichbarkeit prüfen', icon: 'globe' },
+      { act: 'up', title: 'Nach oben', icon: 'arrow-up' },
+      { act: 'down', title: 'Nach unten', icon: 'arrow-down' },
+      { act: 'edit', title: 'Bearbeiten', icon: 'pencil' },
+      { act: 'del', title: 'Löschen', icon: 'trash', cls: 'danger' }
     ];
     const meta = [
       link.category_name,
@@ -479,11 +497,12 @@
       ),
       el('div', { class: 'actions' },
         ...actions.map(a => el('button', {
+          type: 'button',
           class: `icon-btn ${a.cls || ''}`.trim(),
           'data-act': a.act,
           title: a.title,
-          text: a.text
-        }))
+          'aria-label': a.title,
+        }, lineIcon(a.icon)))
       )
     );
   }
@@ -529,7 +548,7 @@
         el('div', { class: 'sub', text: link.url || '' })
       ),
       el('div', { class: 'actions' },
-        el('button', { class: 'icon-btn', 'data-act': 'restore', title: 'Wiederherstellen', text: '↩' })
+        el('button', { type: 'button', class: 'icon-btn', 'data-act': 'restore', title: 'Wiederherstellen', 'aria-label': 'Wiederherstellen' }, lineIcon('undo'))
       )
     );
   }
@@ -980,7 +999,6 @@
       const css = getComputedStyle(document.documentElement);
       const color = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
       const primary = color('--md-primary', '#d0bcff');
-      const primaryContainer = color('--md-primary-container', '#4f378b');
       const muted = color('--md-on-surface-variant', '#cac4d0');
 
       const left = 40, right = 10, top = 20, bottom = 30;
@@ -1012,10 +1030,8 @@
         const x = left + i * slot + barPad / 2;
         const barH = Math.max(2, (c / max) * plotH);
         const y = h - bottom - barH;
-        const grad = ctx.createLinearGradient(0, y, 0, h - bottom);
-        grad.addColorStop(0, primary);
-        grad.addColorStop(1, primaryContainer);
-        ctx.fillStyle = grad;
+        // Flache Balken in der Akzentfarbe (Design-System: keine Verlaeufe)
+        ctx.fillStyle = primary;
         ctx.fillRect(x, y, barW, barH);
       });
 
@@ -4006,6 +4022,8 @@
     const root = document.documentElement;
     const prev = root.getAttribute('data-theme');
     if (theme && theme !== 'dark') root.setAttribute('data-theme', theme); else root.removeAttribute('data-theme');
+    // Original-Farben der Startseite lesen, nicht die des Admin-Designs (css/admin-ds.css)
+    root.classList.add('ow-raw-tokens');
     const cs = getComputedStyle(root);
     const v = (name, fallback = '') => cs.getPropertyValue(name).trim() || fallback;
     const tokens = {
@@ -4029,6 +4047,7 @@
       radius: parseFloat(v('--md-shape-xl', '28')) || 28,
       font: v('--md-font', 'sans-serif'),
     };
+    root.classList.remove('ow-raw-tokens');
     if (prev) root.setAttribute('data-theme', prev); else root.removeAttribute('data-theme');
     return tokens;
   }

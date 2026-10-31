@@ -13,19 +13,20 @@
   
   
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <!-- Hauptschrift (Space Grotesk 400/500/600, lateinisch) sofort laden statt erst nach fonts.css -->
-  <link rel="preload" href="/fonts/font-14.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="/fonts/font-17.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="/fonts/font-20.woff2" as="font" type="font/woff2" crossorigin />
+  <!-- Schrift Inter (lokal, css/admin-ds.css) sofort laden -->
+  <link rel="preload" href="/fonts/inter/inter-latin-400.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/inter/inter-latin-600.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/fonts.css" />
   <link rel="stylesheet" href="/css/admin.css" />
   <link rel="stylesheet" href="/css/themes.css" />
+  <link rel="stylesheet" href="/css/admin-ds.css" />
   <script src="/js/theme-init.js" data-scope="admin"></script>
 </head>
 <body class="login-page">
 
   <div class="login-card">
-    <h1>🔐 Admin Login</h1>
+    <span class="login-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+    <h1>Admin Login</h1>
     <p id="login-desc">Melde dich mit deiner Admin-E-Mail und deinem Passwort an.</p>
 
     <form id="login-form" class="form">
