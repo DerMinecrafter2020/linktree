@@ -1129,6 +1129,7 @@ input[type="checkbox"] {
 .stat-card span { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.5px; color: var(--md-on-surface-variant); }
 
 #stats-chart {
+  display: block;
   width: 100%;
   height: 240px;
   background: var(--md-surface-container);
@@ -1136,6 +1137,9 @@ input[type="checkbox"] {
   border-radius: var(--md-shape-md);
   margin-bottom: 16px;
 }
+/* Waehrend ein anderer Zeitraum laedt, bleiben die alten Zahlen sichtbar, aber gedimmt */
+.stats-summary.is-loading,
+#stats-chart.is-loading { opacity: 0.55; transition: opacity var(--md-dur-short, 150ms) var(--md-ease, ease); }
 
 .stats-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
 .stat-row {

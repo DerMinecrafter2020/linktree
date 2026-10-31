@@ -183,6 +183,18 @@
     document.dispatchEvent(new CustomEvent('admin-tab-change', { detail: name }));
   }
 
+  // Ruft fn auf, sobald der Tab-Bereich <section class="tab" data-tab="name"> angezeigt wird
+  // (und sofort, falls er beim Start schon sichtbar ist). Bewusst ueber das Ereignis aus
+  // switchTab statt ueber [data-tab="…"]: dieser Selektor trifft zuerst den Knopf in der
+  // Seitenleiste, der nie versteckt wird.
+  function onTabShown(name, fn) {
+    const panel = $(`.tab[data-tab="${name}"]`);
+    if (!panel) return null;
+    document.addEventListener('admin-tab-change', (e) => { if (e.detail === name) fn(); });
+    if (!panel.hidden) fn();
+    return panel;
+  }
+
   function bindTabs() {
     $$('.side-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
     $('#logout-btn').addEventListener('click', () => logout());
@@ -905,172 +917,252 @@
     const browsersEl = $('#stats-browsers');
     const osEl = $('#stats-os');
     const countriesEl = $('#stats-countries');
-    if (!summary || !list || !canvas) return;
+    const panel = $('.tab[data-tab="stats"]');
+    if (!summary || !list || !canvas || !panel) return;
 
     let currentDays = 30;
+    let lastStats = null;   // zuletzt geladene Daten (fuer Neuzeichnen und CSV)
+    let requestSeq = 0;     // nur die Antwort der juengsten Anfrage wird angezeigt
+    let loadedAt = 0;
+
+    const isVisible = () => !panel.hidden && !document.hidden;
+    // Zeitzone des Browsers, damit die Tagesbalken lokalen Kalendertagen entsprechen
+    const timeZone = (() => {
+      try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch { return ''; }
+    })();
+
+    function localDayKey(d) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
 
     function setRange(days) {
       currentDays = days;
-      rangeGroup?.querySelectorAll('button').forEach(b => {
-        b.classList.toggle('primary', parseInt(b.dataset.days, 10) === days);
+      rangeGroup?.querySelectorAll('button[data-days]').forEach(b => {
+        const active = parseInt(b.dataset.days, 10) === days;
+        b.classList.toggle('primary', active);
+        b.setAttribute('aria-pressed', String(active));
       });
     }
 
+    function setLoading(loading) {
+      panel.querySelector('.card-block')?.setAttribute('aria-busy', String(loading));
+      summary.classList.toggle('is-loading', loading);
+      canvas.classList.toggle('is-loading', loading);
+    }
+
     function drawChart(timeline, days) {
+      const rect = canvas.getBoundingClientRect();
+      // Versteckter Tab hat keine Groesse – dann beim naechsten Anzeigen zeichnen
+      if (!rect.width || !rect.height) return;
       const ctx = canvas.getContext('2d');
       const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
+      canvas.width = Math.round(rect.width * dpr);
+      canvas.height = Math.round(rect.height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const w = rect.width, h = rect.height;
       ctx.clearRect(0, 0, w, h);
 
-      const labels = [];
+      const byDay = new Map((timeline || []).map(t => [String(t.day).slice(0, 10), Number(t.count) || 0]));
+      const dates = [];
       const counts = [];
-      const end = new Date();
+      const today = new Date();
       for (let i = days - 1; i >= 0; i--) {
-        const d = new Date(end);
-        d.setDate(d.getDate() - i);
-        const key = d.toISOString().slice(0, 10);
-        labels.push(key);
-        const found = timeline.find(t => String(t.day).slice(0, 10) === key);
-        counts.push(found ? found.count : 0);
+        const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+        dates.push(d);
+        counts.push(byDay.get(localDayKey(d)) || 0);
       }
-      const max = Math.max(1, ...counts);
+      // Skala auf "runde" Werte, damit die Gitterlinien ganze Zahlen tragen
+      const rawMax = Math.max(...counts, 0);
+      const max = Math.max(4, Math.ceil(rawMax / 4) * 4);
 
       // Farben aus den M3-Farbrollen (css/admin.css) lesen
       const css = getComputedStyle(document.documentElement);
       const color = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
       const primary = color('--md-primary', '#d0bcff');
       const primaryContainer = color('--md-primary-container', '#4f378b');
+      const muted = color('--md-on-surface-variant', '#cac4d0');
 
-      // Gitter
-      ctx.strokeStyle = color('--md-outline-variant', '#49454f');
+      const left = 40, right = 10, top = 20, bottom = 30;
+      const plotH = h - top - bottom;
+      const plotW = w - left - right;
+
+      // Gitter + Y-Achse
+      ctx.font = '10px "JetBrains Mono", monospace';
       ctx.lineWidth = 1;
       for (let i = 0; i <= 4; i++) {
-        const y = h - 30 - (h - 50) * (i / 4);
+        const y = Math.round(h - bottom - plotH * (i / 4)) + 0.5;
+        ctx.strokeStyle = color('--md-outline-variant', '#49454f');
         ctx.beginPath();
-        ctx.moveTo(40, y);
-        ctx.lineTo(w - 10, y);
+        ctx.moveTo(left, y);
+        ctx.lineTo(w - right, y);
         ctx.stroke();
+        ctx.fillStyle = muted;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String((max / 4) * i), left - 6, y);
       }
 
       // Balken
-      const barPad = 4;
-      const chartW = w - 50;
-      const barW = chartW / days - barPad;
+      const slot = plotW / days;
+      const barPad = Math.min(4, slot * 0.25);
+      const barW = Math.max(1, slot - barPad);
       counts.forEach((c, i) => {
-        const x = 40 + i * (barW + barPad);
-        const barH = (c / max) * (h - 50);
-        const y = h - 30 - barH;
-        const grad = ctx.createLinearGradient(0, y, 0, h - 30);
+        if (!c) return;
+        const x = left + i * slot + barPad / 2;
+        const barH = Math.max(2, (c / max) * plotH);
+        const y = h - bottom - barH;
+        const grad = ctx.createLinearGradient(0, y, 0, h - bottom);
         grad.addColorStop(0, primary);
         grad.addColorStop(1, primaryContainer);
         ctx.fillStyle = grad;
-        ctx.fillRect(x, y, Math.max(1, barW), barH);
+        ctx.fillRect(x, y, barW, barH);
       });
 
-      // Achsenbeschriftung
-      ctx.fillStyle = color('--md-on-surface-variant', '#cac4d0');
-      ctx.font = '10px "JetBrains Mono", monospace';
+      // X-Achse: so viele Beschriftungen, wie nebeneinander passen (je ~52 px, hoechstens 8);
+      // die letzte ist immer "heute"
+      ctx.fillStyle = muted;
       ctx.textAlign = 'center';
-      const step = days > 14 ? Math.ceil(days / 7) : 1;
-      for (let i = 0; i < days; i += step) {
-        const x = 40 + i * (barW + barPad) + barW / 2;
-        const date = new Date(labels[i]);
-        ctx.fillText(`${date.getDate()}.${date.getMonth() + 1}.`, x, h - 12);
+      ctx.textBaseline = 'alphabetic';
+      const maxLabels = Math.max(2, Math.min(8, Math.floor(plotW / 52)));
+      const step = Math.max(1, Math.ceil(days / maxLabels));
+      for (let i = days - 1; i >= 0; i -= step) {
+        const x = left + i * slot + slot / 2;
+        ctx.fillText(`${dates[i].getDate()}.${dates[i].getMonth() + 1}.`, x, h - 12);
       }
+
+      canvas.setAttribute('aria-label',
+        `Klicks pro Tag, letzte ${days} Tage: insgesamt ${counts.reduce((a, b) => a + b, 0)}, höchstens ${rawMax} an einem Tag`);
     }
 
-    async function render(days = currentDays) {
-      setRange(days);
-      try {
-        const stats = await window.api.getLinkStats(days);
-        summary.innerHTML = `
-          <div class="stat-card"><strong>${stats.total.toLocaleString('de-DE')}</strong><span>Gesamtklicks</span></div>
-          <div class="stat-card"><strong>${stats.links.length}</strong><span>Links</span></div>
-          <div class="stat-card"><strong>${stats.musicHistory?.length || 0}</strong><span>Songs gehört</span></div>
-        `;
-        
-        if (window.renderMusicHistory) {
-          window.renderMusicHistory(stats.musicHistory || []);
-        }
+    function renderBreakdown(container, items, labelKey) {
+      if (!container) return;
+      container.replaceChildren();
+      if (!items?.length) {
+        container.appendChild(el('li', { class: 'hint', text: 'Keine Daten.' }));
+        return;
+      }
+      items.forEach(i => {
+        container.appendChild(el('li', { class: 'stat-row' },
+          el('span', { class: 'stat-title', text: String(i[labelKey] ?? 'unbekannt') }),
+          el('span', { class: 'stat-clicks', text: `${i.count} Klicks` })
+        ));
+      });
+    }
 
-        list.replaceChildren();
-        stats.links.forEach(l => {
-          const item = el('li', { class: 'stat-row' },
-            el('div', { class: 'stat-info' },
-              el('span', { class: 'stat-title', text: l.title || l.url }),
-              el('span', { class: 'stat-url', text: l.url })
-            ),
-            el('div', { class: 'stat-counts' },
-              el('span', { class: 'stat-clicks', text: `${l.clicks} Klicks` }),
-              el('span', { class: 'stat-unique', text: `${l.unique_visitors} Unique` })
-            )
-          );
-          list.appendChild(item);
-        });
-        drawChart(stats.timeline, stats.days);
+    function show(stats) {
+      const card = (value, label) => el('div', { class: 'stat-card' },
+        el('strong', { text: Number(value || 0).toLocaleString('de-DE') }),
+        el('span', { text: label })
+      );
+      summary.replaceChildren(
+        card(stats.total, 'Gesamtklicks'),
+        card(stats.links.length, 'Links'),
+        card(stats.musicHistory?.length, 'Songs gehört')
+      );
 
-        function renderBreakdown(container, items) {
-          if (!container) return;
-          container.replaceChildren();
-          if (!items?.length) {
-            container.appendChild(el('li', { class: 'hint', text: 'Keine Daten.' }));
-            return;
-          }
-          items.forEach(i => {
-            container.appendChild(el('li', { class: 'stat-row' },
-              el('span', { class: 'stat-title', text: i.device_type || i.browser || i.os || i.country_code }),
-              el('span', { class: 'stat-clicks', text: `${i.count} Klicks` })
+      if (window.renderMusicHistory) {
+        window.renderMusicHistory(stats.musicHistory || []);
+      }
+
+      list.replaceChildren();
+      if (!stats.links.length) {
+        list.appendChild(el('li', { class: 'hint', text: 'Noch keine Links vorhanden.' }));
+      }
+      stats.links.forEach(l => {
+        list.appendChild(el('li', { class: 'stat-row' },
+          el('div', { class: 'stat-info' },
+            el('span', { class: 'stat-title', text: l.title || l.url || '' }),
+            el('span', { class: 'stat-url', text: l.url || '' })
+          ),
+          el('div', { class: 'stat-counts' },
+            el('span', { class: 'stat-clicks', text: `${l.clicks} Klicks` }),
+            el('span', { class: 'stat-unique', text: `${l.unique_visitors} Unique` })
+          )
+        ));
+      });
+
+      drawChart(stats.timeline, stats.days || currentDays);
+
+      renderBreakdown(devicesEl, stats.devices, 'device_type');
+      renderBreakdown(browsersEl, stats.browsers, 'browser');
+      renderBreakdown(osEl, stats.os, 'os');
+      renderBreakdown(countriesEl, stats.countries, 'country_code');
+
+      if (utmEl) {
+        if (stats.utm?.length) {
+          const tbody = el('tbody');
+          stats.utm.forEach(u => {
+            tbody.appendChild(el('tr', {},
+              el('td', { text: u.source }),
+              el('td', { text: u.medium }),
+              el('td', { text: String(u.count) })
             ));
           });
+          const table = el('table', { class: 'utm-table' },
+            el('thead', {}, el('tr', {},
+              el('th', { text: 'Quelle' }), el('th', { text: 'Medium' }), el('th', { text: 'Klicks' }))),
+            tbody
+          );
+          utmEl.replaceChildren(table);
+        } else {
+          utmEl.replaceChildren(el('p', { class: 'hint', text: 'Keine UTM-Parameter in diesem Zeitraum.' }));
         }
-        renderBreakdown(devicesEl, stats.devices);
-        renderBreakdown(browsersEl, stats.browsers);
-        renderBreakdown(osEl, stats.os);
-        renderBreakdown(countriesEl, stats.countries);
-
-        if (utmEl) {
-          if (stats.utm?.length) {
-            const table = el('table', { class: 'utm-table' });
-            table.innerHTML = `<thead><tr><th>Quelle</th><th>Medium</th><th>Klicks</th></tr></thead>`;
-            const tbody = el('tbody');
-            stats.utm.forEach(u => {
-              tbody.appendChild(el('tr', {},
-                el('td', { text: u.source }),
-                el('td', { text: u.medium }),
-                el('td', { text: u.count })
-              ));
-            });
-            table.appendChild(tbody);
-            utmEl.replaceChildren(table);
-          } else {
-            utmEl.replaceChildren(el('p', { class: 'hint', text: 'Keine UTM-Parameter in diesem Zeitraum.' }));
-          }
-        }
-      } catch (err) {
-        summary.innerHTML = `<p class="hint error">Fehler: ${escapeHtml(err.message)}</p>`;
       }
     }
 
-    // Neu zeichnen bei Resize
+    async function load(days = currentDays) {
+      setRange(days);
+      const seq = ++requestSeq;
+      setLoading(true);
+      if (!lastStats) {
+        summary.replaceChildren(el('p', { class: 'hint', text: 'Statistiken werden geladen …' }));
+      }
+      try {
+        const stats = await window.api.getLinkStats(days, timeZone);
+        if (seq !== requestSeq) return; // inzwischen anderer Zeitraum gewaehlt
+        lastStats = stats;
+        loadedAt = Date.now();
+        show(stats);
+      } catch (err) {
+        if (seq !== requestSeq) return;
+        lastStats = null;
+        summary.replaceChildren(el('p', { class: 'hint error', text: `Statistiken konnten nicht geladen werden: ${err.message}` }));
+      } finally {
+        if (seq === requestSeq) setLoading(false);
+      }
+    }
+
+    // Beim Anzeigen des Tabs immer aktuelle Zahlen holen; bereits geladene Daten sofort
+    // zeichnen (Canvas hatte im versteckten Tab keine Groesse).
+    function onShown() {
+      if (lastStats) drawChart(lastStats.timeline, lastStats.days || currentDays);
+      load(currentDays);
+    }
+    onTabShown('stats', onShown);
+
+    // Zurueck in den Browser-Tab nach laengerer Zeit: auffrischen
+    document.addEventListener('visibilitychange', () => {
+      if (isVisible() && Date.now() - loadedAt > 60_000) load(currentDays);
+    });
+
+    // Bei Groessenaenderung nur neu zeichnen, nicht neu laden
     let resizeTimer;
     window.addEventListener('resize', () => {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(render, 200);
+      resizeTimer = setTimeout(() => {
+        if (lastStats && !panel.hidden) drawChart(lastStats.timeline, lastStats.days || currentDays);
+      }, 150);
     });
 
     rangeGroup?.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-days]');
       if (!btn) return;
-      render(parseInt(btn.dataset.days, 10));
+      load(parseInt(btn.dataset.days, 10));
     });
 
     function exportCSV() {
       const days = currentDays;
-      window.api.getLinkStats(days).then(stats => {
+      window.api.getLinkStats(days, timeZone).then(stats => {
         const rows = [
           ['Zeitraum', `Letzte ${days} Tage`, '', ''],
           ['Gesamtklicks', stats.total, '', ''],
@@ -1109,20 +1201,6 @@
     }
 
     $('#stats-export-csv')?.addEventListener('click', exportCSV);
-
-    // Erst laden, wenn der Tab sichtbar wird
-    const tab = document.querySelector('[data-tab="stats"]');
-    const observer = new MutationObserver(() => {
-      if (!tab.hidden) {
-        render(currentDays);
-      }
-    });
-    if (tab) {
-      observer.observe(tab, { attributes: true, attributeFilter: ['hidden'] });
-      if (!tab.hidden) {
-        render(currentDays);
-      }
-    }
   }
 
   function bindApiKeys() {
@@ -1180,12 +1258,7 @@
       } catch (err) { toast('Fehler: ' + err.message, true); }
     });
 
-    const tab = document.querySelector('[data-tab="apikeys"]');
-    if (tab) {
-      const observer = new MutationObserver(() => { if (!tab.hidden) render(); });
-      observer.observe(tab, { attributes: true, attributeFilter: ['hidden'] });
-      if (!tab.hidden) render();
-    }
+    onTabShown('apikeys', render);
   }
 
   function bindPreview() {
@@ -1458,12 +1531,7 @@
     });
 
     // Backups laden, wenn Daten-Tab sichtbar wird
-    const dataTab = document.querySelector('[data-tab="data"]');
-    if (dataTab) {
-      const observer = new MutationObserver(() => { if (!dataTab.hidden) renderBackups(); });
-      observer.observe(dataTab, { attributes: true, attributeFilter: ['hidden'] });
-      if (!dataTab.hidden) renderBackups();
-    }
+    onTabShown('data', renderBackups);
 
     $('#reset-btn').addEventListener('click', async () => {
       if (!confirm('Wirklich alles zurücksetzen? Das löscht alle Links und setzt das Profil zurück.')) return;
@@ -1588,12 +1656,7 @@
         container.innerHTML = `<p class="hint error">Fehler: ${escapeHtml(err.message)}</p>`;
       }
     }
-    const tab = document.querySelector('[data-tab="audit"]');
-    const observer = new MutationObserver(() => { if (!tab.hidden) render(); });
-    if (tab) {
-      observer.observe(tab, { attributes: true, attributeFilter: ['hidden'] });
-      if (!tab.hidden) render();
-    }
+    onTabShown('audit', render);
   }
 
   function bindSettings() {

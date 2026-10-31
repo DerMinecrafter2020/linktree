@@ -234,76 +234,99 @@ router.get('/icons/resolve', async (req, res, next) => {
 
 // ---------- QR-Codes ----------
 // ---------- Statistik ----------
+// Zeitzone fuer die Tagesbalken (vom Browser des Admins). Nur Namen, die PostgreSQL kennt;
+// sonst UTC. Ergebnis wird gecacht, damit pg_timezone_names nicht bei jedem Aufruf laeuft.
+const STATS_TZ_RE = /^[A-Za-z][A-Za-z0-9_+\-]*(\/[A-Za-z0-9_+\-]+){0,2}$/;
+const statsTzCache = new Map();
+async function statsTimeZone(raw) {
+  const tz = typeof raw === 'string' ? raw.trim() : '';
+  if (!tz || tz.length > 64 || !STATS_TZ_RE.test(tz)) return 'UTC';
+  if (statsTzCache.has(tz)) return statsTzCache.get(tz);
+  const { rows } = await db.query('SELECT 1 FROM pg_timezone_names WHERE name = $1 LIMIT 1', [tz]);
+  const result = rows.length ? tz : 'UTC';
+  if (statsTzCache.size < 50) statsTzCache.set(tz, result);
+  return result;
+}
+
 router.get('/stats/links', async (req, res, next) => {
   try {
     const days = Math.min(90, Math.max(1, parseInt(req.query.days, 10) || 30));
+    const tz = await statsTimeZone(req.query.tz);
+    // Zeitraum = volle Kalendertage in der Zeitzone des Admins inkl. heute (wie im Diagramm)
+    const sinceRes = await db.query(
+      `SELECT (date_trunc('day', NOW() AT TIME ZONE $2) - ($1::int - 1) * INTERVAL '1 day') AT TIME ZONE $2 AS since`,
+      [days, tz]
+    );
+    const since = sinceRes.rows[0].since;
     const totalRes = await db.query(`
-      SELECT COUNT(*)::int AS total FROM link_clicks WHERE clicked_at > NOW() - $1 * INTERVAL '1 day'
-    `, [days]);
+      SELECT COUNT(*)::int AS total FROM link_clicks WHERE clicked_at >= $1
+    `, [since]);
     const linksRes = await db.query(`
       SELECT l.id, l.title, l.url, l.slug,
         COUNT(lc.id)::int AS clicks,
-        COUNT(DISTINCT lc.ip_hash) AS unique_visitors
+        COUNT(DISTINCT lc.ip_hash)::int AS unique_visitors
       FROM links l
-      LEFT JOIN link_clicks lc ON lc.link_id = l.id AND lc.clicked_at > NOW() - $1 * INTERVAL '1 day'
+      LEFT JOIN link_clicks lc ON lc.link_id = l.id AND lc.clicked_at >= $1
       GROUP BY l.id
       ORDER BY clicks DESC, l.position ASC
-    `, [days]);
+    `, [since]);
+    // Tag als Text (YYYY-MM-DD) in der Zeitzone des Admins: ein DATE-Wert wuerde als
+    // Mitternacht in Server-Zeit nach JSON serialisiert und im Browser um einen Tag verrutschen.
     const timelineRes = await db.query(`
-      SELECT DATE(clicked_at) AS day, COUNT(*)::int AS count
+      SELECT to_char((clicked_at AT TIME ZONE $2)::date, 'YYYY-MM-DD') AS day, COUNT(*)::int AS count
       FROM link_clicks
-      WHERE clicked_at > NOW() - $1 * INTERVAL '1 day'
-      GROUP BY day
-      ORDER BY day ASC
-    `, [days]);
+      WHERE clicked_at >= $1
+      GROUP BY 1
+      ORDER BY 1 ASC
+    `, [since, tz]);
     const utmRes = await db.query(`
       SELECT COALESCE(utm_source, '(direkt)') AS source,
              COALESCE(utm_medium, '(unbekannt)') AS medium,
              COUNT(*)::int AS count
       FROM link_clicks
-      WHERE clicked_at > NOW() - $1 * INTERVAL '1 day'
+      WHERE clicked_at >= $1
       GROUP BY utm_source, utm_medium
       ORDER BY count DESC
       LIMIT 20
-    `, [days]);
+    `, [since]);
     const devicesRes = await db.query(`
       SELECT COALESCE(device_type, 'unbekannt') AS device_type, COUNT(*)::int AS count
       FROM link_clicks
-      WHERE clicked_at > NOW() - $1 * INTERVAL '1 day'
+      WHERE clicked_at >= $1
       GROUP BY device_type
       ORDER BY count DESC
-    `, [days]);
+    `, [since]);
     const browsersRes = await db.query(`
       SELECT COALESCE(browser, 'unbekannt') AS browser, COUNT(*)::int AS count
       FROM link_clicks
-      WHERE clicked_at > NOW() - $1 * INTERVAL '1 day'
+      WHERE clicked_at >= $1
       GROUP BY browser
       ORDER BY count DESC
-    `, [days]);
+    `, [since]);
     const osRes = await db.query(`
       SELECT COALESCE(os, 'unbekannt') AS os, COUNT(*)::int AS count
       FROM link_clicks
-      WHERE clicked_at > NOW() - $1 * INTERVAL '1 day'
+      WHERE clicked_at >= $1
       GROUP BY os
       ORDER BY count DESC
-    `, [days]);
+    `, [since]);
     const countriesRes = await db.query(`
       SELECT COALESCE(country_code, 'unbekannt') AS country_code, COUNT(*)::int AS count
       FROM link_clicks
-      WHERE clicked_at > NOW() - $1 * INTERVAL '1 day'
+      WHERE clicked_at >= $1
       GROUP BY country_code
       ORDER BY count DESC
-    `, [days]);
+    `, [since]);
     const musicHistoryRes = await db.query(`
       SELECT * FROM (
         SELECT DISTINCT ON (title, artist) title, artist, album, source, played_at
         FROM music_history 
-        WHERE played_at > NOW() - $1 * INTERVAL '1 day'
+        WHERE played_at >= $1
         ORDER BY title, artist, played_at DESC
       ) AS deduped
       ORDER BY played_at DESC
       LIMIT 150
-    `, [days]);
+    `, [since]);
     res.json({
       ok: true,
       data: {

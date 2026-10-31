@@ -277,7 +277,14 @@ Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
 - Icon-Proxy `/api/icon/dashboardicon` cacht Logos 7 Tage im Speicher (max. 400) und zählt
   nicht zum API-Limit (eigenes Limit 600/min) – sonst verbrauchen viele Links das Kontingent.
 - Admin: Daten erst laden, wenn sie gebraucht werden (Vorschau-iframe, Icon-Vorschläge,
-  Musik-Vorschau und Monitor nur bei offenem Tab).
+  Musik-Vorschau und Monitor nur bei offenem Tab). Laden beim Anzeigen eines Tabs immer über
+  `onTabShown('<name>', fn)` in `public/js/admin.js` (Ereignis `admin-tab-change` aus `switchTab`).
+  **Nicht** `document.querySelector('[data-tab="…"]')` beobachten: der Selektor trifft zuerst den
+  Knopf in der Seitenleiste, der nie versteckt wird (so lud die Statistik nur beim Start im
+  versteckten Tab). Den Bereich selbst mit `.tab[data-tab="…"]` ansprechen.
+- Statistik (`GET /api/admin/stats/links?days=&tz=`): Zeitraum = volle Kalendertage inkl. heute in
+  der Browser-Zeitzone `tz` (nur Namen aus `pg_timezone_names`, sonst UTC); `timeline[].day` kommt
+  als Text `YYYY-MM-DD`, nie als DATE (würde in JSON um einen Tag verrutschen).
 
 **Ressourcenmonitor (`lib/metrics.js`, Admin-Tab „Monitor“):** Messpunkt alle 10 s, 360 Punkte
 (1 h) nur im Arbeitsspeicher; `GET /api/admin/metrics?since=<ts>` liefert nur neue Punkte. Die
