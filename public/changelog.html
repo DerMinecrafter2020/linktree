@@ -48,6 +48,15 @@
     <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
 
     <div class="changelog-entry">
+      <h2>2026-10-31 — OpenWeb v3.3.1 (Spotify-Einrichtungsassistent)</h2>
+      <ul>
+        <li><strong>Spotify:</strong> Ist Spotify noch nicht verbunden, führt im Admin unter „Musik“ ein Assistent in fünf Schritten durch die Einrichtung: App anlegen, Redirect-URI (mit Kopieren-Knopf), Client-ID/-Secret, Verbinden und ein abschließender Verbindungstest.</li>
+        <li><strong>Prüfungen:</strong> Der Assistent warnt, wenn die Redirect-URI kein https nutzt, „localhost“ enthält oder APP_URL fehlt, erkennt falsch kopierte Zugangsdaten und zeigt nach einer abgelehnten Anmeldung die häufigsten Ursachen.</li>
+        <li><strong>Bedienung:</strong> Der Fortschritt bleibt beim Neuladen erhalten; über „Manuell einrichten“ gibt es weiterhin das bisherige Formular, und der Assistent lässt sich dort jederzeit erneut starten. Eine fehlende Freigabe in der Spotify-App („User Management“/Premium) wird beim Verbindungstest jetzt konkret benannt.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <h2>2026-10-31 — OpenWeb v3.3.0 (Spotify als Musikquelle)</h2>
       <ul>
         <li><strong>Spotify:</strong> Der Player auf der Startseite kann jetzt auch anzeigen, was gerade auf Spotify läuft – inklusive Cover, Fortschritt und Podcast-Folgen. Die Anmeldung erfolgt im Admin unter „Musik“ über die eigene Spotify-App (Client-ID/-Secret) und „Mit Spotify verbinden“; Zugangsdaten werden nur verschlüsselt gespeichert.</li>

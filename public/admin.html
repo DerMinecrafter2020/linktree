@@ -274,13 +274,89 @@
             <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener noreferrer">Spotify Developer Dashboard</a>
             (Spotify verlangt dafür ein Premium-Konto). Client-Secret und Anmeldung werden nur verschlüsselt in der Datenbank gespeichert.
           </p>
-          <ol class="hint spotify-steps">
-            <li>Im Dashboard „Create app“ wählen, als API „Web API“ ankreuzen.</li>
-            <li>Diese Redirect-URI exakt eintragen: <code id="spotify-redirect-uri">–</code></li>
-            <li>Client-ID und Client-Secret hier eintragen, speichern und „Mit Spotify verbinden“ klicken.</li>
-          </ol>
+          <!-- Einrichtungsassistent: erscheint, solange Spotify nicht verbunden ist (Logik in js/admin.js) -->
+          <div id="spotify-wizard" class="setup-wizard" hidden>
+            <ol class="wizard-progress" aria-label="Fortschritt der Einrichtung">
+              <li data-step="1"><button type="button" class="wizard-dot" data-goto="1" aria-label="Schritt 1: App anlegen">1</button><span class="wizard-label">App anlegen</span></li>
+              <li data-step="2"><button type="button" class="wizard-dot" data-goto="2" aria-label="Schritt 2: Redirect-URI">2</button><span class="wizard-label">Redirect-URI</span></li>
+              <li data-step="3"><button type="button" class="wizard-dot" data-goto="3" aria-label="Schritt 3: Zugangsdaten">3</button><span class="wizard-label">Zugangsdaten</span></li>
+              <li data-step="4"><button type="button" class="wizard-dot" data-goto="4" aria-label="Schritt 4: Verbinden">4</button><span class="wizard-label">Verbinden</span></li>
+              <li data-step="5"><button type="button" class="wizard-dot" data-goto="5" aria-label="Schritt 5: Fertig">5</button><span class="wizard-label">Fertig</span></li>
+            </ol>
+
+            <section class="wizard-step" data-step="1" hidden>
+              <h4>Spotify-App anlegen</h4>
+              <p>OpenWeb liest über eine eigene Spotify-App, was du gerade hörst. Die App gehört dir; OpenWeb erhält nur Lesezugriff auf die aktuelle Wiedergabe.</p>
+              <ol class="wizard-list">
+                <li>Öffne das <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener noreferrer">Spotify Developer Dashboard</a> und melde dich mit deinem Spotify-Konto an.</li>
+                <li>Klicke auf <strong>„Create app“</strong>. Name und Beschreibung kannst du frei wählen, z. B. „OpenWeb Now Playing“.</li>
+                <li>Bei „Which API/SDKs are you planning to use?“ nur <strong>„Web API“</strong> ankreuzen.</li>
+                <li>Lass das Formular offen – die Redirect-URI trägst du im nächsten Schritt ein.</li>
+              </ol>
+              <p class="wizard-note">Spotify verlangt für eigene Apps ein <strong>Premium-Konto</strong>. Pro App sind höchstens fünf Spotify-Konten erlaubt.</p>
+            </section>
+
+            <section class="wizard-step" data-step="2" hidden>
+              <h4>Redirect-URI eintragen</h4>
+              <p>Trage diese Adresse im App-Formular unter <strong>„Redirect URIs“</strong> ein, klicke auf „Add“ und speichere die App:</p>
+              <div class="wizard-copy">
+                <code id="spotify-wizard-redirect">–</code>
+                <button type="button" class="btn ghost" id="spotify-wizard-copy">Kopieren</button>
+              </div>
+              <p class="wizard-check" id="spotify-wizard-redirect-check"></p>
+            </section>
+
+            <section class="wizard-step" data-step="3" hidden>
+              <h4>Client-ID und Client-Secret eintragen</h4>
+              <p>Öffne deine App im Dashboard und klicke auf <strong>„Settings“</strong>. Kopiere die Client-ID; das Secret erscheint nach „View client secret“.</p>
+              <div class="form wizard-fields">
+                <label>
+                  <span>Client-ID</span>
+                  <input id="spotify-wizard-client-id" type="text" autocomplete="off" spellcheck="false" placeholder="32 Zeichen aus dem Dashboard" />
+                </label>
+                <label>
+                  <span>Client-Secret</span>
+                  <input id="spotify-wizard-client-secret" type="password" autocomplete="new-password" placeholder="Client-Secret aus dem Dashboard" />
+                </label>
+              </div>
+              <p class="wizard-check" id="spotify-wizard-cred-check" aria-live="polite"></p>
+            </section>
+
+            <section class="wizard-step" data-step="4" hidden>
+              <h4>Mit Spotify verbinden</h4>
+              <p>Du wirst zu Spotify weitergeleitet und bestätigst dort den Lesezugriff auf deine aktuelle Wiedergabe. Danach kommst du automatisch hierher zurück.</p>
+              <button type="button" class="btn primary" id="spotify-wizard-connect">Mit Spotify verbinden</button>
+              <div class="wizard-help" id="spotify-wizard-error" hidden>
+                <p class="wizard-check is-error" id="spotify-wizard-error-text"></p>
+                <p>Häufige Ursachen:</p>
+                <ul>
+                  <li>Die Redirect-URI in der Spotify-App weicht ab – sie muss exakt wie in Schritt 2 lauten (inklusive <code>https://</code>, ohne Schrägstrich am Ende).</li>
+                  <li>Client-ID oder Client-Secret wurden falsch kopiert – in Schritt 3 neu eintragen.</li>
+                  <li>Du hast ein anderes Spotify-Konto verwendet als das, mit dem die App erstellt wurde – trage es in der App unter „User Management“ ein.</li>
+                </ul>
+              </div>
+            </section>
+
+            <section class="wizard-step" data-step="5" hidden>
+              <h4>Geschafft!</h4>
+              <p class="wizard-check" id="spotify-wizard-result" aria-live="polite">Prüfe die Verbindung …</p>
+              <p>Ab jetzt erscheint auf deiner Startseite, was du auf Spotify hörst – mit Spotify-Logo am Plattenspieler. Ist der Discord-Webhook aktiv, werden die Titel auch dort gemeldet.</p>
+              <div class="form-actions wizard-inline-actions">
+                <button type="button" class="btn ghost" id="spotify-wizard-retest">Erneut prüfen</button>
+                <button type="button" class="btn ghost" id="spotify-wizard-discord">Discord-Test senden</button>
+              </div>
+            </section>
+
+            <div class="wizard-nav">
+              <button type="button" class="btn ghost" id="spotify-wizard-skip">Manuell einrichten</button>
+              <span class="wizard-spacer"></span>
+              <button type="button" class="btn ghost" id="spotify-wizard-back">Zurück</button>
+              <button type="button" class="btn primary" id="spotify-wizard-next">Weiter</button>
+            </div>
+          </div>
 
           <form id="spotify-form" class="form">
+            <p class="hint">Redirect-URI für die Spotify-App: <code id="spotify-redirect-uri">–</code></p>
             <label class="row">
               <input type="checkbox" name="enabled" />
               <span>Player aktivieren</span>
@@ -297,6 +373,7 @@
             <p class="hint" id="spotify-connection" aria-live="polite">Nicht verbunden</p>
 
             <div class="form-actions">
+              <button type="button" id="spotify-wizard-start-btn" class="btn ghost">Assistent</button>
               <button type="button" id="spotify-discord-test-btn" class="btn ghost" title="Testet den Discord Webhook für 'Now Playing' mit einem Spotify-Beispiel (nutzt URL aus dem Tab Admin)">Discord-Test</button>
               <button type="button" id="spotify-test-btn" class="btn ghost">Verbindung testen</button>
               <button type="button" id="spotify-disconnect-btn" class="btn ghost" hidden>Trennen</button>

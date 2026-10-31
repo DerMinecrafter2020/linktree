@@ -228,6 +228,14 @@ Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
   Speicher; ein widerrufener Refresh-Token (`invalid_grant`) trennt die Verbindung. Neue
   Client-ID/-Secret verwerfen die bestehende Anmeldung. Cover nur von `https://i.scdn.co` über
   `/api/status/spotify-cover`; der Spotify-Link (`spotifyUrl`) ist intern und geht nur an Discord.
+- **Spotify-Einrichtungsassistent** (`#spotify-wizard` in `admin.html`, Logik im Spotify-Block von
+  `public/js/admin.js`): erscheint, solange Spotify nicht verbunden ist, sonst das Formular. Schritte:
+  App anlegen → Redirect-URI → Zugangsdaten (speichert mit `enabled: true`) → Verbinden → Abschlusstest.
+  Startschritt: verbunden = Formular, Zugangsdaten gespeichert = 4, sonst gemerkter Schritt 1–3
+  (`localStorage` `openweb-spotify-wizard`, nur Komfort; `manual: true` = „Manuell einrichten“).
+  Rückkehr `/admin?spotify=connected` zeigt Schritt 5, Fehler (`error`/`invalid`/`denied`) Schritt 4
+  mit Hilfe. Die Redirect-Prüfung kommt vom Server (`redirect_uri_configured`/`_secure`/`_localhost`
+  aus `lib/spotify.getRedirectUriStatus`: https Pflicht, http nur für 127.0.0.1/[::1], nie `localhost`).
 - Music Assistant: `musicassistant_settings.user_id` bestimmt den Benutzer für „Now Playing“.
   Die Player-Zuordnung stammt aus `player_filter` der Music-Assistant-API; ohne eingeschränkte
   Player-Zuordnung wird vorsichtshalber keine Music-Assistant-Wiedergabe ausgegeben.

@@ -934,6 +934,7 @@ const SPOTIFY_STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
 function spotifySettingsView(row, req) {
   const s = row || {};
+  const redirect = spotify.getRedirectUriStatus(req);
   return {
     enabled: !!s.enabled,
     client_id: s.client_id || '',
@@ -941,7 +942,11 @@ function spotifySettingsView(row, req) {
     connected: spotify.isConnected(s),
     account_name: s.account_name || null,
     connected_at: s.connected_at || null,
-    redirect_uri: spotify.getRedirectUri(req),
+    redirect_uri: redirect.uri,
+    // Fuer den Einrichtungsassistenten (APP_URL gesetzt? https?)
+    redirect_uri_configured: redirect.configured,
+    redirect_uri_secure: redirect.secure,
+    redirect_uri_localhost: redirect.localhost,
   };
 }
 
@@ -1090,10 +1095,12 @@ router.post('/settings/spotify/test', async (req, res) => {
     });
   } catch (err) {
     console.error('[admin spotify/test]', err.message);
-    const error = err.status === 429
-      ? 'Spotify-Rate-Limit erreicht, bitte später erneut testen'
-      : 'Spotify nicht erreichbar oder Anmeldung abgelaufen';
-    res.json({ ok: true, data: { configured: true, connected: false, error } });
+    let error = 'Spotify nicht erreichbar oder Anmeldung abgelaufen';
+    if (err.status === 429) error = 'Spotify-Rate-Limit erreicht, bitte später erneut testen';
+    if (err.status === 403) {
+      error = 'Spotify verweigert den Zugriff: Ist dein Konto in der App unter „User Management“ eingetragen und hat Premium?';
+    }
+    res.json({ ok: true, data: { configured: true, connected: false, error, status: err.status || null } });
   }
 });
 

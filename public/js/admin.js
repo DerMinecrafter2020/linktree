@@ -2146,12 +2146,182 @@
   }
 
   // ---------- Spotify ----------
+  // Ist Spotify noch nicht verbunden, fuehrt ein Assistent in 5 Schritten durch die Einrichtung.
+  // Der Fortschritt der Schritte 1–3 (vor dem Speichern) liegt nur im Browser (localStorage).
+  const SPOTIFY_WIZARD_KEY = 'openweb-spotify-wizard';
+  const SPOTIFY_ID_RE = /^[A-Za-z0-9]{16,64}$/;
   const SPOTIFY_RETURN_MESSAGES = {
     connected: ['✅ Mit Spotify verbunden', false],
-    denied: ['Anmeldung bei Spotify abgebrochen', true],
-    invalid: ['Spotify-Anmeldung abgelaufen oder ungültig – bitte erneut verbinden', true],
-    error: ['Spotify-Anmeldung fehlgeschlagen – Redirect-URI, Client-ID und Secret prüfen', true],
+    denied: ['Die Anmeldung bei Spotify wurde abgebrochen. Du kannst es jederzeit erneut versuchen.', true],
+    invalid: ['Die Spotify-Anmeldung ist abgelaufen oder ungültig. Bitte erneut verbinden.', true],
+    error: ['Spotify hat die Anmeldung abgelehnt. Prüfe Redirect-URI, Client-ID und Client-Secret.', true],
   };
+  const spotifyWizard = { step: 1, returnResult: null };
+
+  function readWizardPrefs() {
+    try { return JSON.parse(localStorage.getItem(SPOTIFY_WIZARD_KEY) || '{}') || {}; } catch { return {}; }
+  }
+  function writeWizardPrefs(prefs) {
+    try { localStorage.setItem(SPOTIFY_WIZARD_KEY, JSON.stringify(prefs)); } catch { /* privat/blockiert: egal */ }
+  }
+
+  function spotifyHasCredentials() {
+    return !!(state.spotify?.client_id && state.spotify?.has_client_secret);
+  }
+
+  // Welche Ansicht? Assistent, solange nicht verbunden (ausser "Manuell einrichten" gewaehlt)
+  function renderSpotifyView() {
+    const wizard = $('#spotify-wizard');
+    const form = $('#spotify-form');
+    if (!wizard || !form) return;
+    const cfg = state.spotify || {};
+    const prefs = readWizardPrefs();
+    const showWizard = spotifyWizard.step === 5 || (!cfg.connected && !prefs.manual) || spotifyWizard.forced;
+    wizard.hidden = !showWizard;
+    form.hidden = showWizard;
+    if (showWizard) renderSpotifyWizard();
+  }
+
+  // Erster sinnvoller Schritt: Zugangsdaten gespeichert -> Verbinden, sonst gemerkter Fortschritt
+  function initialWizardStep() {
+    // Bereits verbunden: Assistent startet bei Bedarf von vorn (Abschluss-Schritt nur direkt nach dem Verbinden)
+    if (state.spotify?.connected) return 1;
+    if (spotifyHasCredentials()) return 4;
+    const saved = Number(readWizardPrefs().step);
+    return saved >= 1 && saved <= 3 ? saved : 1;
+  }
+
+  function setWizardStep(step) {
+    spotifyWizard.step = Math.min(5, Math.max(1, step));
+    if (spotifyWizard.step <= 3) writeWizardPrefs({ ...readWizardPrefs(), step: spotifyWizard.step });
+    renderSpotifyWizard();
+    if (spotifyWizard.step === 5) runSpotifyWizardTest();
+    const heading = $(`#spotify-wizard .wizard-step[data-step="${spotifyWizard.step}"] h4`);
+    if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus({ preventScroll: true }); }
+  }
+
+  function renderSpotifyWizard() {
+    const cfg = state.spotify || {};
+    const step = spotifyWizard.step;
+
+    $$('#spotify-wizard .wizard-progress li').forEach((li) => {
+      const n = Number(li.dataset.step);
+      li.classList.toggle('current', n === step);
+      li.classList.toggle('done', n < step);
+      const dot = li.querySelector('.wizard-dot');
+      dot.disabled = !(n < step && step !== 5);
+      if (n === step) dot.setAttribute('aria-current', 'step'); else dot.removeAttribute('aria-current');
+      dot.textContent = n < step ? '✓' : String(n);
+    });
+    $$('#spotify-wizard .wizard-step').forEach((sec) => { sec.hidden = Number(sec.dataset.step) !== step; });
+
+    // Schritt 2: Redirect-URI und ihre Pruefung
+    const uri = cfg.redirect_uri || '–';
+    $('#spotify-wizard-redirect').textContent = uri;
+    const check = $('#spotify-wizard-redirect-check');
+    check.className = 'wizard-check';
+    if (cfg.redirect_uri_localhost) {
+      check.textContent = '⚠️ Spotify akzeptiert „localhost“ nicht. Rufe den Admin über 127.0.0.1 auf oder setze APP_URL in der .env auf deine öffentliche Domain.';
+      check.classList.add('is-warn');
+    } else if (!cfg.redirect_uri_secure) {
+      check.textContent = '⚠️ Spotify verlangt https. Setze APP_URL in der .env auf deine https-Adresse (z. B. https://links.deine-domain.de) und starte OpenWeb neu.';
+      check.classList.add('is-warn');
+    } else if (!cfg.redirect_uri_configured) {
+      check.textContent = '⚠️ APP_URL ist nicht gesetzt – die Adresse wurde aus dem aktuellen Aufruf abgeleitet. Setze APP_URL in der .env, damit sie sich nicht ändert.';
+      check.classList.add('is-warn');
+    } else {
+      check.textContent = '✅ Die Adresse kommt aus APP_URL und nutzt https.';
+      check.classList.add('is-ok');
+    }
+
+    // Schritt 3: gespeicherte Client-ID vorbelegen (Secret nie)
+    const idInput = $('#spotify-wizard-client-id');
+    if (step === 3 && !idInput.value && cfg.client_id) idInput.value = cfg.client_id;
+    $('#spotify-wizard-client-secret').placeholder = cfg.has_client_secret
+      ? '•••••••• (gespeichert – leer lassen zum Behalten)'
+      : 'Client-Secret aus dem Dashboard';
+
+    // Schritt 4: Fehler nach der Rueckkehr von Spotify
+    const errorBox = $('#spotify-wizard-error');
+    const ret = spotifyWizard.returnResult;
+    const showError = step === 4 && ret && ret !== 'connected';
+    errorBox.hidden = !showError;
+    if (showError) $('#spotify-wizard-error-text').textContent = SPOTIFY_RETURN_MESSAGES[ret]?.[0] || 'Die Anmeldung ist fehlgeschlagen.';
+
+    // Navigation
+    const back = $('#spotify-wizard-back');
+    const next = $('#spotify-wizard-next');
+    const skip = $('#spotify-wizard-skip');
+    back.hidden = step === 1 || step === 5;
+    next.hidden = step === 4;
+    next.textContent = { 1: 'App ist angelegt – weiter', 2: 'Eingetragen – weiter', 3: 'Speichern & weiter', 5: 'Fertig' }[step] || 'Weiter';
+    skip.hidden = step === 5;
+    skip.textContent = cfg.connected ? 'Assistent schließen' : 'Manuell einrichten';
+  }
+
+  async function saveWizardCredentials() {
+    const idInput = $('#spotify-wizard-client-id');
+    const secretInput = $('#spotify-wizard-client-secret');
+    const check = $('#spotify-wizard-cred-check');
+    const clientId = idInput.value.trim();
+    const clientSecret = secretInput.value.trim();
+    check.className = 'wizard-check';
+
+    const fail = (msg, field) => {
+      check.textContent = '⚠️ ' + msg;
+      check.classList.add('is-warn');
+      field?.focus();
+      return false;
+    };
+    if (!SPOTIFY_ID_RE.test(clientId)) return fail('Die Client-ID besteht aus 32 Buchstaben und Ziffern – bitte vollständig aus dem Dashboard kopieren.', idInput);
+    const keepSecret = !clientSecret && state.spotify?.has_client_secret && clientId === state.spotify?.client_id;
+    if (!keepSecret && !SPOTIFY_ID_RE.test(clientSecret)) return fail('Das Client-Secret besteht aus 32 Buchstaben und Ziffern – klicke im Dashboard auf „View client secret“ und kopiere es.', secretInput);
+    if (clientSecret && clientSecret === clientId) return fail('Client-ID und Client-Secret sind identisch – vermutlich wurde zweimal dasselbe kopiert.', secretInput);
+
+    try {
+      state.spotify = await window.api.saveSpotifySettings({ enabled: true, clientId, clientSecret });
+      secretInput.value = '';
+      renderSpotifyForm();
+      return true;
+    } catch (err) {
+      return fail(err.message || 'Speichern fehlgeschlagen');
+    }
+  }
+
+  async function startSpotifyLogin(statusEl) {
+    try {
+      const { url } = await window.api.startSpotifyAuthorization();
+      if (typeof url !== 'string' || !url.startsWith('https://accounts.spotify.com/')) throw new Error('Ungültige Anmelde-URL');
+      location.href = url;
+    } catch (err) {
+      if (statusEl) statusEl.textContent = '❌ ' + (err.message || 'Anmeldung konnte nicht gestartet werden');
+    }
+  }
+
+  async function runSpotifyWizardTest() {
+    const result = $('#spotify-wizard-result');
+    if (!result) return;
+    result.className = 'wizard-check';
+    result.textContent = 'Prüfe die Verbindung …';
+    try {
+      const s = await window.api.testSpotifyConnection();
+      if (s?.connected) {
+        const who = s.account ? ` als „${s.account}“` : '';
+        const playing = s.playing
+          ? `Gerade läuft: ${s.title}${s.artist ? ' – ' + s.artist : ''}.`
+          : 'Gerade läuft nichts – starte einen Song auf Spotify und klicke auf „Erneut prüfen“.';
+        result.textContent = `✅ Verbunden${who}. ${playing}`;
+        result.classList.add('is-ok');
+        await loadSpotifySettings(false);
+      } else {
+        result.textContent = '⚠️ ' + (s?.error || 'Spotify ist noch nicht verbunden.');
+        result.classList.add('is-warn');
+      }
+    } catch (err) {
+      result.textContent = '⚠️ ' + (err.message || 'Netzwerkfehler');
+      result.classList.add('is-warn');
+    }
+  }
 
   function renderSpotifyForm() {
     const form = $('#spotify-form');
@@ -2178,38 +2348,104 @@
     if (disconnectBtn) disconnectBtn.hidden = !cfg.connected;
   }
 
-  async function loadSpotifySettings() {
+  async function loadSpotifySettings(rerenderView = true) {
     try {
       state.spotify = await window.api.getSpotifySettings();
       renderSpotifyForm();
+      if (rerenderView) renderSpotifyView();
     } catch (err) {
       console.warn('[admin] Spotify-Settings konnten nicht geladen werden:', err.message);
     }
   }
 
-  // Rueckkehr vom Spotify-Login (/admin?spotify=...): Meldung zeigen, Musik-Tab oeffnen, URL bereinigen
-  function handleSpotifyReturn() {
+  // Rueckkehr vom Spotify-Login (/admin?spotify=...): Ergebnis merken, Musik-Tab oeffnen, URL bereinigen
+  function readSpotifyReturn() {
     const params = new URLSearchParams(location.search);
     const result = params.get('spotify');
-    if (!result) return;
+    if (!result) return null;
     params.delete('spotify');
     const query = params.toString();
     history.replaceState(null, '', location.pathname + (query ? '?' + query : '') + location.hash);
-    const message = SPOTIFY_RETURN_MESSAGES[result];
-    if (!message) return;
+    if (!SPOTIFY_RETURN_MESSAGES[result]) return null;
     switchTab('music');
-    toast(message[0], message[1]);
-    const status = $('#spotify-status');
-    if (status) status.textContent = message[0];
+    const [message, isError] = SPOTIFY_RETURN_MESSAGES[result];
+    toast(message, isError);
+    return result;
   }
 
-  function bindSpotify() {
+  async function bindSpotify() {
     const form = $('#spotify-form');
     if (!form || !window.api) return;
-    loadSpotifySettings();
-    handleSpotifyReturn();
     const status = $('#spotify-status');
+    spotifyWizard.returnResult = readSpotifyReturn();
 
+    // ----- Assistent -----
+    $('#spotify-wizard-next')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const step = spotifyWizard.step;
+      if (step === 3) {
+        btn.disabled = true;
+        const ok = await saveWizardCredentials();
+        btn.disabled = false;
+        if (!ok) return;
+        spotifyWizard.returnResult = null;
+      }
+      if (step === 5) {
+        spotifyWizard.step = 1;
+        spotifyWizard.forced = false;
+        writeWizardPrefs({});
+        renderSpotifyView();
+        return;
+      }
+      setWizardStep(step + 1);
+    });
+    $('#spotify-wizard-back')?.addEventListener('click', () => setWizardStep(spotifyWizard.step - 1));
+    $$('#spotify-wizard .wizard-dot').forEach((dot) => dot.addEventListener('click', () => {
+      const target = Number(dot.dataset.goto);
+      if (target < spotifyWizard.step && spotifyWizard.step !== 5) setWizardStep(target);
+    }));
+    $('#spotify-wizard-skip')?.addEventListener('click', () => {
+      spotifyWizard.forced = false;
+      writeWizardPrefs({ ...readWizardPrefs(), manual: true });
+      renderSpotifyView();
+    });
+    $('#spotify-wizard-copy')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      try {
+        await navigator.clipboard.writeText(state.spotify?.redirect_uri || '');
+        btn.textContent = 'Kopiert ✓';
+      } catch {
+        // Fallback: Text markieren, damit er per Strg+C kopiert werden kann
+        const range = document.createRange();
+        range.selectNodeContents($('#spotify-wizard-redirect'));
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        btn.textContent = 'Markiert – Strg+C';
+      }
+      setTimeout(() => { btn.textContent = 'Kopieren'; }, 2000);
+    });
+    $('#spotify-wizard-connect')?.addEventListener('click', () => startSpotifyLogin($('#spotify-wizard-error-text')));
+    $('#spotify-wizard-retest')?.addEventListener('click', runSpotifyWizardTest);
+    $('#spotify-wizard-discord')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      try {
+        await window.api.testNavidromeDiscordWebhook('spotify');
+        toast('✅ Discord-Test gesendet (prüfe deinen Kanal)');
+      } catch (err) {
+        toast('Discord-Test: ' + (err.message || 'fehlgeschlagen'), true);
+      }
+      btn.blur();
+    });
+    $('#spotify-wizard-start-btn')?.addEventListener('click', () => {
+      writeWizardPrefs({ ...readWizardPrefs(), manual: false });
+      spotifyWizard.forced = true;
+      spotifyWizard.returnResult = null;
+      spotifyWizard.step = initialWizardStep();
+      renderSpotifyView();
+    });
+
+    // ----- Formular (manuelle Einrichtung / bereits verbunden) -----
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const clientId = (form.clientId.value || '').trim();
@@ -2245,13 +2481,7 @@
         status.textContent = 'Trage zuerst Client-ID und Client-Secret ein und speichere.';
         return;
       }
-      try {
-        const { url } = await window.api.startSpotifyAuthorization();
-        if (typeof url !== 'string' || !url.startsWith('https://accounts.spotify.com/')) throw new Error('Ungültige Anmelde-URL');
-        location.href = url;
-      } catch (err) {
-        status.textContent = '❌ ' + (err.message || 'Anmeldung konnte nicht gestartet werden');
-      }
+      startSpotifyLogin(status);
     });
 
     $('#spotify-disconnect-btn')?.addEventListener('click', async () => {
@@ -2277,7 +2507,7 @@
           const who = s.account ? ` als ${s.account}` : '';
           const playing = s.playing ? `spielt: ${s.title}${s.artist ? ' (' + s.artist + ')' : ''}` : 'momentan läuft nichts';
           status.textContent = `✅ Verbunden${who} — ${playing}${s.enabled ? '' : ' (Player ist deaktiviert)'}`;
-          await loadSpotifySettings();
+          await loadSpotifySettings(false);
         }
       } catch (err) {
         status.textContent = '❌ ' + (err.message || 'Netzwerkfehler');
@@ -2293,6 +2523,20 @@
         status.textContent = '❌ ' + (err.message || 'Netzwerkfehler');
       }
     });
+
+    // Einstellungen laden und passende Ansicht waehlen
+    await loadSpotifySettings(false);
+    const ret = spotifyWizard.returnResult;
+    if (ret === 'connected') {
+      // Direkt nach dem Verbinden: Abschluss-Schritt mit Verbindungstest zeigen
+      setWizardStep(5);
+      renderSpotifyView();
+    } else {
+      if (ret && !state.spotify?.connected) writeWizardPrefs({ ...readWizardPrefs(), manual: false });
+      spotifyWizard.step = initialWizardStep();
+      renderSpotifyView();
+      if (ret && state.spotify?.connected && status) status.textContent = SPOTIFY_RETURN_MESSAGES[ret][0];
+    }
   }
 
   async function reloadCategories() { state.categories = await window.api.getAdminLinkCategories(); }
