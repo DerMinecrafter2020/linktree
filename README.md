@@ -17,6 +17,7 @@ OpenWeb ist eine responsive Link-in-Bio-Seite mit Admin-Panel, Statistiken und M
 - Links können geplant, zeitlich begrenzt und passwortgeschützt werden. Die Ziel-URL geschützter Links wird erst nach erfolgreicher Passwortprüfung ausgegeben.
 - Besucher können Links teilen, QR-Codes öffnen und – sofern aktiviert – ein Design wählen; das Standard-Design legt der Admin fest.
 - Optionales Kontaktformular: Nachrichten gehen per SMTP an den Admin (Spamschutz ohne Captcha, keine Speicherung).
+- Link-Vorschau für Discord, WhatsApp & Co.: automatisch erzeugtes Vorschaubild im Seiten-Design (oder eigenes Bild), Embed-Farbe und optional der laufende Song.
 - Now-Playing-Anzeige über Navidrome/Subsonic, Music Assistant oder Spotify (mit Logo der aktiven Quelle); optional mit Discord-Webhook und Musikverlauf.
 - Optionaler Profilabgleich mit Instagram (Profilbild, Beschreibung, Name) für Business-/Creator-Konten, eingerichtet per Assistent im Admin.
 - Impressum und Datenschutzerklärung lassen sich im Admin-Panel pflegen. Leerzeilen und Zeilenumbrüche werden auf den Unterseiten formatiert dargestellt.

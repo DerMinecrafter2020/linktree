@@ -15,6 +15,7 @@ const backup = require('../lib/backup');
 const audit = require('../lib/audit');
 const alert = require('../lib/alert');
 const contact = require('../lib/contact');
+const og = require('../lib/og');
 const icons = require('../lib/icons');
 const encryptionKeyBackup = require('../lib/encryption-key-backup');
 const { getAvailableUsers: getMusicAssistantUsers } = require('../lib/musicassistant');
@@ -712,6 +713,53 @@ router.post('/alert-settings/test', async (req, res, next) => {
   try {
     const result = await alert.notify('test', 'Dies ist eine Testbenachrichtigung von OpenWeb.', { time: new Date().toISOString() });
     res.json({ ok: result.sent, results: result.results });
+  } catch (err) { next(err); }
+});
+
+// ---------- Link-Vorschau (Open Graph) ----------
+function ogView(settings) {
+  return {
+    has_image: Boolean(settings.has_image),
+    image_key: settings.image_key || null,
+    custom: Boolean(settings.custom),
+    show_now_playing: settings.show_now_playing !== false,
+    updated_at: settings.updated_at || null,
+    image_url: settings.has_image ? `/og-image.jpg?v=${og.versionOf(settings.updated_at)}` : null,
+    width: og.WIDTH,
+    height: og.HEIGHT,
+  };
+}
+
+router.get('/og', async (req, res, next) => {
+  try {
+    res.json({ ok: true, data: ogView(await og.getSettings()) });
+  } catch (err) { next(err); }
+});
+
+router.post('/og/image', async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const settings = await og.saveImage({ dataUrl: b.image, key: b.key, custom: b.custom === true });
+    if (b.custom === true) await audit.log(req, 'update', 'og_image', 1, { custom: true });
+    res.json({ ok: true, data: ogView(settings) });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ ok: false, error: err.message });
+    next(err);
+  }
+});
+
+router.delete('/og/image', async (req, res, next) => {
+  try {
+    const settings = await og.clearImage();
+    await audit.log(req, 'delete', 'og_image', 1);
+    res.json({ ok: true, data: ogView(settings) });
+  } catch (err) { next(err); }
+});
+
+router.post('/og/options', async (req, res, next) => {
+  try {
+    const settings = await og.saveOptions({ showNowPlaying: req.body?.show_now_playing !== false });
+    res.json({ ok: true, data: ogView(settings) });
   } catch (err) { next(err); }
 });
 

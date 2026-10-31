@@ -2126,3 +2126,39 @@ input[type="checkbox"] {
 }
 .card-block .contact-status.ok { background: var(--md-success-container); color: var(--md-on-success-container); }
 .card-block .contact-status.warn { background: var(--md-warning-container); color: var(--md-on-warning-container); }
+
+/* ---------- Link-Vorschau (Nachbildung eines Discord-Embeds) ---------- */
+.og-embed {
+  display: flex;
+  max-width: 460px;
+  margin: 4px 0 12px;
+  border-radius: var(--md-shape-xs);
+  background: var(--md-surface-container-high);
+  border-left: 4px solid var(--og-accent, var(--md-primary));
+  overflow: hidden;
+}
+.og-embed-body { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px 16px; min-width: 0; width: 100%; }
+.og-embed-site { font-size: 12px; line-height: 16px; color: var(--md-on-surface-variant); }
+.og-embed-title { font-size: 16px; line-height: 22px; font-weight: 600; color: var(--md-primary); overflow-wrap: anywhere; }
+.og-embed-desc { font-size: 14px; line-height: 20px; color: var(--md-on-surface); white-space: pre-line; overflow-wrap: anywhere; }
+.og-embed-media { margin-top: 8px; }
+.og-embed-media img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  border-radius: var(--md-shape-xs);
+  background: var(--md-surface-container-highest);
+}
+.og-embed-placeholder {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1200 / 630;
+  border-radius: var(--md-shape-xs);
+  border: 1px dashed var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+  font-size: 13px;
+}
+.og-embed-placeholder[hidden] { display: none; }
+.og-actions { justify-content: flex-start; margin-top: 8px; }

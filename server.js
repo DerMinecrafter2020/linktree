@@ -262,6 +262,7 @@ async function finalizeApp() {
     const PgSession = require('connect-pg-simple')(session);
     const db = require('./lib/db');
     const visibility = require('./lib/visibility');
+    const og = require('./lib/og');
     const publicRoutes = require('./routes/public');
     const adminRoutes = require('./routes/admin');
     const navidromeRoutes = require('./routes/navidrome');
@@ -476,7 +477,35 @@ async function finalizeApp() {
 
     const indexHtmlTemplate = versionAssets(fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8'));
 
-    // Startseite mit dynamischen Open-Graph-Tags fuer aktuellen Track
+    // Vorschaubild fuer Link-Vorschauen (Discord, WhatsApp …): erzeugt/hochgeladen im Admin
+    // (lib/og.js), sonst das Profilbild. Nur bei oeffentlichem Profil (oder fuer Admins).
+    app.get('/og-image.jpg', async (req, res, next) => {
+      try {
+        const { rows } = await db.query('SELECT is_public, avatar_url FROM profile WHERE id = 1 LIMIT 1');
+        const profile = rows[0] || {};
+        if (profile.is_public === false && !req.session?.userId) return res.status(404).end();
+        let body = null;
+        let type = null;
+        const stored = await og.getImage();
+        if (stored) {
+          body = stored.image;
+          type = stored.image_type;
+        } else {
+          const m = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(profile.avatar_url || '');
+          if (m) { body = Buffer.from(m[2], 'base64'); type = m[1]; }
+        }
+        if (!body || !['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(type)) return res.status(404).end();
+        res.setHeader('Content-Type', type);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        // Mit ?v=<Version> darf lange gecacht werden (neue Version = neue URL)
+        res.setHeader('Cache-Control', req.query.v ? 'public, max-age=86400' : 'public, max-age=300');
+        res.end(body);
+      } catch (err) {
+        next(err);
+      }
+    });
+
+    // Startseite mit dynamischen Open-Graph-Tags (Vorschaubild, Beschreibung, laufender Song)
     app.get('/', async (req, res, next) => {
       try {
         const { getNowPlaying } = require('./lib/navidrome');
@@ -511,26 +540,18 @@ async function finalizeApp() {
           html = html.replace(/(<\/head>)/i, (m) => '\n<style>' + safeCss + '</style>\n' + m);
         }
 
-        const pageTitle = escapeHtml(profile.handle || profile.name || 'OpenWeb');
-        const pageDescription = escapeHtml(profile.bio || 'Alle wichtigen Links auf einen Blick.');
-        const imageUrl = profile.avatar_url 
-          ? (profile.avatar_url.startsWith('http') ? profile.avatar_url : `${absUrl}${profile.avatar_url}`) 
-          : `${absUrl}/icons/icon.svg`;
-        const image = imageUrl;
+        // Link-Vorschau (Open Graph / Twitter Card, Titel, Beschreibung, Embed-Farbe): lib/og.js
+        const ogSettings = await og.getSettings().catch(() => null);
+        let nowPlaying = '';
+        if (ogSettings?.show_now_playing !== false && og.isCrawler(req.get('user-agent'))) {
+          nowPlaying = await og.nowPlayingLine();
+        }
+        const meta = og.applyMetaTags(html, { profile, absUrl, settings: ogSettings, nowPlaying, theme: validateTheme(profile.theme) });
+        html = meta.html;
+        const image = meta.image;
 
         const pkg = require('./package.json');
-
-        html = html
-          .replace(/<meta property="og:site_name" content="[^"]*"\s*\/?>/, () => `<meta property="og:site_name" content="${escapeHtml(profile.name || profile.handle || 'OpenWeb')}">`)
-          .replace(/<meta property="og:title" content="[^"]*"\s*\/?>/, () => `<meta property="og:title" content="${escapeHtml(pageTitle)}">`)
-          .replace(/<meta property="og:description" content="[^"]*"\s*\/?>/, () => `<meta property="og:description" content="${escapeHtml(pageDescription)}">`)
-          .replace(/<meta property="og:image" content="[^"]*"\s*\/?>/, () => `<meta property="og:image" content="${escapeHtml(image)}">`)
-          .replace(/<meta property="og:url" content="[^"]*"\s*\/?>/, () => `<meta property="og:url" content="${escapeHtml(absUrl)}">`)
-          .replace(/<meta name="twitter:title" content="[^"]*"\s*\/?>/, () => `<meta name="twitter:title" content="${escapeHtml(pageTitle)}">`)
-          .replace(/<meta name="twitter:description" content="[^"]*"\s*\/?>/, () => `<meta name="twitter:description" content="${escapeHtml(pageDescription)}">`)
-          .replace(/<meta name="twitter:image" content="[^"]*"\s*\/?>/, () => `<meta name="twitter:image" content="${escapeHtml(image)}">`)
-          .replace(/<title>[^]*?<\/title>/, () => `<title>${escapeHtml(pageTitle)}</title>`)
-          .replace('__APP_VERSION__', pkg.version);
+        html = html.replace('__APP_VERSION__', pkg.version);
 
         // JSON-LD strukturierte Daten
         const jsonLd = {
@@ -542,7 +563,8 @@ async function finalizeApp() {
             alternateName: profile.name || null,
             description: profile.bio || null,
             url: absUrl,
-            image: profile.avatar_url || `${absUrl}/icons/icon.svg`,
+            // Nie die Data-URL des Profilbilds einbetten (bis 500 KB pro Seitenaufruf)
+            image: image || undefined,
             sameAs: [],
           },
         };

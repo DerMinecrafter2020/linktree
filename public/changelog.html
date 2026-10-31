@@ -50,6 +50,16 @@
     <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
 
     <div class="changelog-entry">
+      <h2>2026-10-31 — OpenWeb v3.7.0 (Link-Vorschau für Discord, WhatsApp & Co.)</h2>
+      <ul>
+        <li><strong>Link-Vorschau:</strong> Beim Teilen der Seite in Discord, WhatsApp, Telegram, X und Co. erscheint jetzt eine große Vorschau mit eigenem Vorschaubild. Bisher war als Bild eine SVG-Datei hinterlegt, die diese Dienste nicht anzeigen.</li>
+        <li><strong>Vorschaubild:</strong> Wird automatisch im Standard-Design aus Profilbild, Name, Bio und den ersten Links erzeugt und bei Änderungen aktualisiert. Alternativ lässt sich im Admin unter „Profil“ ein eigenes Bild hochladen (wird auf 1200 × 630 zugeschnitten). Die Karte dort zeigt, wie die Vorschau in Discord aussieht.</li>
+        <li><strong>Embed-Farbe & Song:</strong> Discord färbt den Rand der Vorschau in der Akzentfarbe des Designs. Läuft beim Teilen gerade Musik, steht auf Wunsch „🎵 Hört gerade …“ in der Beschreibung.</li>
+        <li><strong>Behoben:</strong> Sonderzeichen wie „&amp;“ in Name oder Bio wurden in Titel und Vorschau doppelt umgewandelt angezeigt. Das Profilbild wird nicht mehr bei jedem Seitenaufruf zusätzlich in den Seitenkopf eingebettet (schnellere Startseite). Die Seitenbeschreibung für Suchmaschinen entspricht jetzt der Bio.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <h2>2026-10-31 — OpenWeb v3.6.0 (Kontaktformular)</h2>
       <ul>
         <li><strong>Kontaktformular:</strong> Besucher können über einen neuen Briefumschlag-Knopf auf der Startseite eine Nachricht schreiben (Name, E-Mail, optionaler Betreff, Nachricht und Datenschutz-Einwilligung). Die Nachricht kommt per E-Mail über die vorhandenen SMTP-Einstellungen an; mit „Antworten“ geht die Antwort direkt an den Absender. Nachrichten werden nicht gespeichert.</li>

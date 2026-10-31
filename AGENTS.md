@@ -67,6 +67,7 @@ lib/
   alert.js                Benachrichtigungen (Webhook / SMTP) bei Login, Passwortwechsel, Backup-Fehler
   mailer.js               SMTP-Versand (nodemailer, Timeouts) fuer Alerts und Kontaktformular; Absender = SMTP-Benutzer
   contact.js              Kontaktformular: Einstellungen, Formular-Token, Pruefung, Versand (nichts wird gespeichert)
+  og.js                   Link-Vorschau: Meta-Tags (applyMetaTags), Vorschaubild speichern/pruefen, Crawler-Erkennung, Song-Zeile
   backup.js               Tägliche JSON-Backups nach ./backups (Rechte 600)
   maintenance.js          Aufräumen alter Sessions / Klickdaten und Monitor-Messpunkte (30 Tage)
   navidrome.js            Subsonic-API-Client inkl. Radiosender-Erkennung; saveSettings/getSettings (Anmeldedaten verschluesselt), testConnection/probeServer
@@ -75,7 +76,7 @@ lib/
   analytics.js            User-Agent-/Länder-Parsing für Statistiken
 db/
   migrate.js              Führt db/migrations/*.sql der Reihe nach aus (Tabelle `migrations`)
-  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 022: contact_settings)
+  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 023: og_settings)
   seed.js / reset.js      Initialdaten / Datenbank leeren
 public/                   Statische Dateien (werden 1:1 ausgeliefert!)
   index.html, admin.html, login.html, setup.html, changelog.html, impressum.html, datenschutz.html …
@@ -290,6 +291,16 @@ Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
 - Statistik (`GET /api/admin/stats/links?days=&tz=`): Zeitraum = volle Kalendertage inkl. heute in
   der Browser-Zeitzone `tz` (nur Namen aus `pg_timezone_names`, sonst UTC); `timeline[].day` kommt
   als Text `YYYY-MM-DD`, nie als DATE (würde in JSON um einen Tag verrutschen).
+
+**Link-Vorschau / Open Graph (`lib/og.js`, Karte in Admin > Profil):** `/` setzt Titel, Beschreibung,
+`og:*`/`twitter:*` und `theme-color` (Akzentfarbe des Standard-Designs = Embed-Farbe in Discord) ueber
+`og.applyMetaTags()`. Vorschaubild 1200x630 unter `/og-image.jpg?v=<Version>` aus `og_settings.image`
+(BYTEA, eigene Tabelle – nie in `profile`, sonst landet es in `SELECT *`). Erzeugt wird es im Admin per
+Canvas (`renderOgImage()` in `public/js/admin.js`, Farben per kurzem Umschalten von `data-theme` gelesen);
+`scheduleOgSync()` vergleicht einen Hash der Eingaben (`og_settings.image_key`) und erzeugt neu, ausser bei
+eigenem Bild (`custom`). Ohne Bild dient das Profilbild (kleine Karte). **Kein SVG als `og:image`** (Discord
+& Co. zeigen es nicht). „Hört gerade“ nur fuer Vorschau-Crawler (`og.isCrawler`), max. 0,8 s Wartezeit.
+Profilbild nie als Data-URL in Meta-Tags/JSON-LD einbetten.
 
 **Kontaktformular (`lib/contact.js`, Karte in Admin > Einstellungen > Benachrichtigungen):** Knopf
 `#contact-btn` auf der Startseite nur bei `profile.contact_enabled` (`/api/profile`: Formular an, SMTP

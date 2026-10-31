@@ -324,6 +324,40 @@
             <p id="instagram-status" class="hint" aria-live="polite"></p>
           </form>
         </div>
+
+        <div class="card-block" id="og-block">
+          <h3>🔗 Link-Vorschau (Discord, WhatsApp …)</h3>
+          <p>
+            So erscheint deine Seite, wenn du den Link teilst. Das Vorschaubild wird automatisch aus Profilbild,
+            Name, Bio, deinen ersten Links und dem Standard-Design erzeugt und bei Änderungen aktualisiert –
+            oder du lädst ein eigenes Bild hoch (wird auf 1200 × 630 zugeschnitten).
+          </p>
+          <div class="og-embed" id="og-embed" aria-label="Vorschau, wie die Seite in Discord erscheint">
+            <div class="og-embed-body">
+              <div class="og-embed-site" id="og-embed-site"></div>
+              <div class="og-embed-title" id="og-embed-title"></div>
+              <div class="og-embed-desc" id="og-embed-desc"></div>
+              <div class="og-embed-media">
+                <img id="og-embed-img" alt="Vorschaubild der Seite" width="1200" height="630" hidden />
+                <div id="og-embed-placeholder" class="og-embed-placeholder">Noch kein Vorschaubild</div>
+              </div>
+            </div>
+          </div>
+          <p id="og-status" class="hint" aria-live="polite"></p>
+          <form class="form" id="og-options-form">
+            <label class="row">
+              <input type="checkbox" name="show_now_playing" />
+              <span>Laufenden Song in der Vorschau erwähnen („🎵 Hört gerade …“) – nur wenn beim Teilen gerade Musik läuft</span>
+            </label>
+          </form>
+          <div class="form-actions og-actions">
+            <input type="file" id="og-upload-input" accept="image/png,image/jpeg,image/webp" hidden />
+            <button type="button" id="og-upload-btn" class="btn ghost">Eigenes Bild hochladen</button>
+            <button type="button" id="og-auto-btn" class="btn ghost" hidden>Wieder automatisch erzeugen</button>
+            <button type="button" id="og-regen-btn" class="btn">Neu erzeugen</button>
+          </div>
+          <p class="hint">Discord und andere Dienste speichern Vorschauen eine Weile zwischen. Nach Änderungen erscheint die neue Vorschau meist erst beim nächsten Teilen bzw. nach einigen Stunden.</p>
+        </div>
       </section>
 
       <!-- TAB: MUSIK (NAVIDROME) -->

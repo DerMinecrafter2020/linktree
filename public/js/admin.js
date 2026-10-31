@@ -13,6 +13,8 @@
   const TAB_TITLES = { links: 'Links', stats: 'Statistik', apikeys: 'API-Keys', profile: 'Profil', music: 'Musik', data: 'Daten', settings: 'Einstellungen', audit: 'Audit-Log', monitor: 'Monitor' };
 
   const state = { profile: null, links: [], navidrome: null, musicassistant: null, musicassistantUsers: [], spotify: null };
+  // Link-Vorschau: wird von bindOgPreview() gesetzt (Profil/Links geaendert -> Vorschaubild pruefen)
+  let scheduleOgSync = () => {};
 
   // Musik-Quellen: Anzeigename + Logo (Dashboard Icons ueber den eigenen Proxy)
   const MUSIC_SOURCES = {
@@ -331,6 +333,7 @@
         state.profile = await window.api.getAdminProfile();
         window.icons.applyStyle(state.profile?.icon_style);
         renderLinks();
+        scheduleOgSync();
         toast('✅ Profil gespeichert');
       } catch (err) { toast('Fehler: ' + err.message, true); }
     });
@@ -379,7 +382,8 @@
     }
 
     renderPlayerProgressForm();
-    
+    scheduleOgSync();
+
     const fLegal = $('#legal-form');
     if (fLegal) {
       fLegal.impressum_text.value = state.profile.impressum_text || '';
@@ -3433,7 +3437,7 @@
   }
 
   async function reloadCategories() { state.categories = await window.api.getAdminLinkCategories(); }
-  async function reloadLinks() { state.links = await window.api.getAdminLinks(); renderLinks(); }
+  async function reloadLinks() { state.links = await window.api.getAdminLinks(); renderLinks(); scheduleOgSync(); }
   async function reloadAll() {
     [state.profile, state.links, state.categories] = await Promise.all([
       window.api.getAdminProfile(),
@@ -3656,6 +3660,395 @@
     pollTimer = setInterval(() => { if (musicVisible()) tick(); }, 3000);
     document.addEventListener('admin-tab-change', (e) => { if (e.detail === 'music') tick(); });
     document.addEventListener('visibilitychange', () => { if (musicVisible()) tick(); });
+  }
+
+  // ---------- Link-Vorschau (Open Graph): Vorschaubild erzeugen ----------
+  // Zeichnet ein 1200x630-Bild im Standard-Design der Startseite (Farben aus css/themes.css,
+  // per kurzem Umschalten von data-theme gelesen) und laedt es als JPEG hoch (lib/og.js).
+  // Automatisch neu, wenn sich Profil, Links oder Design aendern (Schluessel = Hash der Eingaben),
+  // ausser es ist ein eigenes Bild hochgeladen.
+  const OG_W = 1200;
+  const OG_H = 630;
+  const OG_RENDER_VERSION = 1;
+
+  // CSS-Variablen eines Themes lesen, ohne dass die Seite sichtbar umschaltet (kein Frame dazwischen)
+  function readThemeTokens(theme) {
+    const root = document.documentElement;
+    const prev = root.getAttribute('data-theme');
+    if (theme && theme !== 'dark') root.setAttribute('data-theme', theme); else root.removeAttribute('data-theme');
+    const cs = getComputedStyle(root);
+    const v = (name, fallback = '') => cs.getPropertyValue(name).trim() || fallback;
+    const tokens = {
+      base: v('--ow-theme-color', v('--md-surface-container-lowest')),
+      surfaceLow: v('--md-surface-container-low'),
+      surfaceHigh: v('--md-surface-container-highest'),
+      cardBg: v('--ow-card-bg'),
+      primary: v('--md-primary'),
+      primaryContainer: v('--md-primary-container'),
+      onPrimaryContainer: v('--md-on-primary-container'),
+      secondaryContainer: v('--md-secondary-container'),
+      onSecondaryContainer: v('--md-on-secondary-container'),
+      tertiary: v('--md-tertiary'),
+      onSurface: v('--md-on-surface'),
+      onSurfaceVariant: v('--md-on-surface-variant'),
+      outlineVariant: v('--md-outline-variant'),
+      blob1: v('--ow-blob-1', v('--md-primary-container')),
+      blob2: v('--ow-blob-2', v('--md-tertiary-container')),
+      blob3: v('--ow-blob-3', v('--md-secondary-container')),
+      aurora: parseFloat(v('--ow-aurora-opacity', '0.35')) || 0.35,
+      radius: parseFloat(v('--md-shape-xl', '28')) || 28,
+      font: v('--md-font', 'sans-serif'),
+    };
+    if (prev) root.setAttribute('data-theme', prev); else root.removeAttribute('data-theme');
+    return tokens;
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    const rr = Math.max(0, Math.min(r, h / 2, w / 2));
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+  }
+
+  function fitText(ctx, text, maxWidth) {
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    let t = text;
+    while (t.length > 1 && ctx.measureText(t + '…').width > maxWidth) t = t.slice(0, -1);
+    return t.trimEnd() + '…';
+  }
+
+  function wrapText(ctx, text, maxWidth, maxLines) {
+    const words = String(text || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+    const lines = [];
+    let line = '';
+    for (let i = 0; i < words.length; i++) {
+      const test = line ? `${line} ${words[i]}` : words[i];
+      if (ctx.measureText(test).width <= maxWidth) { line = test; continue; }
+      if (line) lines.push(line);
+      line = words[i];
+      if (lines.length === maxLines) break;
+    }
+    if (line && lines.length < maxLines) lines.push(line);
+    if (lines.length === maxLines && words.join(' ') !== lines.join(' ')) {
+      lines[maxLines - 1] = fitText(ctx, lines[maxLines - 1] + ' …', maxWidth);
+    }
+    return lines.map(l => fitText(ctx, l, maxWidth));
+  }
+
+  function loadImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Bild konnte nicht geladen werden'));
+      img.src = src;
+    });
+  }
+
+  // Bild "cover" in ein Rechteck zeichnen
+  function drawCover(ctx, img, x, y, w, h) {
+    const scale = Math.max(w / img.width, h / img.height);
+    const sw = w / scale, sh = h / scale;
+    ctx.drawImage(img, (img.width - sw) / 2, (img.height - sh) / 2, sw, sh, x, y, w, h);
+  }
+
+  function ogInputs() {
+    const p = state.profile || {};
+    const theme = window.OpenWebThemes?.isTheme(p.theme) ? p.theme : 'dark';
+    const links = (state.links || []).filter(l => l.is_active !== false).slice(0, 4).map(l => String(l.title || '').slice(0, 40));
+    return {
+      v: OG_RENDER_VERSION,
+      title: p.handle || p.name || 'OpenWeb',
+      name: p.name || '',
+      bio: p.bio || '',
+      avatar: p.avatar_url || '',
+      initials: p.avatar || '',
+      theme,
+      links,
+      linkCount: (state.links || []).filter(l => l.is_active !== false).length,
+      host: location.host,
+    };
+  }
+
+  async function ogKey(inputs) {
+    const data = new TextEncoder().encode(JSON.stringify(inputs));
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    return [...new Uint8Array(hash)].slice(0, 16).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function renderOgImage(inputs) {
+    const t = readThemeTokens(inputs.theme);
+    const family = t.font;
+    try {
+      await Promise.all([`600 64px ${family}`, `500 34px ${family}`, `400 30px ${family}`].map(f => document.fonts.load(f)));
+    } catch { /* Ersatzschrift */ }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = OG_W;
+    canvas.height = OG_H;
+    const ctx = canvas.getContext('2d');
+
+    // Hintergrund + weiche Farbflaechen (wie die Startseite)
+    ctx.fillStyle = t.base;
+    ctx.fillRect(0, 0, OG_W, OG_H);
+    const blobAlpha = Math.min(0.95, t.aurora * 1.35);
+    const blob = (x, y, r, color) => {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, color);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = blobAlpha;
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, OG_W, OG_H);
+      ctx.globalAlpha = 1;
+    };
+    blob(140, 90, 560, t.blob1);
+    blob(1120, 120, 520, t.blob2);
+    blob(900, 700, 560, t.blob3);
+
+    // Karte
+    const card = { x: 56, y: 56, w: OG_W - 112, h: OG_H - 112 };
+    const radius = Math.min(48, Math.max(12, t.radius * 1.4));
+    const solid = /^(#|rgb|hsl|color\()/i.test(t.cardBg);
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.28)';
+    ctx.shadowBlur = 40;
+    ctx.shadowOffsetY = 12;
+    roundRect(ctx, card.x, card.y, card.w, card.h, radius);
+    ctx.fillStyle = solid ? t.cardBg : t.surfaceLow;
+    ctx.fill();
+    ctx.restore();
+    if (!solid) {
+      // Glas: heller Verlauf + Lichtkante
+      const g = ctx.createLinearGradient(card.x, card.y, card.x + card.w, card.y + card.h);
+      g.addColorStop(0, 'rgba(255,255,255,0.22)');
+      g.addColorStop(0.45, 'rgba(255,255,255,0.06)');
+      g.addColorStop(1, 'rgba(255,255,255,0.12)');
+      roundRect(ctx, card.x, card.y, card.w, card.h, radius);
+      ctx.fillStyle = g;
+      ctx.fill();
+    }
+    roundRect(ctx, card.x + 0.5, card.y + 0.5, card.w - 1, card.h - 1, radius);
+    ctx.strokeStyle = t.outlineVariant;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Profilbild mit Ring
+    const cx = card.x + 200, cy = OG_H / 2, r = 138;
+    const ring = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+    ring.addColorStop(0, t.primary);
+    ring.addColorStop(1, t.tertiary);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 9, 0, Math.PI * 2);
+    ctx.fillStyle = ring;
+    ctx.fill();
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+    let drewAvatar = false;
+    if (/^data:image\/(png|jpeg|webp|gif);base64,/i.test(inputs.avatar)) {
+      try { drawCover(ctx, await loadImage(inputs.avatar), cx - r, cy - r, r * 2, r * 2); drewAvatar = true; } catch { /* Initialen */ }
+    }
+    if (!drewAvatar) {
+      ctx.fillStyle = t.primaryContainer;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      ctx.fillStyle = t.onPrimaryContainer;
+      ctx.font = `500 110px ${family}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText((inputs.initials || inputs.title.slice(0, 2)).toUpperCase().slice(0, 2), cx, cy + 4);
+    }
+    ctx.restore();
+
+    // Text
+    const tx = card.x + 410;
+    const tw = card.x + card.w - 56 - tx;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = t.onSurface;
+    ctx.font = `600 64px ${family}`;
+    let y = card.y + 150;
+    ctx.fillText(fitText(ctx, inputs.title, tw), tx, y);
+    if (inputs.name && inputs.name !== inputs.title) {
+      y += 52;
+      ctx.fillStyle = t.primary;
+      ctx.font = `500 34px ${family}`;
+      ctx.fillText(fitText(ctx, inputs.name, tw), tx, y);
+    }
+    if (inputs.bio) {
+      ctx.fillStyle = t.onSurfaceVariant;
+      ctx.font = `400 30px ${family}`;
+      y += 56;
+      for (const line of wrapText(ctx, inputs.bio, tw, 2)) { ctx.fillText(line, tx, y); y += 40; }
+    }
+
+    // Erste Links als Chips
+    const chipY = card.y + card.h - 150;
+    let chipX = tx;
+    ctx.font = `500 24px ${family}`;
+    const chips = inputs.links.filter(Boolean).slice(0, 3);
+    const rest = inputs.linkCount - chips.length;
+    const chipTexts = chips.map(c => fitText(ctx, c, 200));
+    if (rest > 0) chipTexts.push(`+${rest}`);
+    for (const text of chipTexts) {
+      const w = ctx.measureText(text).width + 40;
+      if (chipX + w > tx + tw) break;
+      roundRect(ctx, chipX, chipY, w, 50, 25);
+      ctx.fillStyle = t.secondaryContainer;
+      ctx.fill();
+      ctx.fillStyle = t.onSecondaryContainer;
+      ctx.fillText(text, chipX + 20, chipY + 33);
+      chipX += w + 12;
+    }
+
+    // Domain
+    ctx.fillStyle = t.onSurfaceVariant;
+    ctx.font = `500 26px ${family}`;
+    ctx.fillText(fitText(ctx, inputs.host, tw), tx, card.y + card.h - 44);
+
+    // JPEG, bei Bedarf kleiner (Server-Grenze 700 KB)
+    for (const q of [0.9, 0.82, 0.72, 0.6]) {
+      const url = canvas.toDataURL('image/jpeg', q);
+      if (url.length * 0.75 < 680 * 1024) return url;
+    }
+    throw new Error('Vorschaubild zu groß');
+  }
+
+  // Eigenes Bild auf 1200x630 zuschneiden
+  async function prepareCustomOgImage(file) {
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) throw new Error('Bitte ein PNG-, JPEG- oder WebP-Bild wählen.');
+    if (file.size > 10 * 1024 * 1024) throw new Error('Das Bild ist zu groß (höchstens 10 MB).');
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await loadImage(url);
+      const canvas = document.createElement('canvas');
+      canvas.width = OG_W;
+      canvas.height = OG_H;
+      drawCover(canvas.getContext('2d'), img, 0, 0, OG_W, OG_H);
+      for (const q of [0.9, 0.82, 0.72, 0.6]) {
+        const data = canvas.toDataURL('image/jpeg', q);
+        if (data.length * 0.75 < 680 * 1024) return data;
+      }
+      throw new Error('Das Bild lässt sich nicht klein genug speichern.');
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  function bindOgPreview() {
+    const block = $('#og-block');
+    if (!block) return;
+    const statusEl = $('#og-status');
+    const img = $('#og-embed-img');
+    const placeholder = $('#og-embed-placeholder');
+    const optionsForm = $('#og-options-form');
+    const uploadInput = $('#og-upload-input');
+    const autoBtn = $('#og-auto-btn');
+    const regenBtn = $('#og-regen-btn');
+    let og = null;
+    let busy = false;
+    let timer = null;
+
+    const fmtDate = (d) => d ? new Date(d).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+
+    function renderEmbed() {
+      const p = state.profile || {};
+      $('#og-embed-site').textContent = p.name || p.handle || 'OpenWeb';
+      $('#og-embed-title').textContent = p.handle || p.name || 'OpenWeb';
+      $('#og-embed-desc').textContent = p.bio || 'Alle wichtigen Links auf einen Blick.';
+      const theme = window.OpenWebThemes?.isTheme(p.theme) ? p.theme : 'dark';
+      $('#og-embed').style.setProperty('--og-accent', readThemeTokens(theme).primary);
+      const hasImage = Boolean(og?.image_url);
+      img.hidden = !hasImage;
+      placeholder.hidden = hasImage;
+      if (hasImage && img.getAttribute('src') !== og.image_url) img.src = og.image_url;
+      if (og) {
+        optionsForm.show_now_playing.checked = og.show_now_playing !== false;
+        autoBtn.hidden = !og.custom;
+        regenBtn.hidden = og.custom;
+        if (!busy) {
+          statusEl.textContent = !og.has_image
+            ? 'Noch kein Vorschaubild – wird automatisch erzeugt.'
+            : og.custom
+              ? `Eigenes Bild (hochgeladen am ${fmtDate(og.updated_at)}).`
+              : `Automatisch erzeugt am ${fmtDate(og.updated_at)}; aktualisiert sich bei Änderungen an Profil, Links oder Design.`;
+        }
+      }
+    }
+
+    async function regenerate({ force = false, silent = false } = {}) {
+      if (busy || !og || !state.profile) return;
+      if (og.custom && !force) return;
+      const inputs = ogInputs();
+      const key = await ogKey(inputs);
+      if (!force && og.has_image && og.image_key === key) return;
+      busy = true;
+      statusEl.textContent = 'Vorschaubild wird erzeugt …';
+      try {
+        const dataUrl = await renderOgImage(inputs);
+        og = await window.api.saveOgImage(dataUrl, key, false);
+        if (!silent) toast('🔗 Vorschaubild aktualisiert');
+      } catch (err) {
+        statusEl.textContent = 'Vorschaubild konnte nicht erzeugt werden: ' + err.message;
+        if (!silent) toast('Fehler: ' + err.message, true);
+        busy = false;
+        return;
+      }
+      busy = false;
+      renderEmbed();
+    }
+
+    scheduleOgSync = () => {
+      if (!og) return;
+      renderEmbed();
+      clearTimeout(timer);
+      timer = setTimeout(() => regenerate({ silent: true }), 1200);
+    };
+
+    regenBtn.addEventListener('click', () => regenerate({ force: true }));
+    autoBtn.addEventListener('click', async () => {
+      og = { ...og, custom: false };
+      await regenerate({ force: true });
+    });
+    $('#og-upload-btn').addEventListener('click', () => uploadInput.click());
+    uploadInput.addEventListener('change', async () => {
+      const file = uploadInput.files?.[0];
+      uploadInput.value = '';
+      if (!file) return;
+      busy = true;
+      statusEl.textContent = 'Bild wird vorbereitet …';
+      try {
+        const dataUrl = await prepareCustomOgImage(file);
+        og = await window.api.saveOgImage(dataUrl, null, true);
+        toast('🔗 Eigenes Vorschaubild gespeichert');
+      } catch (err) {
+        toast('Fehler: ' + err.message, true);
+      } finally {
+        busy = false;
+        renderEmbed();
+      }
+    });
+    optionsForm.show_now_playing.addEventListener('change', async (e) => {
+      try {
+        og = await window.api.saveOgOptions({ show_now_playing: e.target.checked });
+        toast('✅ Gespeichert');
+      } catch (err) {
+        e.target.checked = !e.target.checked;
+        toast('Fehler: ' + err.message, true);
+      }
+    });
+
+    (async () => {
+      try {
+        og = await window.api.getOgSettings();
+        scheduleOgSync();
+      } catch (err) {
+        statusEl.textContent = 'Link-Vorschau konnte nicht geladen werden: ' + err.message;
+      }
+    })();
   }
 
   async function initApp() {
@@ -4119,6 +4512,7 @@
     bindMusicAssistant();
     bindSpotify();
     bindInstagram();
+    bindOgPreview();
     bindMonitor();
 
     if (!appInitialized) {
