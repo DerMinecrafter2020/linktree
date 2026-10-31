@@ -1,0 +1,355 @@
+/* =========================================================
+   OpenWeb — Themes (Startseite, Unterseiten, Admin, Login)
+   ---------------------------------------------------------
+   Jedes Theme setzt die M3-Farbrollen (--md-*) und die Material-Tokens (--ow-*).
+   Die Standardwerte ("Dunkel") stehen in styles.css bzw. css/admin.css unter :root;
+   hier nur die Abweichungen. Selektor :root[data-theme] (Spezifitaet 0,2,0), damit
+   die Reihenfolge der Stylesheets keine Rolle spielt. Gesetzt wird data-theme auf
+   <html> von js/theme-init.js (gespeicherte Wahl) bzw. serverseitig (Standard-Design).
+
+   Material-Tokens (Bedeutung, Standard in styles.css/admin.css):
+     --ow-page-bg          Seitenhintergrund (Farbe oder Verlauf)
+     --ow-blob-1..3        Farben der weichen Hintergrund-Flaechen (Startseite)
+     --ow-aurora-opacity   Deckkraft dieser Flaechen
+     --ow-card-bg          Hauptkarte (Startseite) / Karten im Admin
+     --ow-card-backdrop    backdrop-filter der Karten (Glas/Mica), sonst none
+     --ow-card-ring        Innenrand/Lichtkante (inset box-shadow)
+     --ow-card-shadow      Schatten der Karten
+     --ow-card-radius      Ecken der Karten
+     --ow-sheen            Lichtreflex ueber der Karte (Verlauf oder none)
+     --ow-tile-*           Link-Kacheln (bg, hover-bg, ring, radius, hover-radius, hover-transform)
+     --ow-icon-bg/-radius  Icon-Kachel in Links
+     --ow-player-bg/-radius Now-Playing-Karte
+     --ow-btn-radius       Buttons
+     --ow-nav-radius       Navigation im Admin
+     --ow-overlay-bg/-backdrop Dialoge, Menues, Tooltips
+     --ow-theme-color      Farbe fuer <meta name="theme-color">
+   ========================================================= */
+
+/* ---------- Midnight (blauer Seed) ---------- */
+:root[data-theme="midnight"] {
+  --md-primary: #9ecaff;
+  --md-on-primary: #003258;
+  --md-primary-container: #00497d;
+  --md-on-primary-container: #d1e4ff;
+  --md-secondary: #bbc7db;
+  --md-on-secondary: #253140;
+  --md-secondary-container: #3b4858;
+  --md-on-secondary-container: #d7e3f7;
+  --md-tertiary: #d6bee4;
+  --md-on-tertiary: #3b2948;
+  --md-tertiary-container: #523f5f;
+  --md-on-tertiary-container: #f2daff;
+  --md-surface: #111418;
+  --md-surface-dim: #111418;
+  --md-surface-bright: #37393e;
+  --md-surface-container-lowest: #0c0e12;
+  --md-surface-container-low: #191c20;
+  --md-surface-container: #1d2024;
+  --md-surface-container-high: #282a2f;
+  --md-surface-container-highest: #33353a;
+  --md-on-surface: #e1e2e8;
+  --md-on-surface-variant: #c3c7cf;
+  --md-outline: #8d9199;
+  --md-outline-variant: #43474e;
+  --md-inverse-surface: #e1e2e8;
+  --md-inverse-on-surface: #2e3135;
+  --md-inverse-primary: #0061a4;
+  --ow-theme-color: #0c0e12;
+}
+
+/* ---------- Sunset (oranger Seed) ---------- */
+:root[data-theme="sunset"] {
+  --md-primary: #ffb781;
+  --md-on-primary: #4f2500;
+  --md-primary-container: #6f3800;
+  --md-on-primary-container: #ffdcc5;
+  --md-secondary: #e5bfa8;
+  --md-on-secondary: #422b1b;
+  --md-secondary-container: #5b4131;
+  --md-on-secondary-container: #ffdcc5;
+  --md-tertiary: #cac98e;
+  --md-on-tertiary: #323205;
+  --md-tertiary-container: #484a1b;
+  --md-on-tertiary-container: #e7e5a8;
+  --md-surface: #1a120d;
+  --md-surface-dim: #1a120d;
+  --md-surface-bright: #423731;
+  --md-surface-container-lowest: #140d08;
+  --md-surface-container-low: #221a15;
+  --md-surface-container: #271e18;
+  --md-surface-container-high: #322822;
+  --md-surface-container-highest: #3d332c;
+  --md-on-surface: #f0dfd7;
+  --md-on-surface-variant: #d6c3b7;
+  --md-outline: #9f8d83;
+  --md-outline-variant: #52443b;
+  --md-inverse-surface: #f0dfd7;
+  --md-inverse-on-surface: #382e29;
+  --md-inverse-primary: #8e4e14;
+  --ow-theme-color: #140d08;
+}
+
+/* ---------- Hell (M3 Light, violetter Seed) ---------- */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --md-primary: #6750a4;
+  --md-on-primary: #ffffff;
+  --md-primary-container: #eaddff;
+  --md-on-primary-container: #21005d;
+  --md-secondary: #625b71;
+  --md-on-secondary: #ffffff;
+  --md-secondary-container: #e8def8;
+  --md-on-secondary-container: #1d192b;
+  --md-tertiary: #7d5260;
+  --md-on-tertiary: #ffffff;
+  --md-tertiary-container: #ffd8e4;
+  --md-on-tertiary-container: #31111d;
+  --md-error: #b3261e;
+  --md-on-error: #ffffff;
+  --md-error-container: #f9dedc;
+  --md-on-error-container: #410e0b;
+  --md-surface: #fef7ff;
+  --md-surface-dim: #ded8e1;
+  --md-surface-bright: #fef7ff;
+  --md-surface-container-lowest: #ffffff;
+  --md-surface-container-low: #f7f2fa;
+  --md-surface-container: #f3edf7;
+  --md-surface-container-high: #ece6f0;
+  --md-surface-container-highest: #e6e0e9;
+  --md-on-surface: #1d1b20;
+  --md-on-surface-variant: #49454f;
+  --md-outline: #79747e;
+  --md-outline-variant: #cac4d0;
+  --md-inverse-surface: #322f35;
+  --md-inverse-on-surface: #f5eff7;
+  --md-inverse-primary: #d0bcff;
+  --md-success: #2f6b1f;
+  --md-success-container: #c3efad;
+  --md-on-success-container: #072100;
+  --md-warning: #7a5900;
+  --md-warning-container: #ffdf9e;
+  --md-on-warning-container: #261a00;
+  --md-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.12), 0 1px 3px 1px rgba(0, 0, 0, 0.06);
+  --md-elevation-2: 0 1px 2px rgba(0, 0, 0, 0.12), 0 2px 6px 2px rgba(0, 0, 0, 0.08);
+  --md-elevation-3: 0 4px 8px 3px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.12);
+
+  --ow-page-bg: var(--md-surface-container);
+  --ow-card-bg: var(--md-surface-container-lowest);
+  --ow-card-shadow: var(--md-elevation-2);
+  --ow-tile-bg: var(--md-surface-container-low);
+  --ow-tile-hover-bg: var(--md-surface-container-high);
+  --ow-tile-ring: inset 0 0 0 1px var(--md-outline-variant);
+  --ow-icon-bg: var(--md-primary);
+  --ow-icon-color-bg: var(--md-surface-container-lowest);
+  --ow-icon-color-fg: var(--md-primary);
+  --ow-icon-color-ring: inset 0 0 0 1px var(--md-outline-variant);
+  --ow-player-bg: var(--md-surface-container);
+  --ow-aurora-opacity: 0.55;
+  --ow-theme-color: #f3edf7;
+}
+
+/* ---------- Windows 11 (Mica, Fluent 2, dunkel) ---------- */
+:root[data-theme="win11"] {
+  --md-primary: #60cdff;
+  --md-on-primary: #00263a;
+  --md-primary-container: #004a6e;
+  --md-on-primary-container: #c7e9ff;
+  --md-secondary: #d0d6de;
+  --md-on-secondary: #1f2328;
+  --md-secondary-container: rgba(255, 255, 255, 0.0837);
+  --md-on-secondary-container: #ffffff;
+  --md-tertiary: #b9a8ff;
+  --md-on-tertiary: #24145e;
+  --md-tertiary-container: #3d2f7a;
+  --md-on-tertiary-container: #e6deff;
+  --md-error: #ff99a4;
+  --md-on-error: #5a0010;
+  --md-error-container: #6b1220;
+  --md-on-error-container: #ffdadd;
+  --md-surface: #202020;
+  --md-surface-dim: #1c1c1c;
+  --md-surface-bright: #3a3a3a;
+  --md-surface-container-lowest: #1a1a1a;
+  --md-surface-container-low: rgba(255, 255, 255, 0.0326);
+  --md-surface-container: rgba(255, 255, 255, 0.05);
+  --md-surface-container-high: rgba(255, 255, 255, 0.0605);
+  --md-surface-container-highest: rgba(255, 255, 255, 0.0837);
+  --md-on-surface: #ffffff;
+  --md-on-surface-variant: #c5c5c5;
+  --md-outline: #8a8a8a;
+  --md-outline-variant: rgba(255, 255, 255, 0.0837);
+  --md-inverse-surface: #f3f3f3;
+  --md-inverse-on-surface: #1f1f1f;
+  --md-inverse-primary: #005fb8;
+  --md-success: #6ccb5f;
+  --md-success-container: #1f3d1a;
+  --md-warning: #fce100;
+  --md-warning-container: #433519;
+
+  --md-shape-xs: 4px;
+  --md-shape-sm: 4px;
+  --md-shape-md: 6px;
+  --md-shape-lg: 8px;
+  --md-shape-xl: 8px;
+  --md-ease: cubic-bezier(0, 0, 0, 1);
+  --md-ease-emphasized: cubic-bezier(0.1, 0.9, 0.2, 1);
+  --md-elevation-1: 0 2px 4px rgba(0, 0, 0, 0.26);
+  --md-elevation-2: 0 4px 8px rgba(0, 0, 0, 0.26);
+  --md-elevation-3: 0 8px 16px rgba(0, 0, 0, 0.26), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --md-font: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+
+  --ow-page-bg:
+    radial-gradient(120% 90% at 20% 110%, #0f4ea8 0%, transparent 55%),
+    radial-gradient(90% 70% at 90% -10%, #2b3f8f 0%, transparent 55%),
+    linear-gradient(160deg, #0b1226 0%, #101935 55%, #0a1022 100%);
+  --ow-blob-1: #1667d8;
+  --ow-blob-2: #3a5bd9;
+  --ow-blob-3: #0f87c9;
+  --ow-aurora-opacity: 0.5;
+  --ow-card-bg: rgba(32, 32, 32, 0.8);
+  --ow-card-backdrop: blur(60px) saturate(125%);
+  --ow-card-ring: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --ow-card-shadow: 0 32px 64px rgba(0, 0, 0, 0.37), 0 2px 21px rgba(0, 0, 0, 0.37);
+  --ow-card-radius: 8px;
+  --ow-tile-bg: rgba(255, 255, 255, 0.0605);
+  --ow-tile-hover-bg: rgba(255, 255, 255, 0.0837);
+  --ow-tile-ring: inset 0 0 0 1px rgba(255, 255, 255, 0.0578), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --ow-tile-radius: 6px;
+  --ow-tile-hover-radius: 6px;
+  --ow-icon-bg: rgba(255, 255, 255, 0.0605);
+  --ow-icon-radius: 4px;
+  --ow-player-bg: rgba(255, 255, 255, 0.04);
+  --ow-player-radius: 8px;
+  --ow-btn-radius: 4px;
+  --ow-nav-radius: 4px;
+  --ow-overlay-bg: rgba(44, 44, 44, 0.86);
+  --ow-overlay-backdrop: blur(30px) saturate(150%);
+  --ow-sidebar-bg: rgba(28, 28, 28, 0.62);
+  --ow-sidebar-backdrop: blur(60px) saturate(125%);
+  --ow-theme-color: #0b1226;
+}
+
+/* ---------- Liquid Glass (durchscheinendes Glas auf farbigem Hintergrund) ---------- */
+:root[data-theme="glass"] {
+  --md-primary: #9cd0ff;
+  --md-on-primary: #00253f;
+  --md-primary-container: rgba(120, 180, 255, 0.28);
+  --md-on-primary-container: #ffffff;
+  --md-secondary: #dfe3ff;
+  --md-on-secondary: #1b1f3a;
+  --md-secondary-container: rgba(255, 255, 255, 0.16);
+  --md-on-secondary-container: #ffffff;
+  --md-tertiary: #ffb8dc;
+  --md-on-tertiary: #4a0d2f;
+  --md-tertiary-container: rgba(255, 130, 200, 0.26);
+  --md-on-tertiary-container: #ffffff;
+  --md-error: #ffb4ab;
+  --md-on-error: #690005;
+  --md-error-container: rgba(255, 90, 90, 0.3);
+  --md-on-error-container: #ffffff;
+  --md-surface: #14122e;
+  --md-surface-dim: #100e26;
+  --md-surface-bright: #2c2a52;
+  --md-surface-container-lowest: #0e0c22;
+  --md-surface-container-low: rgba(255, 255, 255, 0.07);
+  --md-surface-container: rgba(255, 255, 255, 0.1);
+  --md-surface-container-high: rgba(255, 255, 255, 0.13);
+  --md-surface-container-highest: rgba(255, 255, 255, 0.17);
+  --md-on-surface: #ffffff;
+  --md-on-surface-variant: rgba(255, 255, 255, 0.78);
+  --md-outline: rgba(255, 255, 255, 0.5);
+  --md-outline-variant: rgba(255, 255, 255, 0.2);
+  --md-inverse-surface: #f4f4ff;
+  --md-inverse-on-surface: #1d1b33;
+  --md-inverse-primary: #0060b0;
+  --md-success: #a6f0b0;
+  --md-success-container: rgba(80, 220, 120, 0.25);
+  --md-on-success-container: #ffffff;
+  --md-warning: #ffe08a;
+  --md-warning-container: rgba(255, 200, 60, 0.25);
+  --md-on-warning-container: #ffffff;
+
+  --md-shape-md: 16px;
+  --md-shape-lg: 22px;
+  --md-shape-xl: 34px;
+  --md-elevation-1: 0 4px 16px rgba(10, 5, 40, 0.18);
+  --md-elevation-2: 0 8px 28px rgba(10, 5, 40, 0.24);
+  --md-elevation-3: 0 18px 50px rgba(10, 5, 40, 0.35);
+  --md-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI Variable Text', 'Segoe UI', system-ui, Roboto, sans-serif;
+
+  --ow-page-bg:
+    radial-gradient(60% 50% at 12% 18%, #ff5e8a 0%, transparent 70%),
+    radial-gradient(55% 50% at 88% 12%, #5a7dff 0%, transparent 70%),
+    radial-gradient(60% 55% at 78% 88%, #ffad42 0%, transparent 70%),
+    radial-gradient(55% 50% at 18% 92%, #1fd1b0 0%, transparent 70%),
+    linear-gradient(135deg, #2a1b6e 0%, #3b1d6b 50%, #1a2a6e 100%);
+  --ow-blob-1: #ff4f9a;
+  --ow-blob-2: #4d7bff;
+  --ow-blob-3: #ffb03a;
+  --ow-aurora-opacity: 0.7;
+  /* Weiss-Verlauf fuer das Glas, darunter eine leichte dunkle Toenung fuer lesbaren Text */
+  --ow-card-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.07) 45%, rgba(255, 255, 255, 0.11) 100%), rgba(24, 16, 70, 0.24);
+  --ow-card-backdrop: blur(28px) saturate(180%);
+  --ow-card-ring:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+  --ow-card-shadow: 0 24px 60px rgba(15, 8, 50, 0.35);
+  --ow-card-radius: 34px;
+  --ow-sheen: linear-gradient(115deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 32%, rgba(255, 255, 255, 0) 70%, rgba(255, 255, 255, 0.1) 100%);
+  --ow-tile-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.08));
+  --ow-tile-hover-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.13));
+  --ow-tile-ring: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  --ow-tile-radius: 22px;
+  --ow-tile-hover-radius: 26px;
+  --ow-tile-hover-transform: translateY(-1px) scale(1.012);
+  --ow-icon-bg: rgba(255, 255, 255, 0.18);
+  --ow-icon-radius: 14px;
+  --ow-player-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.07));
+  --ow-player-radius: 28px;
+  --ow-overlay-bg: rgba(40, 32, 90, 0.55);
+  --ow-overlay-backdrop: blur(30px) saturate(180%);
+  --ow-sidebar-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04)), rgba(22, 14, 60, 0.38);
+  --ow-sidebar-backdrop: blur(28px) saturate(170%);
+  --ow-admin-dim: rgba(16, 10, 46, 0.5);
+  --ow-theme-color: #2a1b6e;
+}
+
+/* Optionen nativer Auswahllisten koennen nicht durchscheinen – sonst unlesbar */
+:root[data-theme="glass"] option,
+:root[data-theme="win11"] option {
+  background-color: var(--md-surface);
+  color: var(--md-on-surface);
+}
+
+/* Weniger Transparenz gewuenscht oder kein backdrop-filter: deckende Flaechen */
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-theme="glass"] {
+    --ow-card-bg: #2a2552;
+    --ow-card-backdrop: none;
+    --ow-overlay-bg: #2a2552;
+    --ow-sheen: none;
+  }
+  :root[data-theme="win11"] {
+    --ow-card-bg: #202020;
+    --ow-card-backdrop: none;
+    --ow-overlay-bg: #2c2c2c;
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-theme="glass"] { --ow-card-bg: rgba(42, 37, 82, 0.92); --ow-overlay-bg: rgba(42, 37, 82, 0.96); }
+  :root[data-theme="win11"] { --ow-card-bg: rgba(32, 32, 32, 0.96); --ow-overlay-bg: rgba(44, 44, 44, 0.98); }
+}
+
+/* ---------- Vorschau-Farbfelder im Design-Waehler ---------- */
+.theme-swatch { background: linear-gradient(135deg, #d0bcff 0 50%, #1d1b20 50% 100%); }
+.theme-swatch[data-swatch="midnight"] { background: linear-gradient(135deg, #9ecaff 0 50%, #191c20 50% 100%); }
+.theme-swatch[data-swatch="sunset"] { background: linear-gradient(135deg, #ffb781 0 50%, #221a15 50% 100%); }
+.theme-swatch[data-swatch="light"] { background: linear-gradient(135deg, #6750a4 0 50%, #f7f2fa 50% 100%); }
+.theme-swatch[data-swatch="win11"] { background: linear-gradient(135deg, #60cdff 0 50%, #202020 50% 100%); }
+.theme-swatch[data-swatch="glass"] {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.1)),
+    conic-gradient(from 200deg, #ff5e8a, #ffad42, #1fd1b0, #5a7dff, #ff5e8a);
+}

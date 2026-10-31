@@ -21,6 +21,8 @@
   <link rel="preload" href="/fonts/font-20.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/fonts.css" />
   <link rel="stylesheet" href="/css/admin.css" />
+  <link rel="stylesheet" href="/css/themes.css" />
+  <script src="/js/theme-init.js" data-scope="admin"></script>
 </head>
 <body>
   <!-- SVG-Filter fuer den weissen Icon-Stil: farbige/dunkle Teile -> weiss, weisse Teile -> durchsichtig
@@ -66,9 +68,7 @@
           <label class="admin-theme-control" for="admin-theme-select">
             <span>Theme</span>
             <select id="admin-theme-select">
-              <option value="">Dunkel</option>
-              <option value="midnight">Midnight</option>
-              <option value="sunset">Sunset</option>
+              <option value="dark">Dunkel</option>
             </select>
           </label>
           <span id="connection-state" class="connection-state">…</span>
@@ -170,9 +170,16 @@
             <input name="is_public" type="checkbox" checked />
             <span>Profil öffentlich sichtbar</span>
           </label>
+          <label>
+            <span>Standard-Design der Startseite</span>
+            <select name="theme" id="profile-theme-select">
+              <option value="dark">Dunkel</option>
+            </select>
+            <small class="hint">So sehen Besucher die Seite beim ersten Aufruf.</small>
+          </label>
           <label class="row">
             <input name="allow_visitor_theme" type="checkbox" checked />
-            <span>Besucher dürfen Theme wechseln</span>
+            <span>Besucher dürfen ein eigenes Design wählen</span>
           </label>
           <label>
             <span>Icon-Stil der Links</span>

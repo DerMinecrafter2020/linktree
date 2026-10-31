@@ -150,34 +150,102 @@
     nav.appendChild(wrap);
   }
 
+  // ---------- Design-Waehler ----------
+  // Knopf oben rechts mit Farbfeld + Name; Menue mit Vorschau aller Themes (js/theme-init.js).
+  // Das Standard-Design setzt der Server; ist die Besucherwahl im Admin aus, gibt es keinen Knopf.
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  function svgIcon(cls, d) {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('class', cls);
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', d);
+    svg.appendChild(path);
+    return svg;
+  }
+
   function buildThemeSwitcher(allowThemes) {
-    const existing = $('#theme-switcher');
-    if (existing) existing.remove();
-    if (!allowThemes) { document.body.removeAttribute('data-theme'); return; }
-    const select = document.createElement('select');
-    select.id = 'theme-switcher';
-    select.className = 'theme-switcher';
-    select.setAttribute('aria-label', 'Design wählen');
-    const stored = localStorage.getItem('openweb-theme');
-    const themes = [
-      { value: '', label: 'Dunkel' },
-      { value: 'midnight', label: 'Midnight' },
-      { value: 'sunset', label: 'Sunset' },
-    ];
-    themes.forEach(t => {
-      const opt = document.createElement('option');
-      opt.value = t.value;
-      opt.textContent = t.label;
-      if (t.value === stored) opt.selected = true;
-      select.appendChild(opt);
+    $('#theme-picker')?.remove();
+    $('#theme-switcher')?.remove();
+    const themes = window.OpenWebThemes;
+    if (!themes || !allowThemes) return;
+
+    const wrap = el('div', 'theme-picker');
+    wrap.id = 'theme-picker';
+    const btn = el('button', 'theme-picker-btn');
+    btn.type = 'button';
+    btn.setAttribute('aria-haspopup', 'menu');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-controls', 'theme-picker-menu');
+    const btnSwatch = el('span', 'theme-swatch');
+    const btnLabel = el('span', 'theme-picker-label');
+    btn.append(btnSwatch, btnLabel, svgIcon('theme-picker-chevron', 'M7 10l5 5 5-5z'));
+
+    const menu = el('div', 'theme-picker-menu');
+    menu.id = 'theme-picker-menu';
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', 'Design wählen');
+    menu.hidden = true;
+    menu.appendChild(el('p', 'theme-picker-title', 'Design'));
+
+    const options = themes.list.map((t) => {
+      const opt = el('button', 'theme-option');
+      opt.type = 'button';
+      opt.setAttribute('role', 'menuitemradio');
+      opt.dataset.themeId = t.id;
+      const sw = el('span', 'theme-swatch');
+      sw.dataset.swatch = t.id;
+      const text = el('span', 'theme-option-text');
+      text.append(el('span', 'theme-option-name', t.label), el('span', 'theme-option-hint', t.hint));
+      opt.append(sw, text, svgIcon('theme-option-check', 'M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'));
+      opt.addEventListener('click', () => {
+        themes.choose(t.id);
+        sync();
+        close(true);
+      });
+      menu.appendChild(opt);
+      return opt;
     });
-    select.addEventListener('change', () => {
-      const v = select.value;
-      if (v) { document.body.setAttribute('data-theme', v); localStorage.setItem('openweb-theme', v); }
-      else { document.body.removeAttribute('data-theme'); localStorage.removeItem('openweb-theme'); }
+
+    function sync() {
+      const id = themes.current();
+      const meta = themes.list.find(t => t.id === id) || themes.list[0];
+      btnSwatch.dataset.swatch = meta.id;
+      btnLabel.textContent = meta.label;
+      btn.setAttribute('aria-label', `Design: ${meta.label} – ändern`);
+      options.forEach(o => o.setAttribute('aria-checked', String(o.dataset.themeId === id)));
+    }
+    function open() {
+      menu.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      (options.find(o => o.getAttribute('aria-checked') === 'true') || options[0]).focus();
+    }
+    function close(focusButton) {
+      if (menu.hidden) return;
+      menu.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+      if (focusButton) btn.focus();
+    }
+
+    btn.addEventListener('click', () => (menu.hidden ? open() : close(false)));
+    btn.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); open(); }
     });
-    if (stored) document.body.setAttribute('data-theme', stored);
-    document.body.appendChild(select);
+    menu.addEventListener('keydown', (e) => {
+      const i = options.indexOf(document.activeElement);
+      if (e.key === 'Escape') { e.preventDefault(); close(true); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); options[(i + 1) % options.length].focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); options[(i - 1 + options.length) % options.length].focus(); }
+      else if (e.key === 'Home') { e.preventDefault(); options[0].focus(); }
+      else if (e.key === 'End') { e.preventDefault(); options[options.length - 1].focus(); }
+      else if (e.key === 'Tab') close(false);
+    });
+    document.addEventListener('pointerdown', (e) => { if (!wrap.contains(e.target)) close(false); });
+
+    wrap.append(btn, menu);
+    sync();
+    document.body.appendChild(wrap);
   }
 
   function readUTM() {
@@ -329,6 +397,8 @@
       categories.get(none).forEach(link => section.appendChild(buildLinkRow(link)));
       nav.appendChild(section);
     }
+    // Reihenfolge fuer das gestaffelte Einblenden (styles.css: .link animation-delay)
+    nav.querySelectorAll('.link').forEach((a, i) => a.style.setProperty('--i', String(i)));
   }
 
   const state = { categories: [] };

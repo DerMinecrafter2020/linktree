@@ -8,7 +8,8 @@ KI-Coding-Agenten (Claude Code, Codex, Cursor, Copilot …) und an Menschen, die
 
 ## 1. Projektüberblick
 
-OpenWeb ist eine selbst gehostete **Link-in-Bio-Seite** (à la Linktree) im **Material-3-Design** (dunkel) mit
+OpenWeb ist eine selbst gehostete **Link-in-Bio-Seite** (à la Linktree) im **Material-3-Design** (dunkel, dazu
+wählbare Themes wie Hell, Windows 11 und Liquid Glass) mit
 Admin-Oberfläche, Klick-Statistiken und Musik-Integration („Now Playing“ über Navidrome/Subsonic
 , Music Assistant oder Spotify, inkl. Discord-Webhook und Musik-Verlauf) sowie optionalem
 Profilabgleich mit Instagram.
@@ -76,6 +77,8 @@ db/
   seed.js / reset.js      Initialdaten / Datenbank leeren
 public/                   Statische Dateien (werden 1:1 ausgeliefert!)
   index.html, admin.html, login.html, setup.html, changelog.html, impressum.html, datenschutz.html …
+  css/themes.css          Alle Themes ausser "Dunkel" (Farbrollen + --ow-Material-Tokens), Farbfelder des Design-Waehlers
+  js/theme-init.js        Theme frueh setzen (kein Aufblitzen), Theme-Liste window.OpenWebThemes
   js/api-client.js        window.api – einziger Weg, wie das Frontend das Backend aufruft
   js/app.js               Öffentliche Seite
   js/legal.js             Rechtstexte: sichere Ausgabe, Absätze und Zeilenumbrüche
@@ -348,10 +351,23 @@ gleich); die Werte-Box (`.monitor-tooltip`) wird per `textContent` befüllt.
   CommonJS (`require`) im Backend, API-Antworten immer `{ ok: true, data }` bzw.
   `{ ok: false, error }`.
 - Frontend ruft das Backend **nur** über `window.api` (`public/js/api-client.js`) auf.
-- **Design: Material 3 (Dark).** Farben nur über die M3-Farbrollen (`--md-primary`,
-  `--md-surface-container-*`, `--md-on-surface-variant`, `--md-outline` …) – keine festen Hex-Werte
-  in Komponenten oder JavaScript. Definiert in `public/styles.css` (öffentliche Seite inkl. der
-  Themes Dunkel/Midnight/Sunset), `public/css/admin.css` (Admin + Login) und inline in `setup.html`.
+- **Design: Material 3 + Themes.** Farben nur über die M3-Farbrollen (`--md-primary`,
+  `--md-surface-container-*`, `--md-on-surface-variant`, `--md-outline` …), Flächen/Materialien über
+  die `--ow-*`-Tokens (`--ow-card-bg`, `--ow-tile-bg`, `--ow-overlay-bg`, `--ow-btn-radius` …) – keine
+  festen Hex-Werte in Komponenten oder JavaScript. Standard „Dunkel“ steht unter `:root` in
+  `public/styles.css` (öffentliche Seiten) und `public/css/admin.css` (Admin + Login); alle weiteren
+  Themes (Midnight, Sunset, Hell `light`, Windows 11 `win11`, Liquid Glass `glass`) nur in
+  `public/css/themes.css` als `:root[data-theme="…"]`. `setup.html` hat eigene Inline-Styles.
+  **Neues Theme:** Block in `css/themes.css` (+ Farbfeld `.theme-swatch[data-swatch]`), Eintrag in
+  `THEMES` in `public/js/theme-init.js` und in `validateTheme()` (`lib/validators.js`). Neue
+  Komponenten nutzen die `--ow-*`-Tokens, damit sie in Glas/Mica/Hell passen; in hellen und
+  durchscheinenden Themes per Screenshot prüfen.
+- **Theme-Ablauf:** `data-theme` sitzt auf `<html>`. `js/theme-init.js` (synchron im `<head>`, alle
+  Seiten mit `styles.css`/`admin.css`; Admin/Login mit `data-scope="admin"`) setzt die gespeicherte
+  Wahl vor dem ersten Zeichnen (`localStorage` `openweb-theme` bzw. `openweb-admin-theme`) und stellt
+  `window.OpenWebThemes` bereit (Liste, `choose()`, `current()`). Die Startseite bekommt vom Server
+  `data-default-theme`/`data-theme` aus `profile.theme` (Admin > Profil > Standard-Design) und
+  `data-visitor-theme="0"`, wenn `allow_visitor_theme` aus ist – dann gilt nur das Standard-Design.
   Formen über `--md-shape-*`, Hover/Pressed über State Layer (`::before`, 8 %/12 %), Bewegung über
   `--md-ease*`/`--md-dur-*`. Die alten Variablen (`--neon-*`, `--text-dim`, `--bg-*` …) sind nur
   noch Aliase für ältere Unterseiten und sollen in neuem Code nicht mehr verwendet werden.

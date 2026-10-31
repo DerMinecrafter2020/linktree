@@ -7,7 +7,7 @@ OpenWeb ist eine responsive Link-in-Bio-Seite mit Admin-Panel, Statistiken und M
 | Backend | Node.js **26.x** (Zielversion; Mindestversion **20.19+** oder **22.12+**), Express 4 |
 | Datenbank | PostgreSQL 16 |
 | Anmeldung | E-Mail/Passwort, TOTP und WebAuthn/Passkeys |
-| Oberfläche | Material 3 Dark; öffentliche Themes Dunkel, Midnight und Sunset |
+| Oberfläche | Material 3; Themes Dunkel, Midnight, Sunset, Hell, Windows 11 (Mica) und Liquid Glass |
 
 ## Funktionen
 
@@ -15,7 +15,7 @@ OpenWeb ist eine responsive Link-in-Bio-Seite mit Admin-Panel, Statistiken und M
 
 - Responsive Profilseite mit Kategorien, Kurzlinks und Dashboard-Icons.
 - Links können geplant, zeitlich begrenzt und passwortgeschützt werden. Die Ziel-URL geschützter Links wird erst nach erfolgreicher Passwortprüfung ausgegeben.
-- Besucher können Links teilen, QR-Codes öffnen und – sofern aktiviert – das Theme wählen.
+- Besucher können Links teilen, QR-Codes öffnen und – sofern aktiviert – ein Design wählen; das Standard-Design legt der Admin fest.
 - Now-Playing-Anzeige über Navidrome/Subsonic, Music Assistant oder Spotify (mit Logo der aktiven Quelle); optional mit Discord-Webhook und Musikverlauf.
 - Optionaler Profilabgleich mit Instagram (Profilbild, Beschreibung, Name) für Business-/Creator-Konten, eingerichtet per Assistent im Admin.
 - Impressum und Datenschutzerklärung lassen sich im Admin-Panel pflegen. Leerzeilen und Zeilenumbrüche werden auf den Unterseiten formatiert dargestellt.
@@ -27,7 +27,7 @@ OpenWeb ist eine responsive Link-in-Bio-Seite mit Admin-Panel, Statistiken und M
 - Statistiken über 7, 30 oder 90 Tage: Klicks, eindeutige Besucher, Geräte, Browser, Betriebssysteme, Länder und UTM-Parameter; CSV-Export.
 - API-Key-Verwaltung und öffentliche API-Dokumentation.
 - Ressourcenmonitor für CPU, Arbeitsspeicher, Event-Loop, HTTP-Anfragen/-Fehler, Antwortzeiten und PostgreSQL-Verbindungen. Messpunkte werden zentral gespeichert, sind auf anderen Admin-Geräten sichtbar und bleiben bei Neustarts erhalten. Messpunkte werden nach 30 Tagen gelöscht; das Diagramm zeigt die letzte Stunde.
-- Lokale Theme-Auswahl Dunkel/Midnight/Sunset für das Admin-Panel.
+- Lokale Theme-Auswahl (alle Designs) für Admin-Panel und Login.
 - TOTP- und WebAuthn-Verwaltung, Audit-Log, Benachrichtigungen und JSON-Backups.
 - Verschlüsselungsschlüssel-Backup als separat passwortgeschützte Datei; Wiederherstellung im Admin-Panel oder offline.
 

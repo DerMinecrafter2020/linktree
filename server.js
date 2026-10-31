@@ -11,6 +11,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const setup = require('./lib/setup');
 const metrics = require('./lib/metrics');
+const { validateTheme } = require('./lib/validators');
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -493,6 +494,15 @@ async function finalizeApp() {
           : `${req.protocol}://${req.get('host')}`;
 
         let html = indexHtmlTemplate.replace('__CURRENT_YEAR__', () => String(new Date().getFullYear()));
+
+        // Standard-Design aus dem Admin direkt setzen (kein Aufblitzen); js/theme-init.js
+        // uebernimmt danach eine gespeicherte Besucher-Wahl, sofern erlaubt.
+        // validateTheme liefert nur Werte aus einer festen Liste -> sicher im Attribut.
+        const defaultTheme = validateTheme(profile.theme);
+        const themeAttrs = ` data-default-theme="${defaultTheme}"`
+          + (defaultTheme !== 'dark' ? ` data-theme="${defaultTheme}"` : '')
+          + (profile.allow_visitor_theme === false ? ' data-visitor-theme="0"' : '');
+        html = html.replace(/<html lang="de">/, () => `<html lang="de"${themeAttrs}>`);
         html = html.replace(/(<meta name="robots"[^>]*?>)?/i, '<meta name="robots" content="index, follow" />');
 
         // Custom CSS injizieren

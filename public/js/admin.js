@@ -84,32 +84,12 @@
 
   function bindAdminTheme() {
     const select = $('#admin-theme-select');
-    if (!select) return;
-
-    const storageKey = 'openweb-admin-theme';
-    const allowedThemes = new Set(['midnight', 'sunset']);
-    const apply = (value) => {
-      const theme = allowedThemes.has(value) ? value : '';
-      if (theme) document.body.setAttribute('data-theme', theme);
-      else document.body.removeAttribute('data-theme');
-      select.value = theme;
-    };
-
-    let savedTheme = '';
-    try {
-      const stored = localStorage.getItem(storageKey);
-      if (allowedThemes.has(stored)) savedTheme = stored;
-    } catch { /* Theme bleibt fuer diese Sitzung auf Dunkel */ }
-    apply(savedTheme);
-
-    select.addEventListener('change', () => {
-      const theme = allowedThemes.has(select.value) ? select.value : '';
-      apply(theme);
-      try {
-        if (theme) localStorage.setItem(storageKey, theme);
-        else localStorage.removeItem(storageKey);
-      } catch { /* Theme gilt bis zum Schliessen dieser Seite */ }
-    });
+    const themes = window.OpenWebThemes;
+    if (!select || !themes) return;
+    // Optionen aus der gemeinsamen Theme-Liste (js/theme-init.js), Auswahl gilt nur fuer dieses Geraet
+    select.replaceChildren(...themes.list.map(t => el('option', { value: t.id, text: t.label })));
+    select.value = themes.current();
+    select.addEventListener('change', () => { select.value = themes.choose(select.value); });
   }
 
   function sanitizeIconField(s) {
@@ -334,6 +314,7 @@
         avatar: String(fd.get('avatar') || '').trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 2) || 'CA',
         is_public: fd.get('is_public') === 'on',
         allow_visitor_theme: fd.get('allow_visitor_theme') === 'on',
+        theme: window.OpenWebThemes?.isTheme(fd.get('theme')) ? fd.get('theme') : 'dark',
         icon_style: fd.get('icon_style') === 'color' ? 'color' : 'white',
         custom_css: safeText(fd.get('custom_css'), 5000),
       };
@@ -386,6 +367,12 @@
       f.avatar.value = state.profile.avatar || '';
       f.is_public.checked = state.profile.is_public !== false;
       f.allow_visitor_theme.checked = state.profile.allow_visitor_theme !== false;
+      if (f.theme && window.OpenWebThemes) {
+        if (f.theme.options.length < 2) {
+          f.theme.replaceChildren(...window.OpenWebThemes.list.map(t => el('option', { value: t.id, text: `${t.label} – ${t.hint}` })));
+        }
+        f.theme.value = window.OpenWebThemes.isTheme(state.profile.theme) ? state.profile.theme : 'dark';
+      }
       if (f.icon_style) f.icon_style.value = state.profile.icon_style === 'color' ? 'color' : 'white';
       f.custom_css.value = state.profile.custom_css || '';
       updateAvatarPreview(state.profile.avatar_url || null);

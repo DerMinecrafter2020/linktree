@@ -67,6 +67,24 @@
   --md-font: 'Space Grotesk', 'Roboto Flex', Roboto, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --md-font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
+  /* Material-Tokens: Standardwerte = Theme "Dunkel"; Bedeutung siehe css/themes.css */
+  --ow-page-bg: var(--md-surface);
+  --ow-card-bg: var(--md-surface-container-low);
+  --ow-card-backdrop: none;
+  --ow-card-ring: 0 0 0 0 transparent;
+  --ow-card-shadow: var(--md-elevation-1);
+  --ow-card-radius: var(--md-shape-xl);
+  --ow-sheen: none;
+  --ow-sidebar-bg: var(--md-surface-container-low);
+  --ow-sidebar-backdrop: none;
+  --ow-btn-radius: var(--md-shape-full);
+  --ow-nav-radius: var(--md-shape-full);
+  --ow-overlay-bg: var(--md-surface-container-high);
+  --ow-overlay-backdrop: none;
+  --ow-theme-color: #1d1b20;
+  /* Abdunklung ueber dem Seitenhintergrund (Admin: viel Text direkt auf dem Hintergrund) */
+  --ow-admin-dim: transparent;
+
   /* Aliase der bisherigen Variablen (werden teils noch aus admin.js/HTML referenziert) */
   --bg-0: var(--md-surface-container-lowest);
   --bg-1: var(--md-surface);
@@ -88,64 +106,7 @@
   --radius-lg: var(--md-shape-lg);
 }
 
-/* Admin-Themes: dieselben Akzent- und Oberflächenrollen wie auf der Startseite */
-[data-theme="midnight"] {
-  --md-primary: #9ecaff;
-  --md-on-primary: #003258;
-  --md-primary-container: #00497d;
-  --md-on-primary-container: #d1e4ff;
-  --md-secondary: #bbc7db;
-  --md-on-secondary: #253140;
-  --md-secondary-container: #3b4858;
-  --md-on-secondary-container: #d7e3f7;
-  --md-tertiary: #d6bee4;
-  --md-on-tertiary: #3b2948;
-  --md-tertiary-container: #523f5f;
-  --md-on-tertiary-container: #f2daff;
-  --md-surface: #111418;
-  --md-surface-dim: #111418;
-  --md-surface-bright: #37393e;
-  --md-surface-container-lowest: #0c0e12;
-  --md-surface-container-low: #191c20;
-  --md-surface-container: #1d2024;
-  --md-surface-container-high: #282a2f;
-  --md-surface-container-highest: #33353a;
-  --md-on-surface: #e1e2e8;
-  --md-on-surface-variant: #c3c7cf;
-  --md-outline: #8d9199;
-  --md-outline-variant: #43474e;
-  --md-inverse-surface: #e1e2e8;
-  --md-inverse-primary: #0061a4;
-}
-
-[data-theme="sunset"] {
-  --md-primary: #ffb781;
-  --md-on-primary: #4f2500;
-  --md-primary-container: #6f3800;
-  --md-on-primary-container: #ffdcc5;
-  --md-secondary: #e5bfa8;
-  --md-on-secondary: #422b1b;
-  --md-secondary-container: #5b4131;
-  --md-on-secondary-container: #ffdcc5;
-  --md-tertiary: #cac98e;
-  --md-on-tertiary: #323205;
-  --md-tertiary-container: #484a1b;
-  --md-on-tertiary-container: #e7e5a8;
-  --md-surface: #1a120d;
-  --md-surface-dim: #1a120d;
-  --md-surface-bright: #423731;
-  --md-surface-container-lowest: #140d08;
-  --md-surface-container-low: #221a15;
-  --md-surface-container: #271e18;
-  --md-surface-container-high: #322822;
-  --md-surface-container-highest: #3d332c;
-  --md-on-surface: #f0dfd7;
-  --md-on-surface-variant: #d6c3b7;
-  --md-outline: #9f8d83;
-  --md-outline-variant: #52443b;
-  --md-inverse-surface: #f0dfd7;
-  --md-inverse-primary: #8e4e14;
-}
+/* Weitere Themes (Midnight, Sunset, Hell, Windows 11, Liquid Glass): css/themes.css */
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { min-height: 100%; }
@@ -159,6 +120,8 @@ body {
   letter-spacing: 0.25px;
   color: var(--md-on-surface);
   background: var(--md-surface);
+  background: linear-gradient(var(--ow-admin-dim), var(--ow-admin-dim)), var(--ow-page-bg);
+  background-attachment: fixed;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -239,15 +202,30 @@ code {
   min-height: 100dvh;
   padding: 24px;
   background: var(--md-surface-container-lowest);
+  background: var(--ow-page-bg);
+  background-attachment: fixed;
 }
 
 .login-card {
+  position: relative;
+  isolation: isolate;
   width: min(420px, 100%);
-  background: var(--md-surface-container-low);
+  background: var(--ow-card-bg);
+  -webkit-backdrop-filter: var(--ow-card-backdrop);
+  backdrop-filter: var(--ow-card-backdrop);
   border: none;
-  border-radius: var(--md-shape-xl);
+  border-radius: var(--ow-card-radius);
   padding: clamp(24px, 5vw, 40px);
-  box-shadow: var(--md-elevation-1);
+  box-shadow: var(--ow-card-ring), var(--ow-card-shadow);
+}
+.login-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--ow-sheen);
+  pointer-events: none;
 }
 
 /* M3 Headline Small */
@@ -283,7 +261,9 @@ code {
 
 /* M3 Navigation Drawer (standard) */
 .sidebar {
-  background: var(--md-surface-container-low);
+  background: var(--ow-sidebar-bg);
+  -webkit-backdrop-filter: var(--ow-sidebar-backdrop);
+  backdrop-filter: var(--ow-sidebar-backdrop);
   border-right: none;
   padding: 12px;
   display: flex;
@@ -319,9 +299,10 @@ code {
 
 /* Drawer-Eintraege: 56px hoch, Pill-Form, aktiv = Secondary Container */
 .side-btn {
+  position: relative;
   background: transparent;
   border: none;
-  border-radius: var(--md-shape-full);
+  border-radius: var(--ow-nav-radius);
   padding: 0 24px 0 16px;
   color: var(--md-on-surface-variant);
   text-align: left;
@@ -356,7 +337,7 @@ code {
   color: var(--md-on-surface-variant);
   text-align: left;
   padding: 0 16px;
-  border-radius: var(--md-shape-full);
+  border-radius: var(--ow-nav-radius);
   cursor: pointer;
   font-family: inherit;
   font-size: 14px;
@@ -421,9 +402,12 @@ code {
 
 /* ---------- Karten (M3 Filled Card) ---------- */
 .card-block {
-  background: var(--md-surface-container-low);
+  background: var(--ow-card-bg);
+  -webkit-backdrop-filter: var(--ow-card-backdrop);
+  backdrop-filter: var(--ow-card-backdrop);
+  box-shadow: var(--ow-card-ring);
   border: none;
-  border-radius: var(--md-shape-lg);
+  border-radius: min(var(--ow-card-radius), 24px);
   padding: clamp(16px, 2.5vw, 24px);
   margin-bottom: 16px;
 }
@@ -511,7 +495,7 @@ body.admin-locked #admin-status-block * {
   height: 40px;
   min-height: 40px;
   padding: 0 24px;
-  border-radius: var(--md-shape-full);
+  border-radius: var(--ow-btn-radius);
   border: 1px solid var(--md-outline);
   background: transparent;
   color: var(--md-primary);
@@ -911,7 +895,9 @@ input[type="checkbox"] {
   width: min(560px, 92vw);
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
-  background: var(--md-surface-container-high);
+  background: var(--ow-overlay-bg);
+  -webkit-backdrop-filter: var(--ow-overlay-backdrop);
+  backdrop-filter: var(--ow-overlay-backdrop);
   color: var(--md-on-surface);
   border: none;
   border-radius: var(--md-shape-xl);
@@ -1207,8 +1193,8 @@ input[type="checkbox"] {
 /* M3 Segmented Buttons */
 .btn-group { display: flex; gap: 0; }
 .btn-group .btn { border-radius: 0; margin-left: -1px; background: transparent; border: 1px solid var(--md-outline); color: var(--md-on-surface); }
-.btn-group .btn:first-child { border-radius: var(--md-shape-full) 0 0 var(--md-shape-full); margin-left: 0; }
-.btn-group .btn:last-child { border-radius: 0 var(--md-shape-full) var(--md-shape-full) 0; }
+.btn-group .btn:first-child { border-radius: var(--ow-btn-radius) 0 0 var(--ow-btn-radius); margin-left: 0; }
+.btn-group .btn:last-child { border-radius: 0 var(--ow-btn-radius) var(--ow-btn-radius) 0; }
 .btn-group .btn.primary { background: var(--md-secondary-container); color: var(--md-on-secondary-container); border-color: var(--md-outline); }
 .btn-group .btn.primary:hover { box-shadow: none; }
 
@@ -1577,7 +1563,12 @@ input[type="checkbox"] {
   z-index: 200;
   animation: slideUp var(--md-dur-medium) var(--md-ease-emphasized);
 }
-.toast.error { background: var(--md-error-container); color: var(--md-on-error-container); }
+.toast.error {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+  -webkit-backdrop-filter: var(--ow-overlay-backdrop);
+  backdrop-filter: var(--ow-overlay-backdrop);
+}
 .hint.error { color: var(--md-error); }
 
 @keyframes slideUp {
@@ -2062,9 +2053,11 @@ input[type="checkbox"] {
   min-width: 150px;
   padding: 8px 10px;
   border-radius: var(--md-shape-sm);
-  background: var(--md-surface-container-highest);
+  background: var(--ow-overlay-bg);
+  -webkit-backdrop-filter: var(--ow-overlay-backdrop);
+  backdrop-filter: var(--ow-overlay-backdrop);
   color: var(--md-on-surface);
-  box-shadow: var(--md-elevation-2, 0 2px 6px rgba(0, 0, 0, 0.35));
+  box-shadow: var(--md-elevation-2);
   font-size: 12px;
   line-height: 18px;
   pointer-events: none;
@@ -2087,3 +2080,36 @@ input[type="checkbox"] {
   .monitor-legend { justify-content: flex-start; }
   .monitor-chart canvas { height: 210px; }
 }
+
+/* ---------- Theme-spezifische Details ---------- */
+/* Windows 11: Auswahl in der Navigation mit Akzent-Strich links (wie in den Einstellungen) */
+:root[data-theme="win11"] .side-btn.active {
+  background: rgba(255, 255, 255, 0.0605);
+  color: var(--md-on-surface);
+  font-weight: 600;
+}
+:root[data-theme="win11"] .side-btn.active::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: 2px;
+  background: var(--md-primary);
+}
+:root[data-theme="win11"] .side-btn:hover:not(.active) { background: rgba(255, 255, 255, 0.0605); }
+:root[data-theme="win11"] .btn:not(.primary):not(.ghost):not(.danger) {
+  background: rgba(255, 255, 255, 0.0605);
+  border-color: rgba(255, 255, 255, 0.0698);
+  color: var(--md-on-surface);
+}
+/* Liquid Glass: Glas-Buttons mit Lichtkante */
+:root[data-theme="glass"] .btn:not(.primary):not(.ghost):not(.danger) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: var(--md-on-surface);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+:root[data-theme="glass"] .side-btn.active { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.14); }

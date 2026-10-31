@@ -4,10 +4,12 @@
 // Der Cache-Name enthaelt die App-Version. Bei jedem Update
 // wird der alte Cache automatisch geloescht.
 
-const CACHE_NAME = 'openweb-cache-v3.4.2';
+const CACHE_NAME = 'openweb-cache-v3.5.0';
 const PRECACHE = [
   '/',
   '/styles.css',
+  '/css/themes.css',
+  '/js/theme-init.js',
   '/js/app.js',
   '/js/api-client.js',
   '/js/icons.js',
