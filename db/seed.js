@@ -2,7 +2,7 @@
 // Seed-Script: Default-Daten anlegen
 // =========================================================
 
-require('dotenv').config();
+require('../lib/paths').loadEnv();
 
 const bcrypt = require('bcrypt');
 const db = require('../lib/db');
@@ -30,14 +30,29 @@ async function seed(overrides = {}) {
 
   const passwordHash = await bcrypt.hash(adminPassword, 12);
 
-  await db.query(`
-    INSERT INTO users (email, password_hash, is_active)
-    VALUES ($1, $2, true)
-    ON CONFLICT (email) DO UPDATE SET
-      password_hash = EXCLUDED.password_hash,
-      is_active = true,
-      updated_at = NOW()
-  `, [adminEmail.toLowerCase(), passwordHash]);
+  // Beim Web-Setup (initialSetup) darf nur ein Admin entstehen, wenn noch keiner aktiv ist.
+  // Advisory-Lock + Pruefung in einer Transaktion, damit parallele Setups sich nicht ueberholen.
+  await db.transaction(async (client) => {
+    if (overrides.initialSetup) {
+      await client.query('SELECT pg_advisory_xact_lock(4242001)');
+      const { rows } = await client.query('SELECT 1 FROM users WHERE is_active = true LIMIT 1');
+      if (rows.length) throw new Error('Es existiert bereits ein aktiver Admin – Setup abgebrochen.');
+    }
+    const { rows } = await client.query(`
+      INSERT INTO users (email, password_hash, is_active)
+      VALUES ($1, $2, true)
+      ON CONFLICT (email) DO UPDATE SET
+        password_hash = EXCLUDED.password_hash,
+        is_active = true,
+        updated_at = NOW()
+      RETURNING id
+    `, [adminEmail.toLowerCase(), passwordHash]);
+    // Passwort wurde (neu) gesetzt: alte Sessions dieses Kontos beenden
+    await client.query(
+      "DELETE FROM user_sessions WHERE sess->>'userId' = $1 OR sess->>'pendingUserId' = $1",
+      [String(rows[0].id)]
+    );
+  });
   console.log(`[seed] Admin-User: ${adminEmail}`);
 
   const profile = overrides.profile || {};

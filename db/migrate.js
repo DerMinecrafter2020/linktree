@@ -2,7 +2,7 @@
 // Migration-Runner
 // =========================================================
 
-require('dotenv').config();
+require('../lib/paths').loadEnv();
 
 const fs = require('fs');
 const path = require('path');

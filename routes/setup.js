@@ -93,10 +93,20 @@ router.post('/test-database', async (req, res) => {
   }
 });
 
+// Das Setup darf genau einmal laufen: Die Sperre wird synchron vor dem ersten await gesetzt,
+// damit eine zweite, gleichzeitige Anfrage nicht ebenfalls die Pruefung passiert.
+let setupState = 'open'; // 'open' | 'running' | 'done'
+
 router.post('/', async (req, res) => {
+  if (setupState !== 'open') {
+    return res.status(409).json({ ok: false, error: 'Setup laeuft bereits oder wurde abgeschlossen.' });
+  }
+  setupState = 'running';
+  let done = false;
   try {
     const required = await setup.isSetupRequired();
     if (!required) {
+      done = true;
       return res.status(403).json({ ok: false, error: 'Setup wurde bereits durchgefuehrt.' });
     }
 
@@ -154,6 +164,7 @@ router.post('/', async (req, res) => {
       nodeEnv: ['production', 'development'].includes(config.nodeEnv) ? config.nodeEnv : 'production',
     });
 
+    done = true;
     res.json({
       ok: true,
       data: {
@@ -169,7 +180,10 @@ router.post('/', async (req, res) => {
     }, 500);
   } catch (err) {
     console.error('[setup] Fehler:', err);
-    res.status(500).json({ ok: false, error: err.message });
+    res.status(err.status === 400 ? 400 : 500).json({ ok: false, error: err.message });
+  } finally {
+    // Nach Erfolg (oder wenn bereits eingerichtet) gesperrt lassen, sonst wieder freigeben
+    setupState = done ? 'done' : 'open';
   }
 });
 

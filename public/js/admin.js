@@ -1068,8 +1068,13 @@
 
         const csv = rows.map(r =>
           r.map(c => {
-            const v = String(c ?? '').replace(/"/g, '""');
-            return /[;\n",]/.test(v) ? `"${v}"` : v;
+            let v = String(c ?? '');
+            // Formel-Injection verhindern: Texte, die eine Tabellenkalkulation als Formel
+            // auswerten wuerde (= + - @, Tab, CR), mit Apostroph als Text markieren.
+            // Zahlen (Klickzahlen) bleiben unveraendert.
+            if (typeof c !== 'number' && /^[=+\-@\t\r]/.test(v)) v = `'${v}`;
+            v = v.replace(/"/g, '""');
+            return /[;\n\r",]/.test(v) ? `"${v}"` : v;
           }).join(';')
         ).join('\n');
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -1406,9 +1411,11 @@
       if (!confirm('Beim Import werden alle bestehenden Links und das Profil überschrieben. Fortfahren?')) { e.target.value = ''; return; }
       try {
         const data = JSON.parse(await file.text());
-        await window.api.importData(data);
+        const result = await window.api.importData(data);
         await reloadAll();
-        toast('📥 Importiert');
+        const lost = Number(result && result.deactivated_unprotected) || 0;
+        if (lost > 0) toast(`📥 Importiert – ${lost} passwortgeschützte(r) Link(s) deaktiviert, bitte Passwort neu setzen`, true);
+        else toast('📥 Importiert');
       } catch (err) { toast('Import fehlgeschlagen: ' + err.message, true); }
       e.target.value = '';
     });

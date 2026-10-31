@@ -26,7 +26,9 @@ Autor: Cornelius Ahner · Lizenz: MIT · Sprache der UI, Kommentare und Doku: **
 **Produktivbetrieb:** Linux-Server, eingerichtet mit `install.sh` → **systemd-Service `openweb`**
 (`User=openweb`, `npm start`) hinter **nginx** (TLS via certbot). Updates ausschließlich mit
 `sudo bash install.sh update` (git pull → `npm ci --omit=dev` → Migrationen → Rechte → Neustart).
-Docker/Compose ist nur eine alternative Variante und wird produktiv nicht genutzt.
+Docker/Compose ist nur eine alternative Variante und wird produktiv nicht genutzt. Bei der
+systemd-Installation liegen `.env` und Backups in `/var/lib/openweb` (Dienstbenutzer), der Code
+gehoert `root`.
 
 ---
 
@@ -42,6 +44,10 @@ routes/
   setup.js                /api/setup (nur im Setup-Modus aktiv)
 lib/
   auth.js                 bcrypt, requireAdminSession, IP-Allowlist (IPv4/CIDR)
+  paths.js                Pfade fuer beschreibbare Daten (.env, Backups, Statusdatei); OPENWEB_DATA_DIR
+  visibility.js           Gemeinsame Link-Sichtbarkeit (Zeitsteuerung/Ablauf/Profil) fuer alle oeffentlichen Pfade
+  webauthn-rp.js          WebAuthn RP-ID/Origin aus APP_URL (nicht aus Request-Headern)
+  nowplaying-public.js    Oeffentliche Feld-Allowlist fuer Now-Playing (keine internen Server-URLs)
   crypto.js               AES-256-GCM encrypt/decrypt/isEncrypted (Key: NAVIDROME_ENCRYPTION_KEY)
   encryption-key-backup.js Verschlüsseltes Backup/Wiederherstellung des Anwendungsschlüssels
   totp.js                 TOTP-Helfer (otplib v13, ±30 s, Replay-Schutz über afterTimeStep)
@@ -61,7 +67,7 @@ lib/
   analytics.js            User-Agent-/Länder-Parsing für Statistiken
 db/
   migrate.js              Führt db/migrations/*.sql der Reihe nach aus (Tabelle `migrations`)
-  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern)
+  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 018: api_keys.key_lookup)
   seed.js / reset.js      Initialdaten / Datenbank leeren
 public/                   Statische Dateien (werden 1:1 ausgeliefert!)
   index.html, admin.html, login.html, setup.html, changelog.html, impressum.html, datenschutz.html …
@@ -75,6 +81,7 @@ public/                   Statische Dateien (werden 1:1 ausgeliefert!)
   sw.js                   Service Worker (Network-First, cached nie /api/)
 scripts/bump-version.sh   Versionserhöhung (siehe Abschnitt 8)
 scripts/restore-encryption-key.js Offline-Wiederherstellung aus verschlüsseltem Schlüssel-Backup
+scripts/change-password.js Admin-Passwort auf der Kommandozeile setzen (normalisiert E-Mail, beendet Sitzungen)
 .githooks/pre-commit      Automatische Patch-Erhöhung bei jedem Code-Commit
 install.sh                Interaktive Installation auf Linux (systemd, nginx, Docker-DB)
 Dockerfile, docker-compose.yml, .dockerignore, nginx-lb.conf.example
@@ -130,6 +137,8 @@ Vorlage: `.env.example`. Die `.env` enthält Secrets → **niemals committen, lo
 | `NAVIDROME_URL`, `NAVIDROME_USERNAME`, `NAVIDROME_POLL_INTERVAL_SEC` | – | Initiale Navidrome-Daten (Seeding) |
 | `ADMIN_IP_ALLOWLIST` | – | Kommagetrennte IPv4-Adressen/CIDR für Admin-Zugang (leer = alle) |
 | `TRUST_PROXY` | – | Anzahl vorgeschalteter Proxys (Standard 1). **Ohne Proxy `0` setzen**, sonst ist die Client-IP fälschbar |
+| `HOST` | – | Bind-Adresse. Hinter einem Reverse Proxy auf `127.0.0.1` setzen, damit der Node-Port nicht direkt erreichbar ist. Leer = alle Schnittstellen |
+| `OPENWEB_DATA_DIR` | – | Ordner fuer beschreibbare Daten (`.env`, Backups, `.last-track-id`). systemd-Installation nutzt `/var/lib/openweb`. Leer = Projektordner |
 | `DATA_RETENTION_DAYS` | – | Aufbewahrung von Klickdaten (Standard 365) |
 | `BACKUP_DIR` | – | Zielordner für Backups (Standard `./backups`) |
 
@@ -250,6 +259,13 @@ Middleware zählt jede Anfrage (Dauer, 5xx) – sie muss vor allen Routen stehen
 9. **Proxys auf Fremd-Inhalte** (Cover, Icons) nur mit festem Ziel-Host und festen Content-Types
    durchreichen; SVGs mit Sandbox-CSP.
 10. **Keine Dateien mit Secrets oder Debug-Resten** unter `public/` ablegen – alles dort ist öffentlich.
+11. **Link-Sichtbarkeit** (aktiv, Zeitsteuerung, Ablaufdatum, Passwortschutz, „Profil nicht öffentlich“)
+    immer über `lib/visibility.js` prüfen – auf **jedem** Pfad, der einen Link anzeigt oder auflöst
+    (`/api/links`, `/api/public/links`, `/sitemap.xml`, `/go/:slug`, Entsperren, Klick). Jede Abfrage,
+    deren Ergebnis `isLinkVisible()` filtert, muss `visibilityColumns()` mitselektieren.
+12. **install.sh** liest die `.env` nie per `source`, sondern als reine Daten (`load_env`, nur
+    bekannte Schlüssel). Programmcode gehört `root`; nur `OPENWEB_DATA_DIR` ist für den Dienst
+    beschreibbar. Node-Wartungsbefehle laufen als Dienstbenutzer, `git` ohne `safe.directory`/Hooks.
 
 ---
 
@@ -347,5 +363,10 @@ sichtbare Wirkung und reine Doku-Änderungen.
 - Beim passwortlosen WebAuthn-Login verraten die Antworten, ob eine E-Mail existiert
   (bewusster Kompromiss des „nur E-Mail + Security Key“-Logins).
 - Admin-Zugang ist auf einen Benutzer ausgelegt (kein Rollenmodell).
+- API-Keys werden ueber einen SHA-256-Index gesucht (`api_keys.key_lookup`, Migration 018); Alt-Keys
+  erhalten den Wert beim ersten erfolgreichen Abruf.
+- Fehlversuche bei Passwort/TOTP werden zusaetzlich pro Konto gezaehlt: TOTP wird fuer das Konto
+  gesperrt (Passkey-Login bleibt), beim Passwort gibt es nur einen Alarm (keine Konto-Sperre, damit
+  niemand den Admin anonym aussperren kann).
 - Größere Major-Updates von Abhängigkeiten (Express 5, Helmet 8, express-rate-limit 8,
   @simplewebauthn 14, dotenv 17+) sind bewusst noch nicht durchgeführt – jeweils mit Tests migrieren.

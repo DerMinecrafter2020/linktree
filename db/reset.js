@@ -2,7 +2,7 @@
 // DB-Reset: Alle Daten loeschen und neu seeden (Vorsicht!)
 // =========================================================
 
-require('dotenv').config();
+require('../lib/paths').loadEnv();
 
 const readline = require('readline');
 const db = require('../lib/db');

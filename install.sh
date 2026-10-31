@@ -6,6 +6,10 @@
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Beschreibbare Daten (.env, Backups, Statusdateien). Bei der systemd-Variante liegen sie
+# ausserhalb des Code-Verzeichnisses, damit der Service-Benutzer den Code nicht aendern kann.
+SYSTEM_DATA_DIR="/var/lib/openweb"
+DATA_DIR="$APP_DIR"
 ENV_FILE="$APP_DIR/.env"
 DOCKER_COMPOSE_FILE="$APP_DIR/docker-compose.yml"
 NGINX_CONF="/etc/nginx/sites-available/openweb"
@@ -102,13 +106,148 @@ require_node() {
   fi
 }
 
-# Rechte der .env/Backups nachziehen und Dateien dem Service-Benutzer geben (systemd: User=openweb)
-fix_permissions() {
-  [[ -f "$ENV_FILE" ]] && chmod 600 "$ENV_FILE"
-  [[ -d "$APP_DIR/backups" ]] && chmod 700 "$APP_DIR/backups" && find "$APP_DIR/backups" -type f -exec chmod 600 {} +
-  if [[ "$EUID" -eq 0 ]] && id -u openweb &>/dev/null; then
-    chown -R openweb:openweb "$APP_DIR"
+# Datenordner bestimmen: OPENWEB_DATA_DIR > /var/lib/openweb (systemd-Installation) > Projektordner
+resolve_data_dir() {
+  if [[ -n "${OPENWEB_DATA_DIR:-}" ]]; then
+    DATA_DIR="$OPENWEB_DATA_DIR"
+  elif [[ -d "$SYSTEM_DATA_DIR" ]]; then
+    DATA_DIR="$SYSTEM_DATA_DIR"
+  else
+    DATA_DIR="$APP_DIR"
   fi
+  ENV_FILE="$DATA_DIR/.env"
+  # Node-Skripte (Migrationen, Seeding, Passwortwechsel) finden die .env so im Datenordner
+  if [[ "$DATA_DIR" != "$APP_DIR" ]]; then
+    export OPENWEB_DATA_DIR="$DATA_DIR"
+  fi
+}
+
+# Befehl als Service-Benutzer ausfuehren (falls root und Benutzer vorhanden), sonst direkt
+as_app() {
+  if [[ "$EUID" -eq 0 ]] && id -u openweb &>/dev/null; then
+    runuser -u openweb -- "$@"
+  else
+    "$@"
+  fi
+}
+
+# Systemd-Variante mit eigenem Datenordner aktiv?
+uses_data_dir() {
+  [[ "$EUID" -eq 0 ]] && id -u openweb &>/dev/null && [[ "$DATA_DIR" != "$APP_DIR" ]]
+}
+
+# Rechte setzen. Der Code gehoert root und ist fuer den Service-Benutzer nur lesbar; nur der
+# Datenordner gehoert "openweb". Rechte in Dateien des Service-Benutzers werden als dieser
+# Benutzer gesetzt, damit untergeschobene symbolische Links nichts bewirken.
+fix_permissions() {
+  if uses_data_dir; then
+    chown -R -h root:root "$APP_DIR"
+    chmod -R go-w "$APP_DIR"
+    install -d -o openweb -g openweb -m 700 "$DATA_DIR"
+    if [[ -L "$DATA_DIR/backups" ]]; then
+      err "$DATA_DIR/backups ist ein symbolischer Link – bitte pruefen. Abbruch."
+      exit 1
+    fi
+    as_app mkdir -p "$DATA_DIR/backups"
+    as_app chmod 700 "$DATA_DIR/backups"
+    as_app find "$DATA_DIR" -maxdepth 1 -name .env -type f -exec chmod 600 {} +
+    as_app find "$DATA_DIR/backups" -type f -exec chmod 600 {} +
+  else
+    # Ohne Service-Benutzer: nur Rechte nachziehen, dabei keinen symbolischen Links folgen
+    find "$DATA_DIR" -maxdepth 1 -name .env -type f -exec chmod 600 {} +
+    if [[ -d "$DATA_DIR/backups" && ! -L "$DATA_DIR/backups" ]]; then
+      chmod 700 "$DATA_DIR/backups"
+      find "$DATA_DIR/backups" -type f -exec chmod 600 {} +
+    fi
+  fi
+}
+
+# .env als reine Daten lesen (nie per "source" ausfuehren): nur bekannte Schluessel, kein export.
+# Die Datei kann vom Service-Benutzer bzw. vom Web-Setup geschrieben worden sein.
+ENV_KEYS=" NODE_ENV PORT APP_URL DATABASE_URL SESSION_SECRET SESSION_MAX_AGE_MS ADMIN_EMAIL ADMIN_PASSWORD NAVIDROME_ENCRYPTION_KEY NAVIDROME_ENABLED NAVIDROME_URL NAVIDROME_USERNAME POSTGRES_PASSWORD DOMAIN HOST TRUST_PROXY "
+load_env() {
+  if [[ -L "$ENV_FILE" || ! -f "$ENV_FILE" ]]; then
+    err "$ENV_FILE fehlt oder ist keine regulaere Datei."
+    exit 1
+  fi
+  local line key value
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    [[ "$line" =~ ^[[:space:]]*(#|$) ]] && continue
+    [[ "$line" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Z_][A-Z0-9_]*)=(.*)$ ]] || continue
+    key="${BASH_REMATCH[2]}"
+    value="${BASH_REMATCH[3]}"
+    [[ "$ENV_KEYS" == *" $key "* ]] || continue
+    # Umschliessende Anfuehrungszeichen entfernen (wie dotenv), Inhalt bleibt wortwoertlich
+    if [[ "$value" =~ ^\'(.*)\'$ || "$value" =~ ^\"(.*)\"$ ]]; then
+      value="${BASH_REMATCH[1]}"
+    fi
+    printf -v "$key" '%s' "$value"
+  done < "$ENV_FILE"
+}
+
+# systemd-Unit schreiben (Code read-only, nur der Datenordner ist beschreibbar)
+write_systemd_unit() {
+  cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
+[Unit]
+Description=OpenWeb Link-in-Bio
+After=network.target
+
+[Service]
+Type=simple
+User=openweb
+Group=openweb
+WorkingDirectory=${APP_DIR}
+Environment=PATH=/opt/node26/bin:/usr/local/bin:/usr/bin:/bin
+Environment=OPENWEB_DATA_DIR=${DATA_DIR}
+ExecStart=/usr/bin/env node server.js
+Restart=always
+RestartSec=5
+EnvironmentFile=${ENV_FILE}
+# Haertung: keine zusaetzlichen Rechte, eigenes /tmp, System read-only ausser dem Datenordner
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=${DATA_DIR}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+# Bestehende systemd-Installation (Daten im Code-Ordner, alles "openweb"-eigen) umstellen:
+# .env, Backups und Statusdatei nach /var/lib/openweb verschieben und die Unit neu schreiben.
+migrate_to_data_dir() {
+  [[ "$EUID" -eq 0 ]] || return 0
+  id -u openweb &>/dev/null || return 0
+  systemctl cat "$SERVICE_NAME" &>/dev/null || return 0
+  if [[ "$DATA_DIR" == "$SYSTEM_DATA_DIR" && -f "$SYSTEM_DATA_DIR/.env" ]]; then
+    return 0
+  fi
+  log "Stelle auf getrennten Datenordner um: $SYSTEM_DATA_DIR"
+  install -d -o root -g root -m 700 "$SYSTEM_DATA_DIR"
+  local item src
+  for item in .env backups .last-track-id; do
+    src="$APP_DIR/$item"
+    if [[ -L "$src" ]]; then
+      err "$src ist ein symbolischer Link – bitte manuell pruefen. Abbruch."
+      exit 1
+    fi
+    [[ -e "$src" ]] || continue
+    if [[ -e "$SYSTEM_DATA_DIR/$item" ]]; then
+      err "$SYSTEM_DATA_DIR/$item existiert bereits – bitte manuell zusammenfuehren. Abbruch."
+      exit 1
+    fi
+    mv "$src" "$SYSTEM_DATA_DIR/$item"
+  done
+  chown -R -h openweb:openweb "$SYSTEM_DATA_DIR"
+  DATA_DIR="$SYSTEM_DATA_DIR"
+  ENV_FILE="$DATA_DIR/.env"
+  export OPENWEB_DATA_DIR="$DATA_DIR"
+  write_systemd_unit
+  systemctl daemon-reload
+  log ".env und Backups liegen jetzt in $SYSTEM_DATA_DIR."
 }
 
 # Warnen, wenn Klartext-Passwoerter aus alten Installationen noch in der .env stehen
@@ -132,6 +271,21 @@ cmd_install() {
   # --- System-Checks --------------------------------------------------------
   require_node
 
+  # --- Betriebsart: systemd-Service (root) -> Daten in /var/lib/openweb ------
+  USE_SYSTEMD="false"
+  if [[ "$EUID" -eq 0 ]] && prompt_confirm "systemd-Service einrichten (empfohlen fuer den Produktivbetrieb)" "j"; then
+    USE_SYSTEMD="true"
+    id -u openweb &>/dev/null || useradd -r -s /bin/false openweb
+    # Bestehende .env aus dem Projektordner uebernehmen (aeltere Installationen)
+    if [[ -f "$APP_DIR/.env" && ! -L "$APP_DIR/.env" && ! -e "$SYSTEM_DATA_DIR/.env" ]]; then
+      install -d -o root -g root -m 700 "$SYSTEM_DATA_DIR"
+      mv "$APP_DIR/.env" "$SYSTEM_DATA_DIR/.env"
+    fi
+    install -d -m 700 "$SYSTEM_DATA_DIR"
+    OPENWEB_DATA_DIR="$SYSTEM_DATA_DIR"
+  fi
+  resolve_data_dir
+
   # --- .env vorbereiten -----------------------------------------------------
   OLD_POSTGRES_PASSWORD=""
   if [[ -f "$ENV_FILE" ]]; then
@@ -145,10 +299,7 @@ cmd_install() {
   fi
 
   if [[ -f "$ENV_FILE" ]]; then
-    set -a
-    # shellcheck source=/dev/null
-    source "$ENV_FILE"
-    set +a
+    load_env
   fi
 
   # --- Datenbank-Variante --------------------------------------------------
@@ -229,6 +380,16 @@ cmd_install() {
   PORT=$(prompt "Server Port" "${PORT:-3000}")
   DOMAIN=$(prompt "Domain (optional, fuer nginx)" "${DOMAIN:-}")
 
+  # Mit nginx davor: nur auf 127.0.0.1 lauschen und genau einem Proxy-Hop vertrauen.
+  # Ohne Proxy: X-Forwarded-For nie vertrauen, sonst ist die Client-IP faelschbar.
+  if [[ -n "$DOMAIN" ]] && command -v nginx &>/dev/null; then
+    HOST="127.0.0.1"
+    TRUST_PROXY="loopback"
+  else
+    HOST=""
+    TRUST_PROXY="0"
+  fi
+
   # --- Navidrome (optional) -------------------------------------------------
   NAVIDROME_ENABLED="false"
   NAVIDROME_URL=""
@@ -258,14 +419,19 @@ NAVIDROME_ENCRYPTION_KEY=${NAVIDROME_ENCRYPTION_KEY}
 NAVIDROME_ENABLED=${NAVIDROME_ENABLED}
 NAVIDROME_URL=${NAVIDROME_URL}
 NAVIDROME_USERNAME=${NAVIDROME_USERNAME}
+TRUST_PROXY=${TRUST_PROXY}
 EOF
+    if [[ -n "$HOST" ]]; then
+      echo "HOST=${HOST}" >> "$ENV_FILE"
+    fi
     if [[ "$DB_CHOICE" == "1" ]]; then
       echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}" >> "$ENV_FILE"
     fi
   )
   chmod 600 "$ENV_FILE"
-  # Per sudo installiert: .env dem aufrufenden Benutzer geben (systemd-Variante setzt spaeter openweb)
-  if [[ "$EUID" -eq 0 && -n "${SUDO_USER:-}" ]]; then
+  # Per sudo ohne systemd installiert: .env dem aufrufenden Benutzer geben
+  # (systemd-Variante: fix_permissions gibt den Datenordner dem Service-Benutzer)
+  if [[ "$EUID" -eq 0 && -n "${SUDO_USER:-}" && "$USE_SYSTEMD" != "true" ]]; then
     chown "$SUDO_USER" "$ENV_FILE"
   fi
 
@@ -280,7 +446,8 @@ EOF
 
   # --- npm + Datenbank-Setup ------------------------------------------------
   log "Installiere Node-Abhaengigkeiten…"
-  (cd "$APP_DIR" && npm install)
+  # Exakt die Versionen aus package-lock.json (wie beim Update)
+  (cd "$APP_DIR" && npm ci --omit=dev)
 
   log "Fuehre Migrationen aus…"
   (cd "$APP_DIR" && npm run db:migrate)
@@ -290,31 +457,9 @@ EOF
 
   # --- systemd-Service (nur wenn root) --------------------------------------
   if [[ "$EUID" -eq 0 ]]; then
-    if prompt_confirm "systemd-Service einrichten" "j"; then
-      cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
-[Unit]
-Description=OpenWeb Link-in-Bio
-After=network.target
-
-[Service]
-Type=simple
-User=openweb
-Group=openweb
-WorkingDirectory=${APP_DIR}
-Environment=PATH=/opt/node26/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/usr/bin/env npm start
-Restart=always
-RestartSec=5
-EnvironmentFile=${ENV_FILE}
-# Haertung: keine zusaetzlichen Rechte (setuid), eigenes /tmp
-NoNewPrivileges=true
-PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
-EOF
-      id -u openweb &>/dev/null || useradd -r -s /bin/false openweb
-      chown -R openweb:openweb "$APP_DIR"
+    if [[ "$USE_SYSTEMD" == "true" ]]; then
+      write_systemd_unit
+      fix_permissions
       systemctl daemon-reload
       systemctl enable "$SERVICE_NAME"
       log "Service ${SERVICE_NAME} eingerichtet. Starten mit: systemctl start ${SERVICE_NAME}"
@@ -332,6 +477,7 @@ server {
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
@@ -344,6 +490,9 @@ EOF
       fi
       nginx -t && systemctl reload nginx
       log "nginx eingerichtet."
+    elif [[ "$HOST" == "127.0.0.1" ]]; then
+      warn "nginx wurde nicht eingerichtet, die App lauscht aber nur auf 127.0.0.1 (HOST in $ENV_FILE)."
+      warn "  Ohne Reverse Proxy HOST entfernen und TRUST_PROXY=0 setzen."
 
       if command -v certbot &>/dev/null && prompt_confirm "SSL-Zertifikat mit Let's Encrypt erstellen" "n"; then
         certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$ADMIN_EMAIL" || warn "certbot ist fehlgeschlagen."
@@ -364,11 +513,35 @@ cmd_update() {
   log "Update: hole neuesten Code und behalte .env/DB bei"
   require_command git "git wird fuer update benoetigt."
   require_node
+  resolve_data_dir
+  migrate_to_data_dir
+
+  # Code-Verzeichnis gehoert root (aeltere Installationen: "openweb"). Erst die Rechte
+  # zuruecknehmen, dann git ausfuehren – ohne safe.directory-Ausnahme und ohne Hooks.
+  if uses_data_dir; then
+    chown -R -h root:root "$APP_DIR"
+    chmod -R go-w "$APP_DIR"
+  fi
+  # Konfiguration, ueber die git beim Aufruf Programme starten wuerde, nicht akzeptieren
+  if grep -qiE '^[[:space:]]*(sshcommand|fsmonitor|hookspath|pager|editor|askpass|helper|gitproxy|textconv|clean|smudge|process|path)[[:space:]]*=|^[[:space:]]*\[(include|includeif|filter|alias)' "$APP_DIR/.git/config" 2>/dev/null; then
+    err "$APP_DIR/.git/config enthaelt Eintraege, die Programme starten koennen (z. B. hooksPath, fsmonitor, filter). Bitte pruefen. Abbruch."
+    exit 1
+  fi
+  local git_cmd=(git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c protocol.ext.allow=never -C "$APP_DIR")
+
+  # Veraenderte Code-Dateien (ausser der generierten package-lock.json) nicht ueberschreiben,
+  # sondern melden: sie koennten manipuliert worden sein.
+  local changed
+  changed=$("${git_cmd[@]}" status --porcelain --untracked-files=no | grep -v ' package-lock.json$' || true)
+  if [[ -n "$changed" ]]; then
+    err "Lokal veraenderte Dateien im Code-Verzeichnis gefunden:"
+    echo "$changed" >&2
+    err "Bitte pruefen (z. B. 'git diff') und bereinigen, dann das Update erneut starten."
+    exit 1
+  fi
 
   # Frueher lief hier "npm install", das die package-lock.json lokal veraendert hat.
   # Diese generierte Datei zuruecksetzen, damit "git pull" nicht an lokalen Aenderungen scheitert.
-  # Repo gehoert nach der Installation "openweb" -> als root sonst "dubious ownership"
-  local git_cmd=(git -c safe.directory="$APP_DIR" -C "$APP_DIR")
   if ! "${git_cmd[@]}" diff --quiet -- package-lock.json; then
     warn "Lokale Aenderungen an package-lock.json werden verworfen (generierte Datei)."
     "${git_cmd[@]}" checkout -- package-lock.json
@@ -406,17 +579,11 @@ cmd_change_password() {
     err "Passwort zu kurz."
     exit 1
   fi
-  (cd "$APP_DIR" && ADMIN_EMAIL="$email" ADMIN_PASSWORD="$password" node -e "
-require('dotenv').config();
-const { hashPassword } = require('./lib/auth');
-const db = require('./lib/db');
-(async () => {
-  const hash = await hashPassword(process.env.ADMIN_PASSWORD);
-  await db.query('UPDATE users SET password_hash = \$1, updated_at = NOW() WHERE email = \$2', [hash, process.env.ADMIN_EMAIL]);
-  console.log('Passwort geaendert fuer', process.env.ADMIN_EMAIL);
-  process.exit(0);
-})().catch(e => { console.error(e); process.exit(1); });
-")
+  # Normalisiert die E-Mail, bricht ab, wenn kein Konto passt, und beendet alle Sitzungen
+  if ! (cd "$APP_DIR" && ADMIN_EMAIL="$email" ADMIN_PASSWORD="$password" node scripts/change-password.js); then
+    err "Passwort wurde NICHT geaendert."
+    exit 1
+  fi
 }
 
 cmd_change_navidrome() {
@@ -435,7 +602,7 @@ cmd_change_navidrome() {
   poll=$(prompt "Poll-Intervall in Sekunden" "30")
   # Werte als Umgebungsvariablen VOR dem Befehl uebergeben (nach "node -e" waeren es nur Argumente)
   (cd "$APP_DIR" && NAVIDROME_ENABLED="$enabled" NAVIDROME_URL="$url" NAVIDROME_USERNAME="$username" NAVIDROME_PASSWORD="$password" NAVIDROME_POLL="$poll" node -e "
-require('dotenv').config();
+require('./lib/paths').loadEnv();
 const { encrypt } = require('./lib/crypto');
 const db = require('./lib/db');
 (async () => {
@@ -482,14 +649,12 @@ cmd_logs() {
 }
 
 ensure_env() {
+  resolve_data_dir
   if [[ ! -f "$ENV_FILE" ]]; then
-    err ".env nicht gefunden. Bitte zuerst 'bash install.sh' ausfuehren."
+    err ".env nicht gefunden ($ENV_FILE). Bitte zuerst 'bash install.sh' ausfuehren."
     exit 1
   fi
-  set -a
-  # shellcheck source=/dev/null
-  source "$ENV_FILE"
-  set +a
+  load_env
 }
 
 usage() {

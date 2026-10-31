@@ -2,7 +2,7 @@
 // OpenWeb — Link-in-Bio Server (Node.js + Express + PostgreSQL)
 // =========================================================
 
-require('dotenv').config();
+require('./lib/paths').loadEnv();
 
 const express = require('express');
 const path = require('path');
@@ -260,6 +260,7 @@ async function finalizeApp() {
     const session = require('express-session');
     const PgSession = require('connect-pg-simple')(session);
     const db = require('./lib/db');
+    const visibility = require('./lib/visibility');
     const publicRoutes = require('./routes/public');
     const adminRoutes = require('./routes/admin');
     const navidromeRoutes = require('./routes/navidrome');
@@ -410,7 +411,14 @@ async function finalizeApp() {
         const publicDomain = process.env.PUBLIC_DOMAIN
           ? (process.env.PUBLIC_DOMAIN.startsWith('http') ? process.env.PUBLIC_DOMAIN : `${req.protocol}://${process.env.PUBLIC_DOMAIN}`)
           : `${req.protocol}://${req.get('host')}`;
-        const { rows: slugs } = await db.query('SELECT slug FROM links WHERE is_active = true AND slug IS NOT NULL AND password_hash IS NULL');
+        // Nur Links, die auch die oeffentliche Linkliste zeigen wuerde (Zeitsteuerung, Ablaufdatum,
+        // Profil nicht oeffentlich)
+        const profileHidden = await visibility.isProfileHiddenFor(req);
+        const { rows: slugRows } = profileHidden ? { rows: [] } : await db.query(
+          `SELECT slug, ${visibility.visibilityColumns()} FROM links WHERE is_active = true AND slug IS NOT NULL AND password_hash IS NULL`
+        );
+        const nowBerlin = visibility.getNowInBerlin();
+        const slugs = slugRows.filter(l => visibility.isLinkVisible(l, nowBerlin));
         const now = new Date().toISOString().slice(0, 10);
         const urls = [
           { loc: publicDomain, changefreq: 'daily', priority: '1.0' },
@@ -445,10 +453,14 @@ async function finalizeApp() {
         const slug = safeSlug(req.params.slug);
         if (!slug) return res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
         const { rows } = await db.query(`
-          SELECT id, url, password_hash IS NOT NULL AS is_password_protected
+          SELECT id, url, password_hash IS NOT NULL AS is_password_protected, ${visibility.visibilityColumns()}
           FROM links WHERE slug = $1 AND is_active = true LIMIT 1
         `, [slug]);
-        if (!rows.length) return res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+        // Verborgene, abgelaufene oder zeitlich nicht freigegebene Links sowie Links eines nicht
+        // oeffentlichen Profils wie nicht vorhandene behandeln
+        if (!rows.length || !visibility.isLinkVisible(rows[0]) || await visibility.isProfileHiddenFor(req)) {
+          return res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+        }
         // Passwortgeschuetzte Links nicht per Kurzlink freigeben -> Entsperren auf der Startseite
         if (rows[0].is_password_protected) return res.redirect('/');
         await db.query(`
@@ -549,9 +561,16 @@ async function finalizeApp() {
     res.status(status).json({ ok: false, error: NODE_ENV === 'production' ? message : err.message });
   });
 
-  app.listen(PORT, () => {
+  // HOST: Bind-Adresse. Hinter einem Reverse-Proxy auf demselben Host 127.0.0.1 setzen, damit der
+  // Node-Port nicht direkt erreichbar ist (sonst koennen Clients X-Forwarded-For selbst setzen).
+  const HOST = (process.env.HOST || '').trim() || undefined;
+  if (!HOST && app.get('trust proxy') !== 0 && app.get('trust proxy') !== false) {
+    console.warn('[OpenWeb] Hinweis: TRUST_PROXY ist aktiv, der Server lauscht aber auf allen Schnittstellen. ' +
+      'Hinter einem Proxy HOST=127.0.0.1 setzen, ohne Proxy TRUST_PROXY=0.');
+  }
+  app.listen(PORT, HOST, () => {
     const mode = setupRequired ? 'SETUP-MODUS' : NODE_ENV;
-    console.log(`[OpenWeb] Server laeuft auf http://localhost:${PORT} (env: ${mode})`);
+    console.log(`[OpenWeb] Server laeuft auf http://${HOST || 'localhost'}:${PORT} (env: ${mode})`);
   });
 
   if (!setupRequired) {

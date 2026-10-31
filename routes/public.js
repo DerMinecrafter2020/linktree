@@ -11,6 +11,8 @@ const { parseUserAgent, parseCountryCode } = require('../lib/analytics');
 const audit = require('../lib/audit');
 const alert = require('../lib/alert');
 const icons = require('../lib/icons');
+const { visibilityColumns, getNowInBerlin, isLinkVisible, isProfileHiddenFor } = require('../lib/visibility');
+const webauthnRp = require('../lib/webauthn-rp');
 
 const router = express.Router();
 
@@ -21,18 +23,37 @@ router.param('id', (req, res, next, id) => {
   next();
 });
 
+// API-Keys sind 256-Bit-Zufallswerte: Suche ueber einen SHA-256-Index (key_lookup) statt
+// bcrypt-Vergleich gegen jeden gespeicherten Key. Aeltere Keys ohne key_lookup werden einmalig
+// per bcrypt geprueft und beim ersten erfolgreichen Abruf nachgetragen.
+function apiKeyLookup(key) {
+  return require('crypto').createHash('sha256').update(key).digest('hex');
+}
+
 async function requireApiKey(req, res, next) {
   try {
     const key = req.headers['x-api-key'];
-    if (!key || typeof key !== 'string' || key.length > 200) {
+    if (!key || typeof key !== 'string' || !/^[0-9a-f]{64}$/.test(key)) {
+      req.loginRateLimit?.increment(true);
       return res.status(401).json({ ok: false, error: 'API-Key erforderlich' });
     }
-    const { rows } = await db.query('SELECT id, key_hash FROM api_keys');
+    const lookup = apiKeyLookup(key);
     let match = null;
-    for (const r of rows) {
-      if (await bcrypt.compare(key, r.key_hash)) { match = r; break; }
+    const { rows } = await db.query('SELECT id, key_hash FROM api_keys WHERE key_lookup = $1 LIMIT 1', [lookup]);
+    if (rows[0] && await bcrypt.compare(key, rows[0].key_hash)) {
+      match = rows[0];
+    } else if (!rows[0]) {
+      const { rows: legacy } = await db.query('SELECT id, key_hash FROM api_keys WHERE key_lookup IS NULL');
+      for (const r of legacy) {
+        if (await bcrypt.compare(key, r.key_hash)) { match = r; break; }
+      }
+      if (match) await db.query('UPDATE api_keys SET key_lookup = $1 WHERE id = $2 AND key_lookup IS NULL', [lookup, match.id]);
     }
-    if (!match) return res.status(401).json({ ok: false, error: 'Ungueltiger API-Key' });
+    if (!match) {
+      req.loginRateLimit?.increment(true);
+      return res.status(401).json({ ok: false, error: 'Ungueltiger API-Key' });
+    }
+    req.loginRateLimit?.increment(false);
     await db.query('UPDATE api_keys SET last_used_at = NOW() WHERE id = $1', [match.id]);
     next();
   } catch (err) {
@@ -98,6 +119,64 @@ function getDummyHash() {
 
 const rateLimitLogin = createAttemptLimiter('Zu viele Anmeldeversuche.');
 const rateLimitUnlock = createAttemptLimiter('Zu viele Passwortversuche.', { resetOnSuccess: false });
+const rateLimitApiKey = createAttemptLimiter('Zu viele ungueltige API-Keys.', { resetOnSuccess: false });
+
+// Zusaetzlicher Zaehler je Konto (nicht je IP): Fehlversuche aus beliebig vielen IPs zaehlen
+// gemeinsam.
+// - TOTP: nach ACCOUNT_LIMITS.totp Fehlversuchen wird der 2FA-Schritt fuer das Konto gesperrt.
+//   Diesen Schritt erreicht nur, wer das Passwort kennt – ein Fremder kann den Admin so nicht
+//   aussperren.
+// - Passwort: nur Alarm an den Admin, KEINE Sperre (sonst koennte jeder anonym den Login des
+//   Admins dauerhaft blockieren). Der Schutz kommt hier aus dem IP-Limit und dem Alarm.
+const ACCOUNT_WINDOW_MS = 15 * 60 * 1000;
+const ACCOUNT_LIMITS = { password: 30, totp: 10 };
+const ACCOUNT_LOCKING = { password: false, totp: true };
+const accountFailures = new Map(); // `${factor}:${userId}` -> { count, resetAt, alerted }
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, r] of accountFailures.entries()) if (now >= r.resetAt) accountFailures.delete(k);
+}, 60 * 1000).unref();
+
+function accountRecord(factor, userId) {
+  const key = `${factor}:${userId}`;
+  const now = Date.now();
+  let r = accountFailures.get(key);
+  if (!r || now >= r.resetAt) {
+    r = { count: 0, resetAt: now + ACCOUNT_WINDOW_MS, alerted: false };
+    accountFailures.set(key, r);
+  }
+  return r;
+}
+
+// Antwortet mit 429 und gibt true zurueck, wenn der Faktor fuer dieses Konto gesperrt ist
+function accountLocked(res, factor, userId) {
+  if (!ACCOUNT_LOCKING[factor]) return false;
+  const r = accountRecord(factor, userId);
+  if (r.count < ACCOUNT_LIMITS[factor]) return false;
+  const retryAfter = Math.ceil((r.resetAt - Date.now()) / 1000);
+  res.setHeader('Retry-After', retryAfter);
+  res.status(429).json({ ok: false, error: `Zu viele Fehlversuche fuer dieses Konto. Bitte in ${retryAfter} Sekunden erneut versuchen.` });
+  return true;
+}
+
+function recordAccountFailure(req, factor, user) {
+  const r = accountRecord(factor, user.id);
+  r.count += 1;
+  if (r.count >= ACCOUNT_LIMITS[factor] && !r.alerted) {
+    r.alerted = true;
+    alert.notify('login', `Viele fehlgeschlagene Anmeldeversuche (${factor === 'totp' ? '2FA-Code' : 'Passwort'})`, {
+      email: user.email,
+      ip: req.ip || req.socket?.remoteAddress || '-',
+      attempts: String(r.count),
+      time: new Date().toISOString(),
+    }).catch(() => {});
+  }
+}
+
+function clearAccountFailures(userId) {
+  for (const factor of Object.keys(ACCOUNT_LIMITS)) accountFailures.delete(`${factor}:${userId}`);
+}
 
 // Session-ID nach Login neu erzeugen (Schutz vor Session Fixation), Daten uebernehmen
 function regenerateSession(req, data) {
@@ -113,8 +192,7 @@ function regenerateSession(req, data) {
 // "Profil nicht oeffentlich": Profil und Links nur fuer eingeloggte Admins (Vorschau)
 async function requirePublicProfile(req, res, next) {
   try {
-    const { rows } = await db.query('SELECT is_public FROM profile WHERE id = 1 LIMIT 1');
-    if (rows[0]?.is_public === false && !req.session?.userId) {
+    if (await isProfileHiddenFor(req)) {
       return res.status(403).json({ ok: false, error: 'Dieses Profil ist nicht oeffentlich' });
     }
     next();
@@ -156,31 +234,6 @@ router.get('/legal-content', async (req, res, next) => {
   }
 });
 
-function getNowInBerlin() {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
-}
-
-function isLinkVisible(link, nowBerlin) {
-  if (!link.is_active) return false;
-  if (link.expires_at) {
-    const expires = new Date(link.expires_at);
-    if (expires < nowBerlin) return false;
-  }
-  if (link.visible_from) {
-    const from = new Date(link.visible_from);
-    if (from > nowBerlin) return false;
-  }
-  if (link.visible_until) {
-    const until = new Date(link.visible_until);
-    if (until < nowBerlin) return false;
-  }
-  if (Array.isArray(link.visible_weekdays) && link.visible_weekdays.length) {
-    const weekday = nowBerlin.getDay();
-    if (!link.visible_weekdays.includes(weekday)) return false;
-  }
-  return true;
-}
-
 router.get('/links/categories', requirePublicProfile, async (req, res, next) => {
   try {
     const { rows } = await db.query('SELECT id, name, position FROM link_categories ORDER BY position ASC, name ASC');
@@ -192,8 +245,7 @@ router.get('/links', requirePublicProfile, async (req, res, next) => {
   try {
     const { rows } = await db.query(`
       SELECT l.id, l.title, l.subtitle, l.url, l.display_url, l.icon, l.position,
-             l.is_active, l.open_new, l.meta_description, l.slug,
-             l.visible_from, l.visible_until, l.visible_weekdays,
+             l.open_new, l.meta_description, l.slug, ${visibilityColumns('l')},
              l.category_id, c.name AS category_name, c.position AS category_position,
              l.password_hash IS NOT NULL AS is_password_protected
       FROM links l
@@ -220,8 +272,11 @@ router.get('/links', requirePublicProfile, async (req, res, next) => {
 router.post('/links/:id/unlock', rateLimitUnlock, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { rows } = await db.query('SELECT id, url, password_hash FROM links WHERE id = $1 AND is_active = true LIMIT 1', [id]);
-    if (!rows.length) {
+    // Gleiche Regeln wie die oeffentliche Linkliste: verborgene, abgelaufene, zeitlich noch nicht
+    // freigegebene Links und Links eines nicht oeffentlichen Profils gelten als "nicht gefunden".
+    const hidden = await isProfileHiddenFor(req);
+    const { rows } = await db.query(`SELECT id, url, password_hash, ${visibilityColumns()} FROM links WHERE id = $1 LIMIT 1`, [id]);
+    if (hidden || !rows.length || !isLinkVisible(rows[0])) {
       req.loginRateLimit?.increment(false);
       return res.status(404).json({ ok: false, error: 'Link nicht gefunden' });
     }
@@ -250,10 +305,11 @@ async function sendDiscordWebhook(payload) {
     if (!cfg.discord_webhook_enabled || !cfg.discord_webhook_url) return;
     const url = cfg.discord_webhook_url;
     const template = cfg.discord_webhook_template || 'Neuer Klick auf **{{title}}** ({{url}})';
+    // Replacer-Funktionen: $&, $1 usw. in Titeln/URLs bleiben wortwoertlich
     const text = template
-      .replace(/\{\{title\}\}/g, payload.title || 'Unbekannt')
-      .replace(/\{\{url\}\}/g, payload.url || '')
-      .replace(/\{\{timestamp\}\}/g, new Date().toISOString());
+      .replace(/\{\{title\}\}/g, () => payload.title || 'Unbekannt')
+      .replace(/\{\{url\}\}/g, () => payload.url || '')
+      .replace(/\{\{timestamp\}\}/g, () => new Date().toISOString());
     await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -264,9 +320,21 @@ async function sendDiscordWebhook(payload) {
   }
 }
 
+// UTM-Werte stammen von anonymen Besuchern: fuehrende Formelzeichen entfernen (CSV-Export)
+function safeUtm(value) {
+  return v.safeText(value, 120).replace(/^[=+\-@]+/, '');
+}
+
 router.post('/links/:id/click', async (req, res, next) => {
   try {
     const { id } = req.params;
+    // Nur Klicks auf aktuell oeffentlich sichtbare Links zaehlen und melden
+    const hidden = await isProfileHiddenFor(req);
+    const linkRes = await db.query(`SELECT id, title, url, password_hash IS NOT NULL AS is_password_protected, ${visibilityColumns()} FROM links WHERE id = $1 LIMIT 1`, [id]);
+    const link = linkRes.rows[0];
+    if (hidden || !link || !isLinkVisible(link)) {
+      return res.status(404).json({ ok: false, error: 'Link nicht gefunden' });
+    }
     const ip = req.ip || req.socket?.remoteAddress || null;
     const ipHash = ip ? require('crypto').createHash('sha256').update(ip).digest('hex') : null;
     const utm = req.body.utm || {};
@@ -277,26 +345,22 @@ router.post('/links/:id/click', async (req, res, next) => {
       INSERT INTO link_clicks (link_id, ip_hash, user_agent, referrer, utm_source, utm_medium, utm_campaign, country_code, device_type, browser, os)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     `, [
-      id,
+      link.id,
       ipHash,
       ua.slice(0, 500) || null,
       req.headers.referer?.slice(0, 500) || null,
-      v.safeText(utm.source, 120),
-      v.safeText(utm.medium, 120),
-      v.safeText(utm.campaign, 120),
+      safeUtm(utm.source),
+      safeUtm(utm.medium),
+      safeUtm(utm.campaign),
       country,
       deviceType,
       browser,
       os,
     ]);
-    // Asynchroner Discord-Webhook ohne Antwort zu blockieren
-    const linkRes = await db.query('SELECT title, url, password_hash IS NOT NULL AS is_password_protected FROM links WHERE id = $1 LIMIT 1', [id]);
-    if (linkRes.rows[0]) {
-      const link = linkRes.rows[0];
-      // Ziel geschuetzter Links nicht in den (evtl. geteilten) Discord-Kanal posten
-      const payload = { title: link.title, url: link.is_password_protected ? '(passwortgeschuetzt)' : link.url };
-      sendDiscordWebhook(payload).catch(() => {});
-    }
+    // Asynchroner Discord-Webhook ohne Antwort zu blockieren.
+    // Ziel geschuetzter Links nicht in den (evtl. geteilten) Discord-Kanal posten
+    const payload = { title: link.title, url: link.is_password_protected ? '(passwortgeschuetzt)' : link.url };
+    sendDiscordWebhook(payload).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -381,19 +445,18 @@ router.get('/qr-code', async (req, res, next) => {
   }
 });
 
-router.get('/public/profile', requireApiKey, async (req, res, next) => {
+router.get('/public/profile', rateLimitApiKey, requireApiKey, async (req, res, next) => {
   try {
     const { rows } = await db.query('SELECT name, handle, bio, avatar, avatar_url, theme, is_public, allow_visitor_theme, icon_style, player_progress_style FROM profile WHERE id = 1 LIMIT 1');
     res.json({ ok: true, data: rows[0] || null });
   } catch (err) { next(err); }
 });
 
-router.get('/public/links', requireApiKey, async (req, res, next) => {
+router.get('/public/links', rateLimitApiKey, requireApiKey, async (req, res, next) => {
   try {
     const { rows } = await db.query(`
       SELECT l.id, l.title, l.subtitle, l.url, l.display_url, l.icon, l.position,
-             l.is_active, l.open_new, l.meta_description, l.slug,
-             l.visible_from, l.visible_until, l.visible_weekdays,
+             l.open_new, l.meta_description, l.slug, ${visibilityColumns('l')},
              l.category_id, c.name AS category_name,
              l.password_hash IS NOT NULL AS is_password_protected
       FROM links l
@@ -436,8 +499,13 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
 
     let passwordValid = false;
     if (password) {
+      if (accountLocked(res, 'password', user.id)) {
+        req.loginRateLimit?.increment(true);
+        return;
+      }
       passwordValid = await auth.verifyPassword(password, user.password_hash);
       if (!passwordValid) {
+        recordAccountFailure(req, 'password', user);
         req.loginRateLimit?.increment(true);
         return res.status(401).json({ ok: false, error: 'Ungueltige Anmeldedaten' });
       }
@@ -474,6 +542,7 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
     }
 
     req.loginRateLimit?.increment(false);
+    clearAccountFailures(user.id);
     await regenerateSession(req, { userId: user.id, email: user.email });
 
     // Eingeloggt bleiben: Session-Cookie auf 30 Tage verlängern
@@ -506,6 +575,7 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
   // ---------- 2FA Login Endpoints ----------
   
   async function completeLogin(req, res, user) {
+    clearAccountFailures(user.id);
     const remember = !!req.session.pendingRemember;
     await regenerateSession(req, { userId: user.id, email: user.email });
     if (remember) {
@@ -542,9 +612,14 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
       if (!user || !user.totp_enabled || !user.totp_secret) {
         return res.status(400).json({ ok: false, error: 'TOTP nicht konfiguriert' });
       }
+      if (accountLocked(res, 'totp', user.id)) {
+        req.loginRateLimit?.increment(true);
+        return;
+      }
       const totp = require('../lib/totp');
       const result = await totp.verifyCode(req.body.code, user.totp_secret, user.totp_last_timestep);
       if (!result.valid) {
+        recordAccountFailure(req, 'totp', user);
         req.loginRateLimit?.increment(true);
         return res.status(401).json({ ok: false, error: 'Ungueltiger Code' });
       }
@@ -571,7 +646,7 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
       
       const { generateAuthenticationOptions } = require('@simplewebauthn/server');
       const options = await generateAuthenticationOptions({
-        rpID: req.hostname,
+        rpID: webauthnRp.getRelyingParty(req).rpID,
         allowCredentials: rows.map(r => ({
           id: r.credential_id,
           type: 'public-key',
@@ -605,23 +680,16 @@ router.post('/login', rateLimitLogin, async (req, res, next) => {
         return res.status(400).json({ ok: false, error: 'Key nicht gefunden' });
       }
       
-      const host = req.get('host');
-      const hostname = req.hostname;
-      const expectedOrigin = [
-        `${req.protocol}://${host}`,
-        `https://${host}`,
-        `http://${host}`,
-        `https://${hostname}`,
-        `http://${hostname}`
-      ];
-      
+      // RP-ID und erlaubte Origin kommen aus APP_URL, nicht aus Host-/X-Forwarded-Host-Headern
+      const rp = webauthnRp.getRelyingParty(req);
+
       let verification;
       try {
         verification = await verifyAuthenticationResponse({
           response: body,
           expectedChallenge,
-          expectedOrigin,
-          expectedRPID: hostname,
+          expectedOrigin: rp.origins,
+          expectedRPID: rp.rpID,
           credential: {
             id: authenticator.credential_id,
             publicKey: authenticator.public_key,

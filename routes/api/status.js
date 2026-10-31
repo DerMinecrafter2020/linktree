@@ -2,7 +2,8 @@ const express = require('express');
 const db = require('../../lib/db');
 const { shortCache } = require('../../lib/shortcache');
 const { getNowPlaying: getNavidromePlaying } = require('../../lib/navidrome');
-const { getNowPlaying: getMAPlaying } = require('../../lib/musicassistant');
+const { getNowPlaying: getMAPlaying, fetchCurrentCover } = require('../../lib/musicassistant');
+const { toPublicTrack } = require('../../lib/nowplaying-public');
 
 const router = express.Router();
 const getPlayerProgressStyle = shortCache(async () => {
@@ -16,9 +17,10 @@ router.get('/now-playing', async (req, res, next) => {
     playerProgressStyle = await getPlayerProgressStyle();
     // 1. Fetch from both
     const [maTrack, ndTrack] = await Promise.all([getMAPlaying(), getNavidromePlaying()]);
-    const respond = (track) => res.json({
+    // Nur oeffentliche Felder ausgeben (keine internen Server-URLs); geteiltes Cache-Objekt nicht veraendern
+    const respond = (track, source) => res.json({
       ok: true,
-      data: { ...(track || { playing: false }), player_progress_style: playerProgressStyle }
+      data: { ...toPublicTrack(track && source ? { ...track, source } : track), player_progress_style: playerProgressStyle }
     });
 
     // 2. Determine which one is actively playing
@@ -26,8 +28,7 @@ router.get('/now-playing', async (req, res, next) => {
       return respond(maTrack);
     }
     if (ndTrack && ndTrack.playing && !ndTrack.paused) {
-      ndTrack.source = 'navidrome';
-      return respond(ndTrack);
+      return respond(ndTrack, 'navidrome');
     }
 
     // 3. If neither is actively playing, show paused from whichever has it
@@ -35,8 +36,7 @@ router.get('/now-playing', async (req, res, next) => {
       return respond(maTrack);
     }
     if (ndTrack && ndTrack.playing) {
-      ndTrack.source = 'navidrome';
-      return respond(ndTrack);
+      return respond(ndTrack, 'navidrome');
     }
 
     // Nothing playing
@@ -44,6 +44,20 @@ router.get('/now-playing', async (req, res, next) => {
   } catch (err) {
     console.error('[status] now-playing error:', err.message);
     res.json({ ok: true, data: { playing: false, player_progress_style: playerProgressStyle } });
+  }
+});
+
+// Cover des aktuellen Music-Assistant-Titels ueber die eigene Origin ausliefern
+router.get('/cover', async (req, res) => {
+  try {
+    const cover = await fetchCurrentCover();
+    if (!cover) return res.status(404).send('Kein Cover');
+    res.setHeader('Content-Type', cover.contentType);
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    res.send(cover.body);
+  } catch (err) {
+    console.warn('[status] cover error:', err.message);
+    res.status(502).send('Cover nicht verfuegbar');
   }
 });
 

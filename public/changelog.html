@@ -48,6 +48,23 @@
     <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
 
     <div class="changelog-entry">
+      <h2>2026-10-31 — OpenWeb v3.2.0 (Sicherheits-Audit umgesetzt)</h2>
+      <ul>
+        <li><strong>Installation:</strong> Bei der systemd-Variante liegen Konfiguration und Backups jetzt getrennt vom Programmcode (<code>/var/lib/openweb</code>). Der Code gehört dem Systembenutzer <code>root</code> und ist für den Dienst nur lesbar. Bestehende Installationen werden beim nächsten <code>update</code> automatisch umgestellt. Die <code>.env</code> wird bei Wartungsbefehlen nur noch als Datei gelesen, nicht mehr als Skript ausgeführt.</li>
+        <li><strong>Installation:</strong> <code>install.sh update</code> bricht ab, wenn Programmdateien lokal verändert wurden, statt sie zu überschreiben. Mit nginx wird der Server nur noch auf <code>127.0.0.1</code> gebunden und <code>TRUST_PROXY</code> passend gesetzt.</li>
+        <li><strong>Passwort zurücksetzen:</strong> <code>install.sh change-password</code> behandelt die E-Mail unabhängig von Groß-/Kleinschreibung, meldet einen Fehler, wenn kein Konto passt, und beendet alle bestehenden Sitzungen des Kontos.</li>
+        <li><strong>Setup:</strong> Das Ersteinrichtungs-Formular kann nur noch genau einmal ausgeführt werden; parallele Aufrufe werden abgewiesen und es wird kein zweites Admin-Konto angelegt.</li>
+        <li><strong>Links:</strong> Zeitsteuerung, Ablaufdatum, Passwortschutz und „Profil nicht öffentlich“ gelten jetzt überall gleich – auch für Kurzlinks (<code>/go/…</code>), Sitemap, Entsperren und Klickzählung. Abgelaufene Links werden nicht mehr in der öffentlichen Liste angezeigt.</li>
+        <li><strong>Import:</strong> Beim Wiedereinspielen eines Exports bleiben Linkpasswörter und Ablaufdaten erhalten; lässt sich ein Passwort nicht wiederherstellen, wird der Link deaktiviert statt ungeschützt veröffentlicht.</li>
+        <li><strong>Now Playing:</strong> Die öffentliche Anzeige gibt keine internen Server-Adressen von Navidrome/Music Assistant mehr preis; Cover werden nur über die eigene Seite ausgeliefert.</li>
+        <li><strong>Anmeldung:</strong> Zusätzlicher Schutz gegen das Durchprobieren von Codes/Passwörtern über viele IP-Adressen hinweg, mit Benachrichtigung bei auffällig vielen Fehlversuchen. WebAuthn/Passkeys sind fest an die konfigurierte Adresse (<code>APP_URL</code>) gebunden.</li>
+        <li><strong>Statistik-Export:</strong> Werte aus Klickdaten können beim Öffnen der CSV-Datei in einer Tabellenkalkulation nicht mehr als Formel ausgeführt werden.</li>
+        <li><strong>Stabilität:</strong> Der Backup-Download kann den Server nicht mehr zum Absturz bringen; Cover- und Webhook-Abrufe haben jetzt Zeit- und Größenlimits.</li>
+        <li><strong>Leistung:</strong> Die Prüfung von API-Keys ist nicht mehr von der Anzahl der Keys abhängig.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <h2>2026-10-24 — OpenWeb v3.1.18 (E-Mail-Abhängigkeiten aktualisiert)</h2>
       <ul>
         <li><strong>Benachrichtigungen:</strong> Nodemailer wurde auf 10.2.1 aktualisiert; SMTP-Einstellungen bleiben unverändert.</li>

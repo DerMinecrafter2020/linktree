@@ -17,6 +17,7 @@ const alert = require('../lib/alert');
 const icons = require('../lib/icons');
 const encryptionKeyBackup = require('../lib/encryption-key-backup');
 const { getAvailableUsers: getMusicAssistantUsers } = require('../lib/musicassistant');
+const webauthnRp = require('../lib/webauthn-rp');
 
 function generateApiKey() {
   return require('crypto').randomBytes(32).toString('hex');
@@ -1009,6 +1010,8 @@ router.get('/export', async (req, res, next) => {
   }
 });
 
+const BCRYPT_HASH_RE = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
+
 router.post('/import', async (req, res, next) => {
   try {
     const data = req.body;
@@ -1016,6 +1019,7 @@ router.post('/import', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Ungueltiger Import' });
     }
 
+    let protectionLost = 0;
     await db.transaction(async (client) => {
       if (data.profile && typeof data.profile === 'object') {
         const p = data.profile;
@@ -1058,13 +1062,19 @@ router.post('/import', async (req, res, next) => {
           const l = data.links[i];
           const url = v.safeUrl(l.url);
           if (!url) continue;
+          // Passwortschutz und Ablaufdatum aus dem Export uebernehmen. Ein Link, der im Export
+          // geschuetzt war, dessen Hash aber fehlt oder ungueltig ist, wird deaktiviert statt
+          // ungeschuetzt veroeffentlicht.
+          const hadProtection = typeof l.password_hash === 'string' && l.password_hash !== '';
+          const passwordHash = hadProtection && BCRYPT_HASH_RE.test(l.password_hash) ? l.password_hash : null;
+          if (hadProtection && !passwordHash) protectionLost += 1;
           await client.query(`
             INSERT INTO links (
               title, subtitle, url, display_url, icon, position, is_active, open_new,
               meta_description, admin_note, slug, category_id,
-              visible_from, visible_until, visible_weekdays
+              visible_from, visible_until, visible_weekdays, password_hash, expires_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
           `, [
             v.safeText(l.title, 80),
             v.safeText(l.subtitle, 120),
@@ -1072,7 +1082,7 @@ router.post('/import', async (req, res, next) => {
             v.safeText(l.display_url, 120),
             v.sanitizeIconField(l.icon),
             i,
-            l.is_active !== false,
+            l.is_active !== false && !(hadProtection && !passwordHash),
             l.open_new !== false,
             v.safeText(l.meta_description, 280),
             v.safeText(l.admin_note, 280),
@@ -1081,13 +1091,15 @@ router.post('/import', async (req, res, next) => {
             v.safeDate(l.visible_from),
             v.safeDate(l.visible_until),
             v.safeWeekdays(l.visible_weekdays),
+            passwordHash,
+            v.safeDate(l.expires_at),
           ]);
         }
       }
     });
 
-    await audit.log(req, 'import', 'links', null, { imported: data.links?.length, categories: data.link_categories?.length });
-    res.json({ ok: true });
+    await audit.log(req, 'import', 'links', null, { imported: data.links?.length, categories: data.link_categories?.length, deactivated: protectionLost });
+    res.json({ ok: true, data: { deactivated_unprotected: protectionLost } });
   } catch (err) {
     next(err);
   }
@@ -1108,7 +1120,8 @@ router.post('/api-keys', async (req, res, next) => {
     if (!name) return res.status(400).json({ ok: false, error: 'Name ist Pflicht' });
     const plain = generateApiKey();
     const hash = await bcrypt.hash(plain, 10);
-    const { rows } = await db.query('INSERT INTO api_keys (name, key_hash) VALUES ($1, $2) RETURNING id, name, created_at', [name, hash]);
+    const lookup = crypto.createHash('sha256').update(plain).digest('hex');
+    const { rows } = await db.query('INSERT INTO api_keys (name, key_hash, key_lookup) VALUES ($1, $2, $3) RETURNING id, name, created_at', [name, hash, lookup]);
     await audit.log(req, 'create', 'api_key', rows[0].id, { name });
     res.json({ ok: true, data: { ...rows[0], key: plain } });
   } catch (err) { next(err); }
@@ -1143,14 +1156,28 @@ router.post('/backups', async (req, res, next) => {
   }
 });
 
+// Nur echte Backup-Dateien (Namensschema von lib/backup.js), keine Verzeichnisse oder Links
+const BACKUP_NAME_RE = /^openweb-backup-[A-Za-z0-9._-]{1,80}\.json$/;
+
 router.get('/backups/download/:name', async (req, res, next) => {
   try {
-    const name = path.basename(req.params.name);
-    const file = path.join(backup.BACKUP_DIR || path.join(__dirname, '..', 'backups'), name);
-    if (!fs.existsSync(file)) return res.status(404).json({ ok: false, error: 'Backup nicht gefunden' });
+    const name = String(req.params.name || '');
+    if (!BACKUP_NAME_RE.test(name) || name.includes('..')) {
+      return res.status(404).json({ ok: false, error: 'Backup nicht gefunden' });
+    }
+    const file = path.join(backup.BACKUP_DIR, name);
+    let stat;
+    try { stat = fs.lstatSync(file); } catch { stat = null; }
+    if (!stat || !stat.isFile()) return res.status(404).json({ ok: false, error: 'Backup nicht gefunden' });
     res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
     res.setHeader('Content-Type', 'application/json');
-    fs.createReadStream(file).pipe(res);
+    const stream = fs.createReadStream(file);
+    // Lesefehler duerfen den Prozess nicht beenden
+    stream.on('error', (err) => {
+      if (!res.headersSent) return next(err);
+      res.destroy(err);
+    });
+    stream.pipe(res);
   } catch (err) {
     next(err);
   }
@@ -1399,7 +1426,7 @@ router.post('/change-password', async (req, res, next) => {
       
       const options = await generateRegistrationOptions({
         rpName: 'OpenWeb',
-        rpID: req.hostname,
+        rpID: webauthnRp.getRelyingParty(req).rpID,
         userID: new Uint8Array(Buffer.from(String(req.session.userId))),
         userName: user.email,
         attestationType: 'none',
@@ -1428,21 +1455,14 @@ router.post('/change-password', async (req, res, next) => {
       if (!expectedChallenge) return res.status(400).json({ ok: false, error: 'Kein Challenge aktiv' });
       
       const { verifyRegistrationResponse } = require('@simplewebauthn/server');
-      const host = req.get('host');
-      const hostname = req.hostname;
-      const expectedOrigin = [
-        `${req.protocol}://${host}`,
-        `https://${host}`,
-        `http://${host}`,
-        `https://${hostname}`,
-        `http://${hostname}`
-      ];
-      
+      // RP-ID und Origin aus APP_URL (nicht aus Host-/X-Forwarded-Host-Headern)
+      const rp = webauthnRp.getRelyingParty(req);
+
       const verification = await verifyRegistrationResponse({
         response: req.body,
         expectedChallenge,
-        expectedOrigin,
-        expectedRPID: hostname,
+        expectedOrigin: rp.origins,
+        expectedRPID: rp.rpID,
       });
       
       if (verification.verified) {

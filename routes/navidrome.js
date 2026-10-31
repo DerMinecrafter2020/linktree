@@ -8,6 +8,9 @@ const express = require('express');
 const { decrypt } = require('../lib/crypto');
 const { getNowPlaying, buildSubsonicUrl, getSettings } = require('../lib/navidrome');
 const { requireAdminSession } = require('../lib/auth');
+const { toPublicTrack } = require('../lib/nowplaying-public');
+
+const COVER_MAX_BYTES = 5 * 1024 * 1024;
 
 const router = express.Router();
 
@@ -17,7 +20,8 @@ router.get('/now-playing', async (req, res, next) => {
     if (!track) {
       return res.json({ ok: true, data: { playing: false } });
     }
-    res.json({ ok: true, data: track });
+    // Nur oeffentliche Felder (u. a. nicht die Navidrome-Basis-URL)
+    res.json({ ok: true, data: toPublicTrack(track) });
   } catch (err) {
     console.error('[navidrome] now-playing error:', err.message);
     res.json({ ok: true, data: { playing: false } });
@@ -41,7 +45,7 @@ router.get('/cover-art', async (req, res, next) => {
       size,
     });
 
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!response.ok) {
       return res.status(response.status).send('Cover-Art-Fehler');
     }
@@ -51,11 +55,21 @@ router.get('/cover-art', async (req, res, next) => {
     if (!/^image\/(jpeg|png|gif|webp|avif|bmp)$/.test(contentType)) {
       return res.status(415).send('Ungueltiger Bildtyp');
     }
+    if (Number(response.headers.get('content-length') || 0) > COVER_MAX_BYTES) {
+      return res.status(502).send('Cover zu gross');
+    }
+    const chunks = [];
+    let total = 0;
+    for await (const chunk of response.body) {
+      total += chunk.length;
+      if (total > COVER_MAX_BYTES) return res.status(502).send('Cover zu gross');
+      chunks.push(chunk);
+    }
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=300');
-    const buffer = Buffer.from(await response.arrayBuffer());
-    res.send(buffer);
+    res.send(Buffer.concat(chunks));
   } catch (err) {
+    if (err.name === 'TimeoutError' || err.name === 'AbortError') return res.status(504).send('Navidrome antwortet nicht');
     next(err);
   }
 });
