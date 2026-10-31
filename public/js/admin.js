@@ -1848,6 +1848,7 @@
 
     loadAlertSettings();
     bindContactSettings();
+    bindMaintenance();
     $('#alert-form')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
@@ -1877,6 +1878,157 @@
         toast(res.ok ? '✅ Testbenachrichtigung gesendet' : '⚠️ Test konnte nicht gesendet werden', !res.ok);
       } catch (err) { toast('Fehler: ' + err.message, true); }
     });
+  }
+
+  // ---------- Wartungsmodus ----------
+  // datetime-local arbeitet in Ortszeit ohne Zone: fuer das Feld lokal formatieren, beim
+  // Speichern ueber new Date(wert) wieder als Zeitpunkt (ISO, UTC) an den Server.
+  function toLocalInput(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }
+
+  function formatWhen(iso) {
+    return new Date(iso).toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function renderMaintenanceStatus(s) {
+    const status = $('#maintenance-status');
+    const badge = $('#maintenance-badge');
+    if (badge) badge.hidden = !s.active;
+    if (!status) return;
+    status.className = 'contact-status';
+    if (!s.active) {
+      status.textContent = 'Aus – Besucher sehen die normale Startseite.';
+      return;
+    }
+    status.classList.add('warn');
+    const parts = [`🚧 Aktiv${s.started_at ? ` seit ${formatWhen(s.started_at)}` : ''}: Besucher sehen ${s.http_status === 404 ? 'die „Hier ist nichts“-Seite (404)' : 'die Wartungsseite (503)'}`];
+    if (s.countdown_enabled && s.ends_at) {
+      parts.push(`Countdown bis ${formatWhen(s.ends_at)}${s.auto_end ? ', danach endet der Wartungsmodus automatisch' : ' (danach bleibt die Seite in Wartung, bis du sie beendest)'}`);
+    }
+    status.textContent = parts.join(' · ') + '.';
+  }
+
+  function bindMaintenance() {
+    const form = $('#maintenance-form');
+    if (!form) return;
+    const fields = $('#maintenance-countdown-fields');
+    const errorEl = $('#maintenance-error');
+    const statusHint = $('#maintenance-status-hint');
+    const HINTS = {
+      503: '503 sagt Suchmaschinen „gleich wieder da“ – die Seite bleibt im Index.',
+      404: 'Achtung: Dauert die Wartung länger, können Suchmaschinen die Seite bei 404 aus dem Index nehmen.',
+    };
+    const PLACEHOLDERS = {
+      503: ['Wartungsarbeiten', 'Die Seite wird gerade überarbeitet und ist bald wieder da.'],
+      404: ['Hier ist gerade nichts.', 'Diese Seite ist vorübergehend nicht erreichbar. Schau später noch einmal vorbei.'],
+    };
+    let current = null;
+
+    const syncForm = () => {
+      fields.hidden = !form.countdown_enabled.checked;
+      const code = form.http_status.value === '404' ? 404 : 503;
+      statusHint.textContent = HINTS[code];
+      form.title.placeholder = PLACEHOLDERS[code][0];
+      form.message.placeholder = PLACEHOLDERS[code][1];
+    };
+    const showError = (msg, field) => {
+      errorEl.textContent = msg;
+      errorEl.hidden = !msg;
+      form.querySelectorAll('[aria-invalid]').forEach((f) => f.removeAttribute('aria-invalid'));
+      if (msg && field && form.elements[field]) {
+        form.elements[field].setAttribute('aria-invalid', 'true');
+        form.elements[field].focus();
+      }
+    };
+    const fill = (s) => {
+      current = s;
+      form.enabled.checked = s.enabled;
+      form.http_status.value = String(s.http_status);
+      form.title.value = s.title || '';
+      form.message.value = s.message || '';
+      form.countdown_enabled.checked = s.countdown_enabled;
+      form.ends_at.value = toLocalInput(s.ends_at);
+      form.auto_end.checked = s.auto_end;
+      syncForm();
+      renderMaintenanceStatus(s);
+    };
+
+    async function load() {
+      try {
+        fill(await window.api.getMaintenanceSettings());
+      } catch (err) {
+        $('#maintenance-status').textContent = 'Status konnte nicht geladen werden: ' + err.message;
+      }
+    }
+
+    form.addEventListener('change', syncForm);
+    form.countdown_enabled.addEventListener('change', () => {
+      // Beim Einschalten ohne Datum ein sinnvolles Ende vorschlagen (in einer Stunde)
+      if (form.countdown_enabled.checked && !form.ends_at.value) {
+        form.ends_at.value = toLocalInput(new Date(Date.now() + 3600000).toISOString());
+      }
+    });
+    $$('[data-add-min]', form).forEach((btn) => btn.addEventListener('click', () => {
+      const minutes = Number(btn.dataset.addMin);
+      // auf volle 5 Minuten runden, damit der Countdown "glatt" endet
+      const t = Math.ceil((Date.now() + minutes * 60000) / 300000) * 300000;
+      form.ends_at.value = toLocalInput(new Date(t).toISOString());
+      showError('');
+    }));
+    $('#maintenance-badge')?.addEventListener('click', () => {
+      switchTab('settings');
+      const radio = $('#settings-status');
+      if (radio) radio.checked = true;
+      $('#maintenance-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      showError('');
+      let endsAt = null;
+      if (form.ends_at.value) {
+        const d = new Date(form.ends_at.value);
+        if (Number.isNaN(d.getTime())) return showError('Bitte ein gültiges Datum für das Ende eintragen.', 'ends_at');
+        endsAt = d.toISOString();
+      }
+      if (form.countdown_enabled.checked && !endsAt) return showError('Für den Countdown fehlt das Ende der Wartung.', 'ends_at');
+      if (form.enabled.checked && form.countdown_enabled.checked && Date.parse(endsAt) <= Date.now()) {
+        return showError('Das Ende der Wartung liegt in der Vergangenheit.', 'ends_at');
+      }
+      const turningOn = form.enabled.checked && !current?.enabled;
+      try {
+        const s = await window.api.saveMaintenanceSettings({
+          enabled: form.enabled.checked,
+          http_status: Number(form.http_status.value),
+          title: form.title.value,
+          message: form.message.value,
+          countdown_enabled: form.countdown_enabled.checked,
+          ends_at: endsAt,
+          auto_end: form.auto_end.checked,
+        });
+        fill(s);
+        toast(turningOn ? '🚧 Wartungsmodus ist aktiv' : (s.enabled ? '✅ Wartungsmodus gespeichert' : '✅ Wartungsmodus ist aus'));
+      } catch (err) {
+        showError(err.message, err.field);
+      }
+    });
+
+    load();
+    // Status aktuell halten (z. B. automatisches Ende nach dem Countdown), ohne ungespeicherte
+    // Eingaben im Formular zu ueberschreiben – nur Status, Badge und ggf. den Schalter
+    setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        const s = await window.api.getMaintenanceSettings();
+        if (current?.enabled && !s.enabled) form.enabled.checked = false;
+        current = { ...current, ...s };
+        renderMaintenanceStatus(s);
+      } catch { /* naechster Versuch in einer Minute */ }
+    }, 60000);
   }
 
   // ---------- Kontaktformular (Einstellungen) ----------

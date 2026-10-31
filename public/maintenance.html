@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#0f0d13" />
+  <!-- Template fuer den Wartungsmodus (lib/maintenance-mode.js renderPage), nie direkt ausliefern -->
+  <title__MT_PAGE_TITLE_ATTR__>__MT_PAGE_TITLE__</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/fonts.css" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/css/themes.css" />
+  <script src="/js/theme-init.js"></script>
+  <script src="/js/i18n.js"></script>
+</head>
+<body class="maintenance-page">
+  <div class="aurora" aria-hidden="true">
+    <span class="blob blob-1"></span>
+    <span class="blob blob-2"></span>
+    <span class="blob blob-3"></span>
+  </div>
+  <main class="card maintenance" id="maintenance" data-status="__MT_STATUS__" data-ends-at="__MT_ENDS_AT__" data-auto-end="__MT_AUTO_END__">
+    __MT_BADGE__
+    <h1 class="maintenance-title"__MT_TITLE_ATTR__>__MT_TITLE__</h1>
+    __MT_MESSAGE__
+
+    <section class="maintenance-countdown-wrap"__MT_COUNTDOWN_HIDDEN__>
+      <div class="maintenance-countdown" id="maintenance-countdown" role="timer" aria-labelledby="maintenance-eta-label">
+        <div class="mt-unit" data-unit="d"><span class="mt-value">0</span><span class="mt-label" data-i18n="maintenance.days">Tage</span></div>
+        <div class="mt-unit" data-unit="h"><span class="mt-value">00</span><span class="mt-label" data-i18n="maintenance.hours">Stunden</span></div>
+        <div class="mt-unit" data-unit="m"><span class="mt-value">00</span><span class="mt-label" data-i18n="maintenance.minutes">Minuten</span></div>
+        <div class="mt-unit" data-unit="s"><span class="mt-value">00</span><span class="mt-label" data-i18n="maintenance.seconds">Sekunden</span></div>
+      </div>
+      <p class="maintenance-eta"><span id="maintenance-eta-label" data-i18n="maintenance.eta">Voraussichtlich wieder da:</span> <time id="maintenance-eta"></time></p>
+      <p class="maintenance-done" id="maintenance-done" role="status" hidden data-i18n="maintenance.soon">Gleich geht’s weiter – die Seite lädt neu …</p>
+    </section>
+
+    <nav class="maintenance-links">
+      <a href="/impressum.html" class="footer-link" data-i18n="footer.imprint">Impressum</a>
+      <a href="/datenschutz.html" class="footer-link" data-i18n="footer.privacy">Datenschutz</a>
+    </nav>
+  </main>
+  <script src="/js/maintenance.js"></script>
+</body>
+</html>

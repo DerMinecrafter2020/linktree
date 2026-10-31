@@ -23,7 +23,8 @@ Profilabgleich mit Instagram.
 | Frontend  | Vanilla HTML/CSS/JS, **keine Frameworks, kein Build-Schritt** |
 | Sicherheit| `helmet` (CSP), `express-rate-limit`, eigene Validatoren, AES-256-GCM für gespeicherte Secrets |
 
-Autor: Cornelius Ahner · Lizenz: MIT · Sprache der UI, Kommentare und Doku: **Deutsch**.
+Autor: Cornelius Ahner · Lizenz: MIT · Sprache der UI, Kommentare und Doku: **Deutsch**; die
+Besucherseiten gibt es zusätzlich auf **Englisch** (siehe „Sprachen“ in Abschnitt 5).
 
 **Produktivbetrieb:** Linux-Server, eingerichtet mit `install.sh` → **systemd-Service `openweb`**
 (`User=openweb`, `npm start`) hinter **nginx** (TLS via certbot). Updates ausschließlich mit
@@ -69,6 +70,8 @@ lib/
   contact.js              Kontaktformular: Einstellungen, Formular-Token, Pruefung, Versand (nichts wird gespeichert)
   botguard.js             Bot-Schutz: IP-Sperrliste (UFW Manager, Listen), Pruefung bei Verdacht (Proof-of-Work), Freigabe-Cookie
   iprange.js              IPv4/IPv6/CIDR-Listen (BigInt-Bereiche, binaere Suche), interne Netze
+  maintenance-mode.js     Wartungsmodus: Einstellungen, aktiv/abgelaufen (auto_end), Wartungsseite aus public/maintenance.html, Retry-After
+  i18n.js                 Sprache fuer Server-Texte an Besucher (pickLang: Cookie ow_lang / Accept-Language, msg/t mit Woerterbuch de/en)
   og.js                   Link-Vorschau: Meta-Tags (applyMetaTags), Vorschaubild speichern/pruefen, Crawler-Erkennung, Song-Zeile
   backup.js               Tägliche JSON-Backups nach ./backups (Rechte 600)
   maintenance.js          Aufräumen alter Sessions / Klickdaten und Monitor-Messpunkte (30 Tage)
@@ -78,13 +81,16 @@ lib/
   analytics.js            User-Agent-/Länder-Parsing für Statistiken
 db/
   migrate.js              Führt db/migrations/*.sql der Reihe nach aus (Tabelle `migrations`)
-  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 024: botguard_settings)
+  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 025: maintenance_settings)
   seed.js / reset.js      Initialdaten / Datenbank leeren
 public/                   Statische Dateien (werden 1:1 ausgeliefert!)
   index.html, admin.html, login.html, setup.html, changelog.html, impressum.html, datenschutz.html …
   css/themes.css          Alle Themes ausser "Dunkel" (Farbrollen + --ow-Material-Tokens), Farbfelder des Design-Waehlers
+  maintenance.html        Template der Wartungsseite (Platzhalter __MT_…__, nie direkt ausgeliefert)
+  js/maintenance.js       Countdown + Neuladen auf der Wartungsseite
   js/botguard.js          Bot-Pruefung im Browser (startet js/botguard-worker.js, schickt Loesung an /__botguard/verify)
   js/theme-init.js        Theme frueh setzen (kein Aufblitzen), Theme-Liste window.OpenWebThemes
+  js/i18n.js              Sprache der Besucherseiten (de/en): Woerterbuch, data-i18n-Markierungen, Umschalter, window.OpenWebI18n
   js/api-client.js        window.api – einziger Weg, wie das Frontend das Backend aufruft
   js/app.js               Öffentliche Seite
   js/legal.js             Rechtstexte: sichere Ausgabe, Absätze und Zeilenumbrüche
@@ -172,7 +178,7 @@ Vorlage: `.env.example`. Die `.env` enthält Secrets → **niemals committen, lo
 
 **Middleware-Reihenfolge (relevant für Sicherheit)**
 Health-Check → Metrik-Middleware → Helmet/CSP + Security-Header → Schutz vor direktem Abruf von `admin.html` /
-`index.html` (auch kodierte Varianten) → CSRF-Prüfung für `/api` (nicht GET/HEAD/OPTIONS; volle
+`index.html` / `maintenance.html` (auch kodierte Varianten) → CSRF-Prüfung für `/api` (nicht GET/HEAD/OPTIONS; volle
 Origin inkl. Port) → Body-Parser (1 MB) → Rate-Limits → *(nach Setup-Prüfung)* `/sw.js`-Route →
 `express.static(public, { index: false })` → Session → Limits für Public (120/min je IP für `/api`) und
 Admin (600 je 15 min) →
@@ -337,6 +343,30 @@ Diagramme (`bindMonitor` in `public/js/admin.js`): Definition je Diagramm in `CH
 30 s unterbrechen die Linie. Fadenkreuz per Maus/Touch/Pfeiltasten (`hoverT`, für alle Diagramme
 gleich); die Werte-Box (`.monitor-tooltip`) wird per `textContent` befüllt.
 
+**Wartungsmodus (`lib/maintenance-mode.js`, Karte in Admin > Einstellungen > Status):** Ist er aktiv
+(`maintenance_settings.enabled` und nicht per `auto_end` abgelaufen), liefert `/` Besuchern die Wartungsseite aus
+dem Template `public/maintenance.html` (`renderPage`, Platzhalter nur per Replacer-Funktion, Nutzertexte mit
+`escapeHtml`) mit Status 503 + `Retry-After` (bis Countdown-Ende, sonst 1 h) oder 404, `Cache-Control: no-store`
+und `noindex`. Eingeloggte Admins sehen die Startseite mit Banner (`.maintenance-banner`), `/?preview=maintenance`
+zeigt ihnen die Wartungsseite. Nur `/` ist betroffen – Impressum/Datenschutz (Pflicht), `/go/…`, `/api` und
+Admin bleiben erreichbar. Abgelaufenes `auto_end` schaltet `getSettings()` dauerhaft aus (5 s Cache, Ablauf wird
+sofort beachtet). `public/maintenance.html` darf nie direkt ausgeliefert werden (Pfad-Waechter in `server.js`).
+Leere Texte = Standardtexte ueber `js/i18n.js` (`maintenance.*`), eigene Texte werden nicht uebersetzt.
+
+**Sprachen (Deutsch/Englisch, nur Besucherseiten):** `public/js/i18n.js` (synchron im `<head>` nach
+`theme-init.js`) erkennt die Sprache: Cookie `ow_lang` (Umschalter) → Browsersprachen (erste mit `de`/`en`)
+→ sonst Englisch; ohne Browsersprache Deutsch. Der deutsche Text bleibt im HTML (Rueckfall ohne JS) und wird
+ueber Markierungen getauscht: `data-i18n="key"` (Text), `data-i18n-attr="title:key;aria-label:key"`,
+`data-lang-only="en"` (eigenes Element je Sprache fuer Absaetze mit Links/Code). In JS
+`window.OpenWebI18n.t('key', { var })`; Umschalten loest `openweb:langchange` aus (app.js zeichnet dynamische
+Texte neu). Bis zur Uebersetzung ist die Seite unsichtbar (`html.i18n-pending`, max. 2,5 s). Der Umschalter
+„DE | EN“ und der Design-Waehler sitzen gemeinsam in `#page-controls`. Server-Texte an Besucher
+(Kontaktformular, Link-Entsperren, oeffentliches API-Limit, Pruef-/Sperrseite des Bot-Schutzes) kommen aus
+`lib/i18n.js` (`i18n.t(req, key)` bzw. `pickLang(req)`, gleiche Erkennung). **Regel:** Neue Besucher-Texte immer
+in beiden Woerterbuechern (de **und** en) anlegen, nie fest im Code; Nutzerinhalte (Bio, Linktitel,
+Rechtstexte, Changelog-Eintraege) werden nicht uebersetzt. Admin, Login, Setup und E-Mails an den Betreiber
+bleiben Deutsch. Neue Besucherseiten: `js/i18n.js` einbinden und per `sendHtml()` ausliefern (auch die 404).
+
 **Profil nicht öffentlich (`profile.is_public = false`):** `/`, `/api/profile`, `/api/links` und
 `/api/links/categories` liefern dann nur für eingeloggte Admins (Vorschau) Inhalte.
 
@@ -388,7 +418,8 @@ gleich); die Werte-Box (`.monitor-tooltip`) wird per `textContent` befüllt.
 
 ## 7. Code-Konventionen
 
-- **Sprache:** Deutsch für UI-Texte, Kommentare, Logs und Doku. Code-Kommentare verwenden
+- **Sprache:** Deutsch für UI-Texte, Kommentare, Logs und Doku. Besucher-Texte zusätzlich Englisch über die
+  Wörterbücher in `public/js/i18n.js` bzw. `lib/i18n.js` (Abschnitt 5, „Sprachen“). Code-Kommentare verwenden
   traditionell Umschreibungen (`ae/oe/ue`), UI-Texte echte Umlaute.
 - Bestehenden Stil übernehmen: 2 Leerzeichen, Semikolons, `'use strict'`-IIFEs im Frontend,
   CommonJS (`require`) im Backend, API-Antworten immer `{ ok: true, data }` bzw.
@@ -453,7 +484,7 @@ Design, Sicherheit, Installation/Updates), wird im **selben Commit** in `public/
 eingetragen – nicht nur größere Releases. Ausgenommen sind nur reine interne Refactorings ohne
 sichtbare Wirkung und reine Doku-Änderungen.
 
-- Neuester Eintrag **ganz oben** (direkt unter `<p class="subtitle">`), ältere bleiben stehen.
+- Neuester Eintrag **ganz oben** (direkt unter `<div class="changelog-list" lang="de">`), ältere bleiben stehen.
 - Format:
   ```html
   <div class="changelog-entry">

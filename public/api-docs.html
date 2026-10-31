@@ -6,13 +6,14 @@
   <meta name="description" content="Öffentliche API-Dokumentation für cornyriegel.de" />
   <meta name="theme-color" content="#000000" />
   
-  <title>API-Dokumentation · OpenWeb</title>
+  <title data-i18n="api.pageTitle">API-Dokumentation · OpenWeb</title>
   
   
   <link rel="stylesheet" href="/fonts.css" />
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/css/themes.css" />
   <script src="/js/theme-init.js"></script>
+  <script src="/js/i18n.js"></script>
   <style>
     .api-docs { max-width: 840px; }
     .api-docs h1 { font-size: clamp(24px, 6vw, 32px); margin-bottom: 8px; }
@@ -36,16 +37,16 @@
   </div>
 
   <main class="card api-docs">
-    <h1>API-Dokumentation</h1>
-    <p class="subtitle">Öffentliche Endpunkte der OpenWeb Link-in-Bio Seite. Lesender Zugriff erfolgt mit einem API-Key aus dem Admin-Panel.</p>
+    <h1 data-i18n="api.heading">API-Dokumentation</h1>
+    <p class="subtitle" data-i18n="api.subtitle">Öffentliche Endpunkte der OpenWeb Link-in-Bio Seite. Lesender Zugriff erfolgt mit einem API-Key aus dem Admin-Panel.</p>
 
     <div class="endpoint">
-      <h2>Profil abrufen</h2>
+      <h2 data-i18n="api.profile">Profil abrufen</h2>
       <div class="method"><span>GET</span> <span class="url">/api/public/profile</span></div>
-      <p>Gibt Name, Handle, Bio, Avatar, Theme und Sichtbarkeit des Profils zurück.</p>
+      <p data-i18n="api.profileText">Gibt Name, Handle, Bio, Avatar, Theme und Sichtbarkeit des Profils zurück.</p>
       <h3>Header</h3>
-      <pre>X-Api-Key: dein-api-key</pre>
-      <h3>Beispiel-Antwort</h3>
+      <pre data-i18n="api.keyHeader">X-Api-Key: dein-api-key</pre>
+      <h3 data-i18n="api.exampleResponse">Beispiel-Antwort</h3>
       <pre>{
   "ok": true,
   "data": {
@@ -62,12 +63,12 @@
     </div>
 
     <div class="endpoint">
-      <h2>Links abrufen</h2>
+      <h2 data-i18n="api.links">Links abrufen</h2>
       <div class="method"><span>GET</span> <span class="url">/api/public/links</span></div>
-      <p>Gibt alle aktiven, aktuell sichtbaren Links inklusive Kategorie und Zeitsteuerung zurück.</p>
+      <p data-i18n="api.linksText">Gibt alle aktiven, aktuell sichtbaren Links inklusive Kategorie und Zeitsteuerung zurück.</p>
       <h3>Header</h3>
-      <pre>X-Api-Key: dein-api-key</pre>
-      <h3>Beispiel-Antwort</h3>
+      <pre data-i18n="api.keyHeader">X-Api-Key: dein-api-key</pre>
+      <h3 data-i18n="api.exampleResponse">Beispiel-Antwort</h3>
       <pre>{
   "ok": true,
   "data": [
@@ -93,13 +94,14 @@
     }
   ]
 }</pre>
-      <p><code>icon_resolved</code> ist das tatsächlich angezeigte Icon: <code>dashboard</code> (Logo aus <a href="https://github.com/homarr-labs/dashboard-icons" target="_blank" rel="noopener noreferrer">Dashboard Icons</a>, abrufbar unter <code>/api/icon/dashboardicon/&lt;name&gt;/&lt;format&gt;</code>), <code>image</code> (eigene Bild-URL) oder <code>generic</code> (Symbol <code>link</code>, <code>mail</code> oder <code>phone</code>). Bei passwortgeschützten Links ist <code>url</code> immer <code>null</code>.</p>
+      <p data-lang-only="de"><code>icon_resolved</code> ist das tatsächlich angezeigte Icon: <code>dashboard</code> (Logo aus <a href="https://github.com/homarr-labs/dashboard-icons" target="_blank" rel="noopener noreferrer">Dashboard Icons</a>, abrufbar unter <code>/api/icon/dashboardicon/&lt;name&gt;/&lt;format&gt;</code>), <code>image</code> (eigene Bild-URL) oder <code>generic</code> (Symbol <code>link</code>, <code>mail</code> oder <code>phone</code>). Bei passwortgeschützten Links ist <code>url</code> immer <code>null</code>.</p>
+      <p data-lang-only="en" lang="en" hidden><code>icon_resolved</code> is the icon that is actually shown: <code>dashboard</code> (logo from <a href="https://github.com/homarr-labs/dashboard-icons" target="_blank" rel="noopener noreferrer">Dashboard Icons</a>, available at <code>/api/icon/dashboardicon/&lt;name&gt;/&lt;format&gt;</code>), <code>image</code> (custom image URL) or <code>generic</code> (symbol <code>link</code>, <code>mail</code> or <code>phone</code>). For password-protected links, <code>url</code> is always <code>null</code>.</p>
     </div>
 
     <div class="endpoint">
-      <h2>Klick tracken</h2>
+      <h2 data-i18n="api.click">Klick tracken</h2>
       <div class="method"><span>POST</span> <span class="url">/api/links/:id/click</span></div>
-      <p>Speichert einen Klick für einen Link. Optional können UTM-Parameter mitgegeben werden.</p>
+      <p data-i18n="api.clickText">Speichert einen Klick für einen Link. Optional können UTM-Parameter mitgegeben werden.</p>
       <h3>Body</h3>
       <pre>{
   "utm": {
@@ -108,21 +110,21 @@
     "campaign": "summer"
   }
 }</pre>
-      <h3>Antwort</h3>
+      <h3 data-i18n="api.response">Antwort</h3>
       <pre>{ "ok": true }</pre>
     </div>
 
     <div class="endpoint">
-      <h2>Passwortgeschützten Link entsperren</h2>
+      <h2 data-i18n="api.unlock">Passwortgeschützten Link entsperren</h2>
       <div class="method"><span>POST</span> <span class="url">/api/links/:id/unlock</span></div>
-      <p>Gibt die Ziel-URL eines passwortgeschützten Links zurück, wenn das Passwort korrekt ist.</p>
+      <p data-i18n="api.unlockText">Gibt die Ziel-URL eines passwortgeschützten Links zurück, wenn das Passwort korrekt ist.</p>
       <h3>Body</h3>
-      <pre>{ "password": "geheim" }</pre>
-      <h3>Antwort</h3>
+      <pre data-i18n="api.unlockBody">{ "password": "geheim" }</pre>
+      <h3 data-i18n="api.response">Antwort</h3>
       <pre>{ "ok": true, "data": { "url": "https://example.com" } }</pre>
     </div>
 
-    <a href="/" class="back-link">← Zurück zur Startseite</a>
+    <a href="/" class="back-link" data-i18n="common.backHome">← Zurück zur Startseite</a>
   </main>
 </body>
 </html>

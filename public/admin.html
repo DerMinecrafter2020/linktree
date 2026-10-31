@@ -71,6 +71,7 @@
               <option value="dark">Dunkel</option>
             </select>
           </label>
+          <button type="button" id="maintenance-badge" class="connection-state maintenance-badge" title="Wartungsmodus ist aktiv – zu den Einstellungen" hidden>🚧 Wartung</button>
           <span id="connection-state" class="connection-state">…</span>
         </div>
       </header>
@@ -832,6 +833,60 @@
 
           <div class="sub-tab-panels">
             <div class="sub-tab-panel" id="panel-status">
+              <div class="card-block" id="maintenance-card">
+                <h3>🚧 Wartungsmodus</h3>
+                <p class="hint">Besucher sehen statt der Startseite eine Wartungsseite. Solange du angemeldet bist, siehst du weiter die normale Startseite (mit Hinweis). Impressum, Datenschutz, Kurzlinks und die API bleiben erreichbar.</p>
+                <p id="maintenance-status" class="contact-status" aria-live="polite">Lade Status …</p>
+                <form id="maintenance-form" class="form" novalidate>
+                  <label class="row">
+                    <input name="enabled" type="checkbox" />
+                    <span>Wartungsmodus aktivieren</span>
+                  </label>
+                  <label>
+                    <span>Anzeige für Besucher</span>
+                    <select name="http_status">
+                      <option value="503">Wartungsseite (Status 503 – empfohlen)</option>
+                      <option value="404">„Hier ist nichts“ wie die 404-Seite (Status 404)</option>
+                    </select>
+                  </label>
+                  <p class="hint" id="maintenance-status-hint">503 sagt Suchmaschinen „gleich wieder da“ – die Seite bleibt im Index.</p>
+                  <label>
+                    <span>Überschrift (optional)</span>
+                    <input name="title" type="text" maxlength="100" placeholder="Wartungsarbeiten" />
+                  </label>
+                  <label>
+                    <span>Text (optional)</span>
+                    <textarea name="message" rows="2" maxlength="500" placeholder="Die Seite wird gerade überarbeitet und ist bald wieder da."></textarea>
+                  </label>
+                  <p class="hint">Leer lassen = Standardtext, automatisch auf Deutsch oder Englisch. Eigene Texte werden nicht übersetzt.</p>
+                  <label class="row">
+                    <input name="countdown_enabled" type="checkbox" />
+                    <span>Countdown anzeigen</span>
+                  </label>
+                  <div id="maintenance-countdown-fields" class="maintenance-countdown-fields" hidden>
+                    <label>
+                      <span>Ende der Wartung (deine Ortszeit)</span>
+                      <input name="ends_at" type="datetime-local" />
+                    </label>
+                    <div class="maintenance-quick" role="group" aria-label="Ende schnell setzen">
+                      <span class="hint">Ab jetzt:</span>
+                      <button type="button" class="btn ghost small" data-add-min="15">+15 Min.</button>
+                      <button type="button" class="btn ghost small" data-add-min="60">+1 Std.</button>
+                      <button type="button" class="btn ghost small" data-add-min="180">+3 Std.</button>
+                      <button type="button" class="btn ghost small" data-add-min="1440">+1 Tag</button>
+                    </div>
+                    <label class="row">
+                      <input name="auto_end" type="checkbox" />
+                      <span>Wartungsmodus bei Ablauf automatisch beenden</span>
+                    </label>
+                  </div>
+                  <p id="maintenance-error" class="hint error" role="alert" hidden></p>
+                  <div class="form-actions">
+                    <a href="/?preview=maintenance" target="_blank" rel="noopener" class="btn ghost" id="maintenance-preview">Vorschau</a>
+                    <button type="submit" class="btn primary">Speichern</button>
+                  </div>
+                </form>
+              </div>
               <div class="card-block" id="admin-status-block">
                 <h3>🛡️ Admin-Bereich</h3>
                 <p id="admin-status-text">Status wird geladen…</p>

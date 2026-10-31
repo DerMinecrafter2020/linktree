@@ -32,6 +32,7 @@
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/css/themes.css" />
   <script src="/js/theme-init.js"></script>
+  <script src="/js/i18n.js"></script>
 </head>
 <body>
   <!-- SVG-Filter fuer den weissen Icon-Stil: farbige/dunkle Teile -> weiss, weisse Teile -> durchsichtig
@@ -45,16 +46,16 @@
   <!-- Passwort-Dialog für geschützte Links -->
   <dialog id="link-password-dialog" class="dialog password-dialog">
     <form method="dialog" class="form">
-      <h3>🔒 Geschützter Link</h3>
-      <p class="hint">Dieser Link ist passwortgeschützt. Bitte gib das Passwort ein.</p>
+      <h3 data-i18n="pw.title">🔒 Geschützter Link</h3>
+      <p class="hint" data-i18n="pw.hint">Dieser Link ist passwortgeschützt. Bitte gib das Passwort ein.</p>
       <label>
-        <span>Passwort</span>
+        <span data-i18n="pw.label">Passwort</span>
         <input id="link-password-input" type="password" />
       </label>
-      <p id="link-password-error" class="hint error" hidden>Falsches Passwort.</p>
+      <p id="link-password-error" class="hint error" data-i18n="pw.wrong" hidden>Falsches Passwort.</p>
       <div class="form-actions">
-        <button type="button" id="link-password-cancel" class="btn ghost">Abbrechen</button>
-        <button type="submit" class="btn primary">Öffnen</button>
+        <button type="button" id="link-password-cancel" class="btn ghost" data-i18n="common.cancel">Abbrechen</button>
+        <button type="submit" class="btn primary" data-i18n="pw.open">Öffnen</button>
       </div>
     </form>
   </dialog>
@@ -66,32 +67,32 @@
   </div>
 
   <main class="card">
-    <a id="admin-shortcut" class="profile-action admin-shortcut" href="/admin" title="Admin-Bereich öffnen" aria-label="Admin-Bereich öffnen" hidden>
+    <a id="admin-shortcut" class="profile-action admin-shortcut" href="/admin" title="Admin-Bereich öffnen" aria-label="Admin-Bereich öffnen" data-i18n-attr="title:home.admin;aria-label:home.admin" hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z" /></svg>
     </a>
     <header class="profile">
       <div class="avatar-wrap">
         <div class="avatar-ring"></div>
-        <div class="avatar" aria-label="Profilbild">CA</div>
+        <div class="avatar" aria-label="Profilbild" data-i18n-attr="aria-label:home.avatar">CA</div>
       </div>
       <h1 class="name">@corneliusahner</h1>
       <p class="handle">Cornelius Ahner</p>
       <p class="bio">Azubi, 21 Jahre alt</p>
       <div class="profile-actions">
-        <button type="button" id="share-btn" class="profile-action" title="Seite teilen" aria-label="Seite teilen">
+        <button type="button" id="share-btn" class="profile-action" title="Seite teilen" aria-label="Seite teilen" data-i18n-attr="title:home.share;aria-label:home.share">
           <svg class="icon-share" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11A2.99 2.99 0 0 0 21 5c0-1.66-1.34-3-3-3s-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81A2.99 2.99 0 0 0 3 12c0 1.66 1.34 3 3 3 .79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65A2.92 2.92 0 1 0 18 16.08z"/></svg>
           <svg class="icon-done" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
         </button>
-        <button type="button" id="contact-btn" class="profile-action" title="Nachricht schreiben" aria-label="Nachricht schreiben" aria-haspopup="dialog" hidden>
+        <button type="button" id="contact-btn" class="profile-action" title="Nachricht schreiben" aria-label="Nachricht schreiben" data-i18n-attr="title:home.contact;aria-label:home.contact" aria-haspopup="dialog" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
         </button>
-        <button type="button" id="qr-public-btn" class="profile-action" title="QR-Code anzeigen" aria-label="QR-Code anzeigen">
+        <button type="button" id="qr-public-btn" class="profile-action" title="QR-Code anzeigen" aria-label="QR-Code anzeigen" data-i18n-attr="title:home.qr;aria-label:home.qr">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11h8V3H3v8zm2-6h4v4H5V5zM3 21h8v-8H3v8zm2-6h4v4H5v-4zM13 3v8h8V3h-8zm6 6h-4V5h4v4zM19 19h2v2h-2zM13 13h2v2h-2zM15 15h2v2h-2zM13 17h2v2h-2zM15 19h2v2h-2zM17 17h2v2h-2zM17 13h2v2h-2zM19 15h2v2h-2z"/></svg>
         </button>
       </div>
     </header>
 
-    <section id="navidrome-player" class="np-player idle" data-progress-style="time" aria-label="Aktuell gespielter Track" hidden>
+    <section id="navidrome-player" class="np-player idle" data-progress-style="time" aria-label="Aktuell gespielter Track" data-i18n-attr="aria-label:player.label" hidden>
       <div class="np-turntable-wrap" aria-hidden="true">
         <div class="np-turntable-base">
           <div class="np-cover"></div>
@@ -110,7 +111,7 @@
         </div>
         <div class="np-artist">—</div>
         <div class="np-progress" id="np-progress"></div>
-        <div class="np-progress-line" id="np-progress-line" role="progressbar" aria-label="Wiedergabefortschritt" aria-valuemin="0" aria-valuemax="100">
+        <div class="np-progress-line" id="np-progress-line" role="progressbar" aria-label="Wiedergabefortschritt" data-i18n-attr="aria-label:player.progress" aria-valuemin="0" aria-valuemax="100">
           <div class="np-waveform-layer np-waveform-base"></div>
           <div class="np-waveform-layer np-waveform-played"></div>
         </div>
@@ -119,16 +120,16 @@
       </div>
     </section>
 
-    <nav class="links" aria-label="Wichtige Links">
+    <nav class="links" aria-label="Wichtige Links" data-i18n-attr="aria-label:home.links">
       <!-- Links werden dynamisch geladen -->
     </nav>
 
     <footer class="footer">
       <span class="dot"></span>
-      <span>made with <span class="heart">♥</span> · <span class="year">__CURRENT_YEAR__</span> · <a href="/changelog.html" class="footer-link">Changelog</a> · v3.8.0</span>
+      <span>made with <span class="heart">♥</span> · <span class="year">__CURRENT_YEAR__</span> · <a href="/changelog.html" class="footer-link footer-version" title="Changelog – was ist neu?" data-i18n-attr="title:footer.changelog">v3.10.0</a></span>
       <div style="margin-top: 10px; font-size: 0.85em; display: flex; gap: 15px; justify-content: center;">
-        <a href="/impressum.html" class="footer-link">Impressum</a>
-        <a href="/datenschutz.html" class="footer-link">Datenschutz</a>
+        <a href="/impressum.html" class="footer-link" data-i18n="footer.imprint">Impressum</a>
+        <a href="/datenschutz.html" class="footer-link" data-i18n="footer.privacy">Datenschutz</a>
       </div>
     </footer>
   </main>
@@ -142,25 +143,25 @@
   <!-- Kontaktformular (sichtbar, wenn im Admin aktiviert und SMTP eingerichtet) -->
   <dialog id="contact-dialog" class="dialog contact-dialog" aria-labelledby="contact-title">
     <form id="contact-form" class="form" novalidate>
-      <h3 id="contact-title">Nachricht schreiben</h3>
+      <h3 id="contact-title" data-i18n="contact.title">Nachricht schreiben</h3>
       <p id="contact-intro" class="contact-intro" hidden></p>
       <div id="contact-fields" class="contact-fields">
         <div class="contact-row">
           <label>
-            <span>Name</span>
+            <span data-i18n="contact.name">Name</span>
             <input name="name" type="text" autocomplete="name" maxlength="100" required />
           </label>
           <label>
-            <span>E-Mail</span>
+            <span data-i18n="contact.email">E-Mail</span>
             <input name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" required />
           </label>
         </div>
         <label>
-          <span>Betreff <em>(optional)</em></span>
+          <span><span data-i18n="contact.subject">Betreff</span> <em data-i18n="contact.optional">(optional)</em></span>
           <input name="subject" type="text" maxlength="150" />
         </label>
         <label>
-          <span>Nachricht</span>
+          <span data-i18n="contact.message">Nachricht</span>
           <textarea name="message" rows="5" maxlength="5000" required></textarea>
           <small id="contact-count" class="contact-count" aria-live="polite">0 / 5000</small>
         </label>
@@ -170,20 +171,20 @@
         </div>
         <label class="contact-consent">
           <input name="consent" type="checkbox" required />
-          <span>Ich bin einverstanden, dass meine Angaben zur Beantwortung meiner Anfrage verwendet werden. Mehr dazu in der <a href="/datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung</a>.</span>
+          <span><span data-i18n="contact.consent">Ich bin einverstanden, dass meine Angaben zur Beantwortung meiner Anfrage verwendet werden. Mehr dazu in der</span> <a href="/datenschutz.html" target="_blank" rel="noopener" data-i18n="contact.privacyLink">Datenschutzerklärung</a>.</span>
         </label>
       </div>
       <p id="contact-error" class="contact-error" role="alert" hidden></p>
       <div id="contact-success" class="contact-success" role="status" hidden>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
         <div>
-          <strong>Danke für deine Nachricht!</strong>
-          <p>Sie ist angekommen – die Antwort kommt an die angegebene E-Mail-Adresse.</p>
+          <strong data-i18n="contact.thanks">Danke für deine Nachricht!</strong>
+          <p data-i18n="contact.thanksText">Sie ist angekommen – die Antwort kommt an die angegebene E-Mail-Adresse.</p>
         </div>
       </div>
       <div class="form-actions">
-        <button type="button" id="contact-cancel" class="btn ghost">Abbrechen</button>
-        <button type="submit" id="contact-submit" class="btn primary">Senden</button>
+        <button type="button" id="contact-cancel" class="btn ghost" data-i18n="common.cancel">Abbrechen</button>
+        <button type="submit" id="contact-submit" class="btn primary" data-i18n="contact.send">Senden</button>
       </div>
     </form>
   </dialog>
@@ -191,11 +192,11 @@
   <!-- Öffentlicher QR-Code-Dialog -->
   <dialog id="public-qr-dialog" class="dialog qr-dialog">
     <form method="dialog" class="form">
-      <h3>📱 QR-Code</h3>
-      <img id="public-qr-img" alt="QR-Code dieser Seite" />
+      <h3 data-i18n="qr.title">📱 QR-Code</h3>
+      <img id="public-qr-img" alt="QR-Code dieser Seite" data-i18n-attr="alt:qr.alt" />
       <div class="form-actions">
-        <button type="button" id="public-qr-download" class="btn primary">⬇ Herunterladen</button>
-        <button type="button" id="public-qr-close" class="btn ghost">Schließen</button>
+        <button type="button" id="public-qr-download" class="btn primary" data-i18n="qr.download">⬇ Herunterladen</button>
+        <button type="button" id="public-qr-close" class="btn ghost" data-i18n="common.close">Schließen</button>
       </div>
     </form>
   </dialog>

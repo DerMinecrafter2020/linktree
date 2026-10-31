@@ -6,13 +6,14 @@
   <meta name="robots" content="noindex, follow" />
   <meta name="theme-color" content="#000000" />
   
-  <title>Seite nicht gefunden · OpenWeb</title>
+  <title data-i18n="notFound.title">Seite nicht gefunden · OpenWeb</title>
   
   
   <link rel="stylesheet" href="/fonts.css" />
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/css/themes.css" />
   <script src="/js/theme-init.js"></script>
+  <script src="/js/i18n.js"></script>
   <style>
     .not-found { max-width: 520px; text-align: center; }
     .not-found h1 { font-size: clamp(48px, 12vw, 88px); margin-bottom: 4px; background: linear-gradient(135deg, var(--neon-pink), var(--neon-cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -29,9 +30,9 @@
   </div>
   <main class="card not-found">
     <h1>404</h1>
-    <h2>Hier ist nichts.</h2>
-    <p>Der angeforderte Link existiert nicht oder wurde entfernt. Wahrscheinlich bist du nur falsch abgebogen.</p>
-    <a href="/" class="btn primary">Zurück zur Startseite</a>
+    <h2 data-i18n="notFound.heading">Hier ist nichts.</h2>
+    <p data-i18n="notFound.text">Der angeforderte Link existiert nicht oder wurde entfernt. Wahrscheinlich bist du nur falsch abgebogen.</p>
+    <a href="/" class="btn primary" data-i18n="common.backHomePlain">Zurück zur Startseite</a>
   </main>
 </body>
 </html>

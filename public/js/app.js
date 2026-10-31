@@ -6,6 +6,10 @@
   'use strict';
 
   const $ = (s, r = document) => r.querySelector(s);
+  // Texte in der Sprache des Besuchers (js/i18n.js); ohne i18n.js bleibt der Schluessel sichtbar
+  const i18n = window.OpenWebI18n;
+  const t = (key, vars) => (i18n ? i18n.t(key, vars) : key);
+  const locale = () => (i18n ? i18n.locale() : 'de-DE');
 
   function escapeHtml(s) {
     return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -112,12 +116,12 @@
     if (!profile) return;
 
     // OG-/Twitter-Meta an Profilbeschreibung anpassen
-    const metaDesc = profile.bio || 'Alle wichtigen Links auf einen Blick.';
+    const metaDesc = profile.bio || t('meta.description');
     document.querySelector('meta[name="description"]')?.setAttribute('content', metaDesc);
     document.querySelector('meta[property="og:description"]')?.setAttribute('content', metaDesc);
     document.querySelector('meta[name="twitter:description"]')?.setAttribute('content', metaDesc);
-    document.querySelector('meta[property="og:title"]')?.setAttribute('content', (profile.name || profile.handle || 'Profil') + ' · Links');
-    document.querySelector('meta[name="twitter:title"]')?.setAttribute('content', (profile.name || profile.handle || 'Profil') + ' · Links');
+    document.querySelector('meta[property="og:title"]')?.setAttribute('content', (profile.name || profile.handle || t('meta.profile')) + ' · Links');
+    document.querySelector('meta[name="twitter:title"]')?.setAttribute('content', (profile.name || profile.handle || t('meta.profile')) + ' · Links');
 
     const avatarEl = $('.avatar');
     if (avatarEl) {
@@ -144,8 +148,8 @@
     if (!nav) return;
     nav.replaceChildren();
     const wrap = el('div', 'private-notice');
-    wrap.appendChild(el('h2', null, '🔒 Privates Profil'));
-    wrap.appendChild(el('p', null, 'Dieses Profil ist derzeit nicht öffentlich sichtbar.'));
+    wrap.appendChild(el('h2', null, t('home.private')));
+    wrap.appendChild(el('p', null, t('home.privateText')));
     if (profile?.bio) wrap.appendChild(el('p', null, profile.bio));
     nav.appendChild(wrap);
   }
@@ -163,6 +167,13 @@
     path.setAttribute('d', d);
     svg.appendChild(path);
     return svg;
+  }
+
+  // Name eines Themes in der Besuchersprache (Liste in js/theme-init.js ist deutsch)
+  function themeLabel(theme) {
+    const key = 'theme.' + theme.id;
+    const label = t(key);
+    return label === key ? theme.label : label;
   }
 
   function buildThemeSwitcher(allowThemes) {
@@ -185,22 +196,22 @@
     const menu = el('div', 'theme-picker-menu');
     menu.id = 'theme-picker-menu';
     menu.setAttribute('role', 'menu');
-    menu.setAttribute('aria-label', 'Design wählen');
+    menu.setAttribute('aria-label', t('theme.menu'));
     menu.hidden = true;
-    menu.appendChild(el('p', 'theme-picker-title', 'Design'));
+    menu.appendChild(el('p', 'theme-picker-title', t('theme.title')));
 
-    const options = themes.list.map((t) => {
+    const options = themes.list.map((theme) => {
       const opt = el('button', 'theme-option');
       opt.type = 'button';
       opt.setAttribute('role', 'menuitemradio');
-      opt.dataset.themeId = t.id;
+      opt.dataset.themeId = theme.id;
       const sw = el('span', 'theme-swatch');
-      sw.dataset.swatch = t.id;
+      sw.dataset.swatch = theme.id;
       const text = el('span', 'theme-option-text');
-      text.append(el('span', 'theme-option-name', t.label), el('span', 'theme-option-hint', t.hint));
+      text.append(el('span', 'theme-option-name', themeLabel(theme)), el('span', 'theme-option-hint', t('theme.' + theme.id + '.hint')));
       opt.append(sw, text, svgIcon('theme-option-check', 'M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'));
       opt.addEventListener('click', () => {
-        themes.choose(t.id);
+        themes.choose(theme.id);
         sync();
         close(true);
       });
@@ -210,10 +221,10 @@
 
     function sync() {
       const id = themes.current();
-      const meta = themes.list.find(t => t.id === id) || themes.list[0];
+      const meta = themes.list.find(theme => theme.id === id) || themes.list[0];
       btnSwatch.dataset.swatch = meta.id;
-      btnLabel.textContent = meta.label;
-      btn.setAttribute('aria-label', `Design: ${meta.label} – ändern`);
+      btnLabel.textContent = themeLabel(meta);
+      btn.setAttribute('aria-label', t('theme.button', { name: themeLabel(meta) }));
       options.forEach(o => o.setAttribute('aria-checked', String(o.dataset.themeId === id)));
     }
     function open() {
@@ -245,7 +256,8 @@
 
     wrap.append(btn, menu);
     sync();
-    document.body.appendChild(wrap);
+    // Neben dem Sprach-Umschalter (js/i18n.js), sonst direkt in den body
+    (i18n ? i18n.controls() : document.body).appendChild(wrap);
   }
 
   function readUTM() {
@@ -306,8 +318,7 @@
         else window.location.href = target;
       } catch (err) {
         // 429 (zu viele Versuche) nicht als "Falsches Passwort" anzeigen
-        const defaultText = error.dataset.defaultText || (error.dataset.defaultText = error.textContent);
-        error.textContent = err.status === 429 ? err.message : defaultText;
+        error.textContent = err.status === 429 ? err.message : t('pw.wrong');
         error.hidden = false;
         input.value = '';
         input.focus();
@@ -364,7 +375,7 @@
 
     const active = links.filter((l) => l.is_active !== false);
     if (active.length === 0) {
-      nav.appendChild(el('p', 'empty-state', 'Noch keine Links vorhanden.'));
+      nav.appendChild(el('p', 'empty-state', t('home.empty')));
       return;
     }
 
@@ -426,7 +437,7 @@
       }
     } catch (err) {
       const nav = $('.links');
-      if (nav) nav.replaceChildren(el('p', 'empty-state', 'Links konnten nicht geladen werden.'));
+      if (nav) nav.replaceChildren(el('p', 'empty-state', t('home.loadError')));
     }
   }
 
@@ -601,8 +612,8 @@
       if (wrap) {
         wrap.hidden = false;
       }
-      setText('.np-title', 'Momentan läuft nichts', wrap);
-      setText('.np-artist', 'Sobald Musik läuft, erscheint sie hier', wrap);
+      setText('.np-title', t('player.idle'), wrap);
+      setText('.np-artist', t('player.idleHint'), wrap);
       this.renderSource(null);
       const albumEl = wrap?.querySelector('.np-album');
       if (albumEl) { albumEl.textContent = ''; albumEl.hidden = true; }
@@ -640,7 +651,7 @@
       const icon = wrap?.querySelector('.np-title-source');
       const label = wrap?.querySelector('.np-source-label');
       const meta = MUSIC_SOURCES[source];
-      if (label) label.textContent = meta ? `Quelle: ${meta.name}` : '';
+      if (label) label.textContent = meta ? t('player.source', { name: meta.name }) : '';
       if (!icon) return;
       if (!meta) {
         icon.hidden = true;
@@ -686,13 +697,13 @@
 
       let artist = data.artist || data.album || '';
       if (data.isRadio) {
-        artist = artist || 'Internetradio';
-        if (state === 'paused') artist += ' (pausiert)';
+        artist = artist || t('player.radio');
+        if (state === 'paused') artist += t('player.pausedSuffix');
       } else {
-        if (state === 'paused' && artist) artist += ' (pausiert)';
-        else if (state === 'paused') artist = 'Pausiert';
+        if (state === 'paused' && artist) artist += t('player.pausedSuffix');
+        else if (state === 'paused') artist = t('player.paused');
       }
-      setText('.np-title', data.title || 'Unbekannt', wrap);
+      setText('.np-title', data.title || t('player.unknown'), wrap);
       setText('.np-artist', artist, wrap);
       this.updateFavicon(data.coverUrl);
       const albumEl = wrap?.querySelector('.np-album');
@@ -706,20 +717,39 @@
       } else {
         document.title = data.artist ? `${data.artist} — ${data.title}` : data.title;
       }
-      if (state === 'paused') document.title += ' (pausiert)';
+      if (state === 'paused') document.title += t('player.pausedSuffix');
     },
 
   };
 
   function init() {
+    const npTitle = $('.np-title');
+    if (npTitle && !npTitle.dataset.lastText) npTitle.textContent = t('player.loading');
     render();
     np.start();
+    document.addEventListener('openweb:langchange', onLangChange);
     bindPublicActions();
     bindContactForm();
     revealAdminShortcut();
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) revealAdminShortcut();
     });
+  }
+
+  // Sprache umgeschaltet (js/i18n.js hat die markierten HTML-Texte schon getauscht):
+  // dynamische Texte neu zeichnen
+  function onLangChange() {
+    render();
+    const wrap = $('#navidrome-player');
+    if (np.currentTrack) {
+      np.renderTrack(np.currentTrack, np.currentTrack.paused === true ? 'paused' : 'playing');
+      np.renderExtra(np.currentTrack, np.localPosition);
+    } else if (wrap?.classList.contains('idle') && $('.np-title', wrap)?.dataset.lastText) {
+      np.renderIdle();
+    } else {
+      const npTitle = $('.np-title');
+      if (npTitle && !npTitle.dataset.lastText) npTitle.textContent = t('player.loading');
+    }
   }
 
   async function revealAdminShortcut() {
@@ -799,7 +829,7 @@
 
     const updateCount = () => {
       const n = form.message.value.length;
-      count.textContent = `${n.toLocaleString('de-DE')} / ${max.toLocaleString('de-DE')}`;
+      count.textContent = `${n.toLocaleString(locale())} / ${max.toLocaleString(locale())}`;
       count.classList.toggle('warn', n > max * 0.9);
     };
     const clearErrors = () => {
@@ -819,7 +849,7 @@
     const setBusy = (state) => {
       busy = state;
       submit.disabled = state;
-      submit.textContent = state ? 'Wird gesendet …' : 'Senden';
+      submit.textContent = state ? t('contact.sending') : t('contact.send');
     };
     const showSent = (state) => {
       sent = state;
@@ -827,7 +857,7 @@
       intro.hidden = state || !intro.textContent;
       success.hidden = !state;
       submit.hidden = state;
-      cancel.textContent = state ? 'Schließen' : 'Abbrechen';
+      cancel.textContent = state ? t('common.close') : t('common.cancel');
     };
     const close = () => { if (typeof dlg.close === 'function') dlg.close(); else dlg.removeAttribute('open'); };
 
@@ -847,10 +877,15 @@
       try {
         await loadToken();
       } catch (err) {
-        showError(err.status === 429 ? err.message : 'Das Kontaktformular ist gerade nicht erreichbar. Bitte versuche es später erneut.');
+        showError(err.status === 429 ? err.message : t('contact.errUnreachable'));
       }
     });
     cancel.addEventListener('click', close);
+    document.addEventListener('openweb:langchange', () => {
+      updateCount();
+      setBusy(busy);
+      cancel.textContent = sent ? t('common.close') : t('common.cancel');
+    });
     form.message.addEventListener('input', updateCount);
     form.addEventListener('input', (e) => {
       if (e.target.getAttribute('aria-invalid') === 'true') e.target.removeAttribute('aria-invalid');
@@ -862,10 +897,10 @@
       clearErrors();
       // Kurze Pruefung im Browser (der Server prueft verbindlich)
       const value = (name) => String(form.elements[name].value || '').trim();
-      if (!value('name')) return showError('Bitte gib deinen Namen an.', 'name');
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value('email'))) return showError('Bitte gib eine gültige E-Mail-Adresse an, damit eine Antwort möglich ist.', 'email');
-      if (value('message').length < 10) return showError('Die Nachricht ist zu kurz (mindestens 10 Zeichen).', 'message');
-      if (!form.consent.checked) return showError('Bitte bestätige den Hinweis zum Datenschutz.', 'consent');
+      if (!value('name')) return showError(t('contact.errName'), 'name');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value('email'))) return showError(t('contact.errEmail'), 'email');
+      if (value('message').length < 10) return showError(t('contact.errShort', { min: 10 }), 'message');
+      if (!form.consent.checked) return showError(t('contact.errConsent'), 'consent');
 
       setBusy(true);
       try {
@@ -889,9 +924,9 @@
           // Formular war zu lange offen: neues Token holen, Eingaben bleiben erhalten
           token = null;
           try { await loadToken(); } catch { /* Meldung unten reicht */ }
-          showError('Das Formular wurde erneuert. Bitte tippe noch einmal auf „Senden“.');
+          showError(t('contact.errRenewed'));
         } else {
-          showError(err.message || 'Die Nachricht konnte nicht gesendet werden.', err.field);
+          showError(err.message || t('contact.errFailed'), err.field);
         }
       } finally {
         setBusy(false);

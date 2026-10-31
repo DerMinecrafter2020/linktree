@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/css/themes.css" />
   <script src="/js/theme-init.js"></script>
+  <script src="/js/i18n.js"></script>
   <style>
     .changelog { max-width: 720px; }
     .changelog h1 { font-size: clamp(24px, 6vw, 32px); margin-bottom: 8px; }
@@ -43,11 +44,37 @@
         <line x1="19" y1="12" x2="5" y2="12"></line>
         <polyline points="12 19 5 12 12 5"></polyline>
       </svg>
-      Zurück zur Startseite
+      <span data-i18n="common.backHomePlain">Zurück zur Startseite</span>
     </a>
     
     <h1>Changelog</h1>
-    <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
+    <p class="subtitle" data-i18n="changelog.subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
+    <p class="subtitle changelog-lang-note" data-lang-only="en" lang="en" hidden>The release notes are written in German.</p>
+    <div class="changelog-list" lang="de">
+    <div class="changelog-entry">
+      <h2>2026-10-31 — OpenWeb v3.10.0 (Wartungsmodus)</h2>
+      <ul>
+        <li><strong>Wartungsmodus:</strong> Unter Einstellungen &gt; Status lässt sich die Startseite für Besucher sperren. Wahlweise erscheint eine Wartungsseite (Status 503, Suchmaschinen kommen später wieder) oder eine „Hier ist nichts“-Seite im Stil der 404-Seite (Status 404). Überschrift und Text sind frei wählbar; ohne eigene Texte erscheinen Standardtexte auf Deutsch oder Englisch.</li>
+        <li><strong>Countdown:</strong> Optional zeigt die Seite einen Countdown bis zum geplanten Ende samt Uhrzeit in der Zeitzone des Besuchers. Auf Wunsch endet der Wartungsmodus bei Ablauf automatisch und die Seite lädt von selbst neu.</li>
+        <li><strong>Für Admins:</strong> Angemeldet siehst du weiter die normale Startseite mit einem Hinweis; oben im Admin-Bereich zeigt „🚧 Wartung“ den aktiven Modus. Über „Vorschau“ lässt sich die Wartungsseite vorab ansehen. Impressum, Datenschutz, Kurzlinks und die API bleiben erreichbar; Ein- und Ausschalten steht im Audit-Log.</li>
+      </ul>
+    </div>
+    <div class="changelog-entry">
+      <h2>2026-10-31 — OpenWeb v3.9.0 (Englische Sprachversion)</h2>
+      <ul>
+        <li><strong>Sprachen:</strong> Die Besucherseiten gibt es jetzt auf Deutsch und Englisch – Startseite mit Player, Design-Wähler, Passwort-Dialog und Kontaktformular, die 404-Seite, die API-Dokumentation sowie die Rahmen von Impressum, Datenschutz und Changelog.</li>
+        <li><strong>Automatische Erkennung:</strong> Die Sprache richtet sich nach der Browsersprache (Deutsch bleibt Deutsch, alle anderen Sprachen bekommen Englisch). Oben rechts lässt sie sich per „DE | EN“ umschalten; die Wahl wird gemerkt.</li>
+        <li><strong>Server-Meldungen:</strong> Fehlermeldungen des Kontaktformulars, des Passwortschutzes für Links sowie die Prüf- und Sperrseite des Bot-Schutzes erscheinen in der gewählten Sprache.</li>
+        <li><strong>Unverändert:</strong> Eigene Inhalte (Bio, Linktitel, Rechtstexte, Changelog-Einträge) bleiben so, wie sie eingetragen sind; auf Englisch weisen Impressum, Datenschutz und Changelog darauf hin, dass der Text deutsch ist. Der Admin-Bereich bleibt deutsch.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
+      <h2>2026-10-31 — OpenWeb v3.8.1 (Versionsnummer führt zum Changelog)</h2>
+      <ul>
+        <li><strong>Startseite:</strong> Im Footer führt jetzt ein Klick auf die Versionsnummer zum Changelog; der separate Link „Changelog“ daneben entfällt.</li>
+      </ul>
+    </div>
 
     <div class="changelog-entry">
       <h2>2026-10-31 — OpenWeb v3.8.0 (Bot-Schutz & IP-Sperrliste)</h2>
@@ -345,7 +372,7 @@
     </div>
 
     <details>
-      <summary>Ältere Änderungen anzeigen (v2.x und früher)</summary>
+      <summary data-i18n="changelog.older">Ältere Änderungen anzeigen (v2.x und früher)</summary>
 
       <div class="changelog-entry">
         <h2>2026-08-09 — OpenWeb Feature-Bundle v2.1</h2>
@@ -439,7 +466,8 @@
 
     </details>
 
-    <a href="/" class="back-link">← Zurück zur Startseite</a>
+    </div>
+    <a href="/" class="back-link" data-i18n="common.backHome">← Zurück zur Startseite</a>
   </main>
 </body>
 </html>

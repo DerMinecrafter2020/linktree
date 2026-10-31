@@ -15,6 +15,7 @@ const backup = require('../lib/backup');
 const audit = require('../lib/audit');
 const alert = require('../lib/alert');
 const contact = require('../lib/contact');
+const maintenanceMode = require('../lib/maintenance-mode');
 const og = require('../lib/og');
 const botguard = require('../lib/botguard');
 const icons = require('../lib/icons');
@@ -803,6 +804,28 @@ router.post('/og/options', async (req, res, next) => {
     const settings = await og.saveOptions({ showNowPlaying: req.body?.show_now_playing !== false });
     res.json({ ok: true, data: ogView(settings) });
   } catch (err) { next(err); }
+});
+
+// ---------- Wartungsmodus (lib/maintenance-mode.js) ----------
+router.get('/settings/maintenance', async (req, res, next) => {
+  try {
+    res.json({ ok: true, data: maintenanceMode.view(await maintenanceMode.getSettings({ fresh: true })) });
+  } catch (err) { next(err); }
+});
+
+router.post('/settings/maintenance', async (req, res, next) => {
+  try {
+    const before = await maintenanceMode.getSettings({ fresh: true });
+    const data = await maintenanceMode.saveSettings(req.body || {});
+    const action = data.enabled && !before.enabled ? 'maintenance_on' : (!data.enabled && before.enabled ? 'maintenance_off' : 'update');
+    await audit.log(req, action, 'maintenance_settings', 1, {
+      enabled: data.enabled, http_status: data.http_status, countdown: data.countdown_enabled, ends_at: data.ends_at, auto_end: data.auto_end,
+    });
+    res.json({ ok: true, data });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ ok: false, error: err.message, field: err.field });
+    next(err);
+  }
 });
 
 // ---------- Kontaktformular (Versand ueber die SMTP-Daten der Alert-Einstellungen) ----------

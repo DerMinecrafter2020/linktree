@@ -2192,3 +2192,30 @@ input[type="checkbox"] {
 .botguard-ev.blocked { background: var(--md-error-container); color: var(--md-on-error-container); }
 .botguard-ev.solved { background: var(--md-success-container); color: var(--md-on-success-container); }
 .botguard-ev.failed { background: var(--md-warning-container); color: var(--md-on-warning-container); }
+
+/* ---------- Wartungsmodus (Einstellungen > Status) ---------- */
+.connection-state.maintenance-badge {
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--md-on-warning-container);
+  background: var(--md-warning-container);
+  border-color: transparent;
+}
+.connection-state.maintenance-badge:hover { filter: brightness(1.08); }
+.connection-state.maintenance-badge:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+.maintenance-countdown-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--md-shape-md);
+  background: var(--md-surface-container-high);
+}
+.maintenance-quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.maintenance-quick .hint { margin: 0 4px 0 0; }
+#maintenance-form [aria-invalid="true"] { border-color: var(--md-error); }

@@ -12,6 +12,8 @@ const compression = require('compression');
 const setup = require('./lib/setup');
 const metrics = require('./lib/metrics');
 const { validateTheme } = require('./lib/validators');
+const i18n = require('./lib/i18n');
+const maintenanceMode = require('./lib/maintenance-mode');
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -106,6 +108,8 @@ app.use((req, res, next) => {
   if (file === 'admin.html') return res.redirect('/admin');
   // Startseite nur ueber die dynamische Route "/" (prueft u. a. "Profil nicht oeffentlich")
   if (file === 'index.html') return res.redirect('/');
+  // Template der Wartungsseite (Platzhalter) nur ueber "/" im Wartungsmodus
+  if (file === 'maintenance.html') return sendHtml(res, '404.html', 404);
   next();
 });
 
@@ -166,7 +170,7 @@ const apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 200,
   skip: isIconRequest,
-  message: { ok: false, error: 'API-Limit erreicht. Bitte kurz warten.' },
+  handler: (req, res) => res.status(429).json({ ok: false, error: i18n.t(req, 'api.limit') }),
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -344,7 +348,7 @@ async function finalizeApp() {
       legacyHeaders: false,
       skip: isIconRequest,
       keyGenerator: (req) => req.ip || req.socket?.remoteAddress || 'unknown',
-      handler: (req, res) => res.status(429).json({ ok: false, error: 'Zu viele Anfragen. Bitte warte einen Moment.' }),
+      handler: (req, res) => res.status(429).json({ ok: false, error: i18n.t(req, 'api.tooMany') }),
     });
     app.use('/api', publicLimiter);
 
@@ -460,7 +464,7 @@ async function finalizeApp() {
     app.get('/go/:slug', async (req, res, next) => {
       try {
         const slug = safeSlug(req.params.slug);
-        if (!slug) return res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+        if (!slug) return sendHtml(res, '404.html', 404);
         const { rows } = await db.query(`
           SELECT id, url, password_hash IS NOT NULL AS is_password_protected, ${visibility.visibilityColumns()}
           FROM links WHERE slug = $1 AND is_active = true LIMIT 1
@@ -468,7 +472,7 @@ async function finalizeApp() {
         // Verborgene, abgelaufene oder zeitlich nicht freigegebene Links sowie Links eines nicht
         // oeffentlichen Profils wie nicht vorhandene behandeln
         if (!rows.length || !visibility.isLinkVisible(rows[0]) || await visibility.isProfileHiddenFor(req)) {
-          return res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+          return sendHtml(res, '404.html', 404);
         }
         // Passwortgeschuetzte Links nicht per Kurzlink freigeben -> Entsperren auf der Startseite
         if (rows[0].is_password_protected) return res.redirect('/');
@@ -483,6 +487,27 @@ async function finalizeApp() {
     });
 
     const indexHtmlTemplate = versionAssets(fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8'));
+    const maintenanceTemplate = versionAssets(fs.readFileSync(path.join(__dirname, 'public', 'maintenance.html'), 'utf8'));
+
+    // Standard-Design aus dem Admin direkt setzen (kein Aufblitzen); js/theme-init.js
+    // uebernimmt danach eine gespeicherte Besucher-Wahl, sofern erlaubt.
+    // validateTheme liefert nur Werte aus einer festen Liste -> sicher im Attribut.
+    function withThemeAttrs(html, profile) {
+      const defaultTheme = validateTheme(profile?.theme);
+      const themeAttrs = ` data-default-theme="${defaultTheme}"`
+        + (defaultTheme !== 'dark' ? ` data-theme="${defaultTheme}"` : '')
+        + (profile?.allow_visitor_theme === false ? ' data-visitor-theme="0"' : '');
+      return html.replace(/<html lang="de">/, () => `<html lang="de"${themeAttrs}>`);
+    }
+
+    // Wartungsseite senden (lib/maintenance-mode.js): 503 mit Retry-After oder 404, nie cachen
+    async function sendMaintenance(res, settings, status) {
+      const profile = (await db.query('SELECT theme, allow_visitor_theme FROM profile WHERE id = 1 LIMIT 1').catch(() => ({ rows: [] }))).rows[0];
+      if (status === 503) res.setHeader('Retry-After', String(maintenanceMode.retryAfter(settings)));
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('X-Robots-Tag', 'noindex');
+      res.status(status).type('html').send(withThemeAttrs(maintenanceMode.renderPage(maintenanceTemplate, settings), profile));
+    }
 
     // Vorschaubild fuer Link-Vorschauen (Discord, WhatsApp …): erzeugt/hochgeladen im Admin
     // (lib/og.js), sonst das Profilbild. Nur bei oeffentlichem Profil (oder fuer Admins).
@@ -515,6 +540,15 @@ async function finalizeApp() {
     // Startseite mit dynamischen Open-Graph-Tags (Vorschaubild, Beschreibung, laufender Song)
     app.get('/', async (req, res, next) => {
       try {
+        // Wartungsmodus: Besucher sehen die Wartungsseite, angemeldete Admins die Startseite
+        // (mit Hinweis); "/?preview=maintenance" zeigt Admins die Wartungsseite als Vorschau.
+        const isAdmin = Boolean(req.session?.userId);
+        if (isAdmin && req.query.preview === 'maintenance') {
+          return await sendMaintenance(res, await maintenanceMode.getSettings(), 200);
+        }
+        const maintenance = await maintenanceMode.getActive();
+        if (maintenance && !isAdmin) return await sendMaintenance(res, maintenance, maintenance.http_status);
+
         const { getNowPlaying } = require('./lib/navidrome');
         const profileRes = await db.query('SELECT * FROM profile WHERE id = 1 LIMIT 1');
         const profile = profileRes.rows[0] || { name: '@corneliusahner', handle: 'Cornelius Ahner', is_public: true };
@@ -531,15 +565,15 @@ async function finalizeApp() {
 
         let html = indexHtmlTemplate.replace('__CURRENT_YEAR__', () => String(new Date().getFullYear()));
 
-        // Standard-Design aus dem Admin direkt setzen (kein Aufblitzen); js/theme-init.js
-        // uebernimmt danach eine gespeicherte Besucher-Wahl, sofern erlaubt.
-        // validateTheme liefert nur Werte aus einer festen Liste -> sicher im Attribut.
-        const defaultTheme = validateTheme(profile.theme);
-        const themeAttrs = ` data-default-theme="${defaultTheme}"`
-          + (defaultTheme !== 'dark' ? ` data-theme="${defaultTheme}"` : '')
-          + (profile.allow_visitor_theme === false ? ' data-visitor-theme="0"' : '');
-        html = html.replace(/<html lang="de">/, () => `<html lang="de"${themeAttrs}>`);
+        html = withThemeAttrs(html, profile);
         html = html.replace(/(<meta name="robots"[^>]*?>)?/i, '<meta name="robots" content="index, follow" />');
+
+        // Admin bei aktivem Wartungsmodus: Hinweis-Banner (Texte ueber js/i18n.js)
+        if (maintenance) {
+          html = html.replace('<main class="card">', () => '<div class="maintenance-banner" role="status">'
+            + '<span data-i18n="maintenance.adminBanner">Wartungsmodus aktiv – Besucher sehen die Wartungsseite, nur du siehst die Startseite.</span> '
+            + '<a href="/admin" target="_top" data-i18n="maintenance.adminLink">Einstellungen</a></div>\n  <main class="card">');
+        }
 
         // Custom CSS injizieren
         if (profile.custom_css) {
@@ -588,7 +622,7 @@ async function finalizeApp() {
       }
     });
 
-    app.get('*', (req, res) => res.status(404).sendFile(path.join(__dirname, 'public', '404.html')));
+    app.get('*', (req, res) => sendHtml(res, '404.html', 404));
   }
 
   // Globaler Error-Handler

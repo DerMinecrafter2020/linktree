@@ -95,6 +95,8 @@
     saveOgImage: (image, key, custom = false) => post('/admin/og/image', { image, key, custom }),
     deleteOgImage: () => del('/admin/og/image'),
     saveOgOptions: (options) => post('/admin/og/options', options),
+    getMaintenanceSettings: () => get('/admin/settings/maintenance'),
+    saveMaintenanceSettings: (settings) => post('/admin/settings/maintenance', settings),
     getContactSettings: () => get('/admin/settings/contact'),
     saveContactSettings: (settings) => post('/admin/settings/contact', settings),
     testContactForm: () => post('/admin/settings/contact/test', {}),

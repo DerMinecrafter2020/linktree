@@ -15,6 +15,8 @@
   var returnTo = root.getAttribute('data-return') || '/';
   var statusEl = document.getElementById('botguard-status');
   var progressEl = document.getElementById('botguard-progress');
+  // Texte kommen vom Server in der Sprache des Besuchers (lib/i18n.js), Deutsch als Rueckfall
+  function msg(name, fallback) { return root.getAttribute('data-msg-' + name) || fallback; }
 
   // ---------- SHA-256 (kompakt, synchron) ----------
   var K = new Uint32Array([
@@ -116,7 +118,7 @@
 
   function done(solution) {
     setProgress(1);
-    setStatus('Geschafft – einen Augenblick …');
+    setStatus(msg('done', 'Geschafft – einen Augenblick …'));
     fetch('/__botguard/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -129,16 +131,16 @@
         var target = (r.json.data && r.json.data.redirect) || '/';
         location.replace(target.charAt(0) === '/' && target.charAt(1) !== '/' ? target : '/');
       } else {
-        setStatus((r.json && r.json.error) || 'Die Prüfung ist fehlgeschlagen. Bitte lade die Seite neu.');
+        setStatus((r.json && r.json.error) || msg('failed', 'Die Prüfung ist fehlgeschlagen. Bitte lade die Seite neu.'));
         if (progressEl) progressEl.parentNode.classList.add('error');
       }
     }).catch(function () {
-      setStatus('Keine Verbindung. Bitte lade die Seite neu.');
+      setStatus(msg('offline', 'Keine Verbindung. Bitte lade die Seite neu.'));
     });
   }
 
   if (!window.TextEncoder) {
-    setStatus('Dein Browser ist zu alt für diese Prüfung.');
+    setStatus(msg('old', 'Dein Browser ist zu alt für diese Prüfung.'));
     return;
   }
   if (window.Worker) startWorker(); else setTimeout(fallback, 50);

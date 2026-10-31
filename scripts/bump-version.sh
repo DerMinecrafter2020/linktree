@@ -8,7 +8,7 @@
 #   - package.json            ("version")
 #   - package-lock.json       (Top-Level + packages[""])
 #   - public/sw.js            (CACHE_NAME -> alter Offline-Cache wird verworfen)
-#   - public/index.html       (Footer "vX.Y.Z")
+#   - public/index.html       (Footer: Link "vX.Y.Z" zum Changelog)
 # Reines POSIX-sh (kein Node noetig), laeuft unter Linux, macOS und Git Bash (Windows).
 
 set -e
@@ -50,7 +50,7 @@ replace() {
 replace package.json "s/^  \"version\": \"$old_re\",\$/  \"version\": \"$new\",/"
 replace package-lock.json "1,12s/\"version\": \"$old_re\",/\"version\": \"$new\",/"
 replace public/sw.js "s/openweb-cache-v$old_re'/openweb-cache-v$new'/"
-replace public/index.html "s#</a> · v$old_re</span>#</a> · v$new</span>#"
+replace public/index.html "s#\">v$old_re</a></span>#\">v$new</a></span>#"
 
 # Pruefen, dass wirklich ueberall genau die erwartete Stelle ersetzt wurde
 new_re=$(printf '%s' "$new" | sed 's/\./\\./g')
@@ -69,6 +69,6 @@ check() {
 check package.json "^  \"version\": \"$new_re\",\$" 1
 check package-lock.json "\"version\": \"$new_re\"," 2
 check public/sw.js "openweb-cache-v$new_re'" 1
-check public/index.html "</a> · v$new_re</span>" 1
+check public/index.html "\">v$new_re</a></span>" 1
 
 echo "[bump-version] $old -> $new"

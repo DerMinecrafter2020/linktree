@@ -11,6 +11,7 @@ const { parseUserAgent, parseCountryCode } = require('../lib/analytics');
 const audit = require('../lib/audit');
 const alert = require('../lib/alert');
 const contact = require('../lib/contact');
+const i18n = require('../lib/i18n');
 const icons = require('../lib/icons');
 const { visibilityColumns, getNowInBerlin, isLinkVisible, isProfileHiddenFor } = require('../lib/visibility');
 const webauthnRp = require('../lib/webauthn-rp');
@@ -69,6 +70,7 @@ const LOGIN_MAX_ATTEMPTS = 10;
 // resetOnSuccess: Erfolg setzt den Zaehler komplett zurueck (Login). Sonst wird nur der
 // eigene Versuch zurueckgebucht (Link-Entsperren: ein bekanntes Passwort darf nicht die
 // Sperre fuer andere Links aufheben).
+// message: fester Text oder Funktion (req, retryAfter) => Text (z. B. Besucher-Sprache)
 function createAttemptLimiter(message, { resetOnSuccess = true } = {}) {
   const attempts = new Map();
 
@@ -91,7 +93,8 @@ function createAttemptLimiter(message, { resetOnSuccess = true } = {}) {
     if (record.count >= LOGIN_MAX_ATTEMPTS) {
       const retryAfter = Math.ceil((record.resetAt - now) / 1000);
       res.setHeader('Retry-After', retryAfter);
-      return res.status(429).json({ ok: false, error: `${message} Bitte in ${retryAfter} Sekunden erneut versuchen.` });
+      const error = typeof message === 'function' ? message(req, retryAfter) : `${message} Bitte in ${retryAfter} Sekunden erneut versuchen.`;
+      return res.status(429).json({ ok: false, error });
     }
     // Versuch sofort (synchron) zaehlen: parallele Anfragen koennen das Limit so nicht
     // umgehen, waehrend bcrypt noch rechnet. Erfolg bucht den Versuch wieder zurueck.
@@ -119,7 +122,7 @@ function getDummyHash() {
 }
 
 const rateLimitLogin = createAttemptLimiter('Zu viele Anmeldeversuche.');
-const rateLimitUnlock = createAttemptLimiter('Zu viele Passwortversuche.', { resetOnSuccess: false });
+const rateLimitUnlock = createAttemptLimiter((req, seconds) => i18n.t(req, 'unlock.tooMany', { seconds }), { resetOnSuccess: false });
 const rateLimitApiKey = createAttemptLimiter('Zu viele ungueltige API-Keys.', { resetOnSuccess: false });
 
 // Zusaetzlicher Zaehler je Konto (nicht je IP): Fehlversuche aus beliebig vielen IPs zaehlen
@@ -244,7 +247,7 @@ function contactIpLimit(req, res, next) {
   if (record.count >= CONTACT_IP_MAX) {
     const retryAfter = Math.ceil((record.resetAt - now) / 1000);
     res.setHeader('Retry-After', retryAfter);
-    return res.status(429).json({ ok: false, error: 'Du hast schon mehrere Nachrichten gesendet. Bitte versuche es später erneut.' });
+    return res.status(429).json({ ok: false, error: i18n.t(req, 'contact.ipLimit') });
   }
   req.contactLimit = record;
   next();
@@ -253,7 +256,7 @@ function contactIpLimit(req, res, next) {
 router.get('/contact/token', requirePublicProfile, async (req, res, next) => {
   try {
     const status = await contact.getStatus();
-    if (!status.available) return res.status(403).json({ ok: false, error: 'Das Kontaktformular ist derzeit nicht verfügbar.' });
+    if (!status.available) return res.status(403).json({ ok: false, error: i18n.t(req, 'contact.unavailable') });
     res.setHeader('Cache-Control', 'no-store');
     res.json({ ok: true, data: { token: contact.issueToken(), intro_text: status.intro_text, limits: contact.LIMITS } });
   } catch (err) {
@@ -264,7 +267,7 @@ router.get('/contact/token', requirePublicProfile, async (req, res, next) => {
 router.post('/contact', requirePublicProfile, contactIpLimit, async (req, res, next) => {
   try {
     const { rows } = await db.query('SELECT name, handle FROM profile WHERE id = 1 LIMIT 1');
-    const result = await contact.submit(req.body || {}, { profile: rows[0] });
+    const result = await contact.submit(req.body || {}, { profile: rows[0], lang: i18n.pickLang(req) });
     // Versuche zaehlen, die bis zum Versand kamen (auch bei SMTP-Fehler), nicht Tippfehler
     if (result.status === 200 || result.status === 502) req.contactLimit.count += 1;
     if (!result.ok) {
@@ -335,7 +338,7 @@ router.post('/links/:id/unlock', rateLimitUnlock, async (req, res, next) => {
     const { rows } = await db.query(`SELECT id, url, password_hash, ${visibilityColumns()} FROM links WHERE id = $1 LIMIT 1`, [id]);
     if (hidden || !rows.length || !isLinkVisible(rows[0])) {
       req.loginRateLimit?.increment(false);
-      return res.status(404).json({ ok: false, error: 'Link nicht gefunden' });
+      return res.status(404).json({ ok: false, error: i18n.t(req, 'unlock.notFound') });
     }
     const link = rows[0];
     if (!link.password_hash) {
@@ -346,7 +349,7 @@ router.post('/links/:id/unlock', rateLimitUnlock, async (req, res, next) => {
     const valid = await bcrypt.compare(password, link.password_hash);
     if (!valid) {
       req.loginRateLimit?.increment(true);
-      return res.status(401).json({ ok: false, error: 'Falsches Passwort' });
+      return res.status(401).json({ ok: false, error: i18n.t(req, 'unlock.wrong') });
     }
     req.loginRateLimit?.increment(false);
     res.json({ ok: true, data: { url: link.url } });
