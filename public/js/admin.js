@@ -521,7 +521,8 @@
   }
 
   function buildArchiveRow(link) {
-    return el('li', { class: 'link-row archive' },
+    // data-id wird vom Klick-Handler (#archive-list) zum Wiederherstellen gebraucht
+    return el('li', { class: 'link-row archive', 'data-id': link.id },
       renderIcon(link.icon_resolved, 40),
       el('div', { class: 'link-info' },
         el('div', { class: 'title' }, el('span', { text: link.title || '' })),
@@ -575,12 +576,17 @@
       const btn = e.target.closest('button[data-act]');
       if (!btn || btn.dataset.act !== 'restore') return;
       const row = btn.closest('.link-row');
-      const id = row.dataset.id;
+      const id = row?.dataset.id;
+      if (!id) return;
+      btn.disabled = true;
       try {
         await window.api.updateLink(id, { is_active: true });
         await reloadLinks();
         toast('↩ Link wiederhergestellt');
-      } catch (err) { toast('Fehler: ' + err.message, true); }
+      } catch (err) {
+        btn.disabled = false;
+        toast('Fehler: ' + err.message, true);
+      }
     });
 
     let dragId = null;
