@@ -1848,6 +1848,7 @@
     try {
       state.navidrome = await window.api.getNavidromeSettings();
       renderNavidromeForm();
+      navidromeWizard?.updateView();
     } catch (err) {
       console.warn('[admin] Navidrome-Settings konnten nicht geladen werden:', err.message);
     }
@@ -1946,6 +1947,7 @@
   function bindNavidrome() {
     const form = $('#navidrome-form');
     if (!form || !window.api) return;
+    initNavidromeWizard();
     loadNavidromeSettings();
     initAdminNowPlaying();
 
@@ -1985,8 +1987,8 @@
       status.textContent = 'Pruefe…';
       try {
         const s = await window.api.testNavidromeConnection();
-        if (!s?.configured) {
-          status.textContent = '❌ Navidrome nicht konfiguriert oder nicht erreichbar';
+        if (!s?.connected) {
+          status.textContent = '❌ ' + (s?.error || 'Navidrome nicht konfiguriert oder nicht erreichbar');
           return;
         }
         status.textContent = s.playing
@@ -2011,7 +2013,9 @@
     try {
       state.musicassistant = await window.api.getMusicAssistantSettings();
       renderMusicAssistantForm();
-      if (state.musicassistant?.url) await loadMusicAssistantUsers();
+      maWizard?.updateView();
+      // Benutzerliste nur fuer das Formular laden (der Assistent laedt sie selbst in Schritt 3)
+      if (state.musicassistant?.url && musicAssistantConfigured()) await loadMusicAssistantUsers();
     } catch (err) {
       console.warn('[admin] Music Assistant-Settings konnten nicht geladen werden:', err.message);
     }
@@ -2099,6 +2103,7 @@
   function bindMusicAssistant() {
     const form = $('#musicassistant-form');
     if (!form || !window.api) return;
+    initMusicAssistantWizard();
     loadMusicAssistantSettings();
 
     $('#musicassistant-load-users-btn')?.addEventListener('click', loadMusicAssistantUsers);
@@ -2145,10 +2150,494 @@
     });
   }
 
+  // ---------- Einrichtungsassistenten (Spotify, Navidrome, Music Assistant) ----------
+  // Gemeinsame Logik: Fortschrittsanzeige, Schritte, Zurueck/Weiter, "Manuell einrichten".
+  // Der Assistent erscheint, solange der Dienst nicht eingerichtet ist (isConfigured), sonst das
+  // Formular. Der Fortschritt liegt nur im Browser (localStorage, reiner Komfort).
+  //
+  // opts: { name, root, form, startButton, steps: [{ label, next, onNext, onEnter, persist }],
+  //         isConfigured(), firstStep() }
+  //   next: Beschriftung des Weiter-Knopfs (null = Knopf ausblenden, der Schritt hat eine eigene Aktion)
+  //   onNext: async () => true/false (false = im Schritt bleiben)
+  //   persist: false = diesen Schritt nicht als Fortschritt merken
+  function createSetupWizard(opts) {
+    const root = $(opts.root);
+    const form = $(opts.form);
+    if (!root || !form) return null;
+    const total = opts.steps.length;
+    const storeKey = `openweb-${opts.name}-wizard`;
+    const w = { step: 1, forced: false, finishing: false, ready: false, stepSet: false };
+
+    const prefs = {
+      read() { try { return JSON.parse(localStorage.getItem(storeKey) || '{}') || {}; } catch { return {}; } },
+      write(p) { try { localStorage.setItem(storeKey, JSON.stringify(p)); } catch { /* privat/blockiert: egal */ } },
+      update(patch) { this.write({ ...this.read(), ...patch }); },
+    };
+
+    const progress = root.querySelector('.wizard-progress');
+    progress.style.setProperty('--wizard-steps', String(total));
+    progress.replaceChildren(...opts.steps.map((s, i) => el('li', { 'data-step': String(i + 1) },
+      el('button', { type: 'button', class: 'wizard-dot', 'data-goto': String(i + 1), 'aria-label': `Schritt ${i + 1}: ${s.label}` }, String(i + 1)),
+      el('span', { class: 'wizard-label' }, s.label))));
+
+    const nav = {
+      back: root.querySelector('.wizard-back'),
+      next: root.querySelector('.wizard-next'),
+      skip: root.querySelector('.wizard-skip'),
+    };
+
+    function render() {
+      const step = w.step;
+      progress.querySelectorAll('li').forEach((li) => {
+        const n = Number(li.dataset.step);
+        li.classList.toggle('current', n === step);
+        li.classList.toggle('done', n < step);
+        const dot = li.querySelector('.wizard-dot');
+        dot.disabled = !(n < step && step !== total);
+        if (n === step) dot.setAttribute('aria-current', 'step'); else dot.removeAttribute('aria-current');
+        dot.textContent = n < step ? '✓' : String(n);
+      });
+      root.querySelectorAll('.wizard-step').forEach((sec) => { sec.hidden = Number(sec.dataset.step) !== step; });
+      const cfg = opts.steps[step - 1];
+      nav.back.hidden = step === 1 || step === total;
+      nav.next.hidden = cfg.next === null;
+      nav.next.textContent = cfg.next || (step === total ? 'Fertig' : 'Weiter');
+      nav.skip.hidden = step === total;
+      nav.skip.textContent = opts.isConfigured() ? 'Assistent schließen' : 'Manuell einrichten';
+      cfg.render?.();
+    }
+
+    function goTo(step, { focus = true } = {}) {
+      w.step = Math.min(total, Math.max(1, step));
+      const cfg = opts.steps[w.step - 1];
+      if (w.step < total && cfg.persist !== false) prefs.update({ step: w.step });
+      render();
+      cfg.onEnter?.();
+      if (focus && !root.hidden) {
+        const heading = root.querySelector(`.wizard-step[data-step="${w.step}"] h4`);
+        if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus({ preventScroll: true }); }
+      }
+    }
+
+    function updateView() {
+      // Beim ersten Anzeigen mit dem passenden Startschritt beginnen (Daten sind jetzt geladen)
+      if (!w.ready && !w.stepSet) w.step = Math.min(total, Math.max(1, opts.firstStep()));
+      w.ready = true;
+      const show = w.finishing || w.forced || (!opts.isConfigured() && !prefs.read().manual);
+      const wasHidden = root.hidden;
+      root.hidden = !show;
+      form.hidden = show;
+      if (show && wasHidden) goTo(w.step, { focus: false });
+      else if (show) render();
+    }
+
+    nav.next.addEventListener('click', async () => {
+      const cfg = opts.steps[w.step - 1];
+      if (cfg.onNext) {
+        nav.next.disabled = true;
+        let ok = false;
+        try { ok = await cfg.onNext(); } finally { nav.next.disabled = false; }
+        if (!ok) return;
+      }
+      if (w.step === total) {
+        w.finishing = false;
+        w.forced = false;
+        prefs.write({});
+        updateView();
+        return;
+      }
+      goTo(w.step + 1);
+    });
+    nav.back.addEventListener('click', () => goTo(w.step - 1));
+    progress.addEventListener('click', (e) => {
+      const dot = e.target.closest('.wizard-dot');
+      const target = Number(dot?.dataset.goto);
+      if (target && target < w.step && w.step !== total) goTo(target);
+    });
+    nav.skip.addEventListener('click', () => {
+      w.forced = false;
+      w.finishing = false;
+      prefs.update({ manual: true });
+      updateView();
+    });
+    $(opts.startButton)?.addEventListener('click', () => {
+      prefs.update({ manual: false });
+      w.forced = true;
+      w.finishing = false;
+      w.step = opts.firstStep();
+      root.hidden = true; // damit updateView den Schritt neu betritt
+      updateView();
+    });
+
+    return {
+      get step() { return w.step; },
+      prefs,
+      goTo,
+      updateView,
+      // Startschritt setzen (vor dem ersten updateView)
+      setStep(step) { w.step = Math.min(total, Math.max(1, step)); w.stepSet = true; },
+      // gemerkter Schritt (1..max), sonst 1
+      savedStep(max) {
+        const n = Number(prefs.read().step);
+        return n >= 1 && n <= max ? n : 1;
+      },
+      // Abschluss-Schritt anzeigen (z. B. direkt nach erfolgreicher Einrichtung)
+      finish() {
+        w.finishing = true;
+        w.stepSet = true;
+        w.step = total;
+        root.hidden = true;
+        updateView();
+      },
+      // Assistent auch bei "Manuell einrichten" wieder anzeigen (z. B. nach Fehler-Rueckkehr)
+      reopen(step) {
+        prefs.update({ manual: false });
+        w.step = step;
+        w.stepSet = true;
+      },
+    };
+  }
+
+  // Einheitliche Statuszeilen in den Assistenten
+  function wizardCheck(elOrSel, text, kind) {
+    const node = typeof elOrSel === 'string' ? $(elOrSel) : elOrSel;
+    if (!node) return;
+    node.className = 'wizard-check' + (kind ? ' is-' + kind : '');
+    node.textContent = text || '';
+  }
+
+  function isHttpUrl(value) {
+    try {
+      const u = new URL(value);
+      return (u.protocol === 'http:' || u.protocol === 'https:') && !!u.hostname;
+    } catch {
+      return false;
+    }
+  }
+
+  async function sendWizardDiscordTest(source) {
+    try {
+      await window.api.testNavidromeDiscordWebhook(source);
+      toast('✅ Discord-Test gesendet (prüfe deinen Kanal)');
+    } catch (err) {
+      toast('Discord-Test: ' + (err.message || 'fehlgeschlagen'), true);
+    }
+  }
+
+  function describePlaying(s, emptyHint) {
+    return s.playing
+      ? `Gerade läuft: ${s.title}${s.artist ? ' – ' + s.artist : ''}.`
+      : emptyHint;
+  }
+
+  // ---------- Navidrome-Assistent ----------
+  let navidromeWizard = null;
+
+  function navidromeConfigured() {
+    const c = state.navidrome || {};
+    return !!(c.enabled && c.url && c.username && c.has_password);
+  }
+
+  async function runNavidromeWizardTest() {
+    const result = $('#navidrome-wizard-result');
+    wizardCheck(result, 'Prüfe die Verbindung …');
+    try {
+      const s = await window.api.testNavidromeConnection();
+      if (s?.connected) {
+        wizardCheck(result, `✅ Verbunden mit Navidrome als „${state.navidrome?.username || ''}“. ` +
+          describePlaying(s, 'Gerade läuft nichts – starte einen Song in Navidrome und klicke auf „Erneut prüfen“.'), 'ok');
+      } else {
+        wizardCheck(result, '⚠️ ' + (s?.error || 'Navidrome ist nicht erreichbar.'), 'warn');
+      }
+    } catch (err) {
+      wizardCheck(result, '⚠️ ' + (err.message || 'Netzwerkfehler'), 'warn');
+    }
+  }
+
+  function initNavidromeWizard() {
+    navidromeWizard = createSetupWizard({
+      name: 'navidrome',
+      root: '#navidrome-wizard',
+      form: '#navidrome-form',
+      startButton: '#navidrome-wizard-start-btn',
+      isConfigured: navidromeConfigured,
+      firstStep: () => (navidromeConfigured() ? 1 : navidromeWizard.savedStep(2)),
+      steps: [
+        {
+          label: 'Server',
+          next: 'Prüfen & weiter',
+          onEnter() {
+            const input = $('#navidrome-wizard-url');
+            if (!input.value) input.value = navidromeWizard.prefs.read().url || state.navidrome?.url || '';
+          },
+          async onNext() {
+            const url = $('#navidrome-wizard-url').value.trim().replace(/\/+$/, '');
+            const check = '#navidrome-wizard-url-check';
+            if (!isHttpUrl(url)) {
+              wizardCheck(check, '⚠️ Bitte eine vollständige Adresse mit http:// oder https:// eingeben.', 'warn');
+              return false;
+            }
+            wizardCheck(check, 'Prüfe den Server …');
+            try {
+              const s = await window.api.testNavidromeConnection({ url, probe: true });
+              if (!s?.connected) {
+                wizardCheck(check, '⚠️ ' + (s?.error || 'Server nicht erreichbar.'), 'warn');
+                return false;
+              }
+            } catch (err) {
+              wizardCheck(check, '⚠️ ' + (err.message || 'Netzwerkfehler'), 'warn');
+              return false;
+            }
+            wizardCheck(check, '');
+            navidromeWizard.prefs.update({ url });
+            return true;
+          },
+        },
+        {
+          label: 'Anmeldung',
+          next: 'Prüfen & speichern',
+          onEnter() {
+            const user = $('#navidrome-wizard-username');
+            if (!user.value && state.navidrome?.username) user.value = state.navidrome.username;
+            $('#navidrome-wizard-password').placeholder = state.navidrome?.has_password
+              ? '•••••••• (gespeichert – leer lassen zum Behalten)'
+              : 'Passwort deines Navidrome-Kontos';
+          },
+          async onNext() {
+            const url = navidromeWizard.prefs.read().url || state.navidrome?.url || '';
+            const userInput = $('#navidrome-wizard-username');
+            const passInput = $('#navidrome-wizard-password');
+            const username = userInput.value.trim();
+            const password = passInput.value;
+            const check = '#navidrome-wizard-login-check';
+            if (!username) {
+              wizardCheck(check, '⚠️ Bitte den Benutzernamen eingeben.', 'warn');
+              userInput.focus();
+              return false;
+            }
+            const keepPassword = !password && state.navidrome?.has_password &&
+              username === state.navidrome?.username && url === state.navidrome?.url;
+            if (!password && !keepPassword) {
+              wizardCheck(check, '⚠️ Bitte das Passwort eingeben.', 'warn');
+              passInput.focus();
+              return false;
+            }
+            wizardCheck(check, 'Melde mich bei Navidrome an …');
+            try {
+              const s = await window.api.testNavidromeConnection({ url, username, password });
+              if (!s?.connected) {
+                wizardCheck(check, '⚠️ ' + (s?.error || 'Anmeldung fehlgeschlagen.'), 'warn');
+                return false;
+              }
+              await window.api.saveNavidromeSettings({
+                enabled: true,
+                url,
+                username,
+                password,
+                poll_interval_sec: state.navidrome?.poll_interval_sec || 30,
+              });
+              passInput.value = '';
+              state.navidrome = await window.api.getNavidromeSettings();
+              renderNavidromeForm();
+              wizardCheck(check, '');
+              return true;
+            } catch (err) {
+              wizardCheck(check, '⚠️ ' + (err.message || 'Speichern fehlgeschlagen'), 'warn');
+              return false;
+            }
+          },
+        },
+        { label: 'Fertig', next: 'Fertig', persist: false, onEnter: runNavidromeWizardTest },
+      ],
+    });
+    if (!navidromeWizard) return;
+    $('#navidrome-wizard-retest')?.addEventListener('click', runNavidromeWizardTest);
+    $('#navidrome-wizard-discord')?.addEventListener('click', () => sendWizardDiscordTest('navidrome'));
+  }
+
+  // ---------- Music-Assistant-Assistent ----------
+  let maWizard = null;
+
+  function musicAssistantConfigured() {
+    const c = state.musicassistant || {};
+    return !!(c.enabled && c.url && c.user_id);
+  }
+
+  async function runMusicAssistantWizardTest() {
+    const result = $('#musicassistant-wizard-result');
+    wizardCheck(result, 'Prüfe die Verbindung …');
+    try {
+      const s = await window.api.testMusicAssistantConnection();
+      if (s?.connected) {
+        const user = state.musicassistantUsers.find((u) => String(u.user_id) === String(state.musicassistant?.user_id));
+        const who = user ? ` für „${user.name}“` : '';
+        wizardCheck(result, `✅ Verbunden${who}. ` +
+          describePlaying(s, 'Gerade läuft nichts – starte Musik auf einem deiner Player und klicke auf „Erneut prüfen“.'), 'ok');
+      } else {
+        wizardCheck(result, '⚠️ ' + (s?.error || 'Music Assistant ist nicht erreichbar.'), 'warn');
+      }
+    } catch (err) {
+      wizardCheck(result, '⚠️ ' + (err.message || 'Netzwerkfehler'), 'warn');
+    }
+  }
+
+  function renderWizardUserSelect() {
+    const select = $('#musicassistant-wizard-user');
+    const check = '#musicassistant-wizard-user-check';
+    const users = state.musicassistantUsers || [];
+    const selected = select.value || String(state.musicassistant?.user_id || '') ||
+      String(users.find((u) => u.is_current)?.user_id || '');
+    const options = [new Option(users.length ? 'Bitte auswählen …' : 'Keine Benutzer gefunden', '')];
+    for (const u of users) {
+      const name = u.name && u.username && u.username !== u.name ? `${u.name} (${u.username})` : (u.name || u.username || u.user_id);
+      const flags = [u.is_current ? 'Token-Benutzer' : '', u.has_player_filter ? '' : 'keine Player zugewiesen'].filter(Boolean);
+      options.push(new Option(flags.length ? `${name} – ${flags.join(', ')}` : name, String(u.user_id)));
+    }
+    select.replaceChildren(...options);
+    select.value = users.some((u) => String(u.user_id) === selected) ? selected : '';
+    const user = users.find((u) => String(u.user_id) === select.value);
+    if (user && !user.has_player_filter) {
+      wizardCheck(check, '⚠️ Diesem Benutzer sind in Music Assistant keine Player zugewiesen. Weise ihm dort in der Benutzerverwaltung deine eigenen Player zu – sonst zeigt OpenWeb vorsichtshalber nichts an.', 'warn');
+    } else {
+      wizardCheck(check, '');
+    }
+  }
+
+  function initMusicAssistantWizard() {
+    maWizard = createSetupWizard({
+      name: 'musicassistant',
+      root: '#musicassistant-wizard',
+      form: '#musicassistant-form',
+      startButton: '#musicassistant-wizard-start-btn',
+      isConfigured: musicAssistantConfigured,
+      firstStep: () => {
+        if (musicAssistantConfigured()) return 1;
+        // Adresse gespeichert -> Benutzer waehlen, sonst gemerkter Schritt
+        if (state.musicassistant?.enabled && state.musicassistant?.url) return 3;
+        return maWizard.savedStep(2);
+      },
+      steps: [
+        {
+          label: 'Server',
+          next: 'Prüfen & weiter',
+          onEnter() {
+            const input = $('#musicassistant-wizard-url');
+            if (!input.value) input.value = maWizard.prefs.read().url || state.musicassistant?.url || '';
+          },
+          async onNext() {
+            const url = $('#musicassistant-wizard-url').value.trim().replace(/\/+$/, '');
+            const check = '#musicassistant-wizard-url-check';
+            if (!isHttpUrl(url)) {
+              wizardCheck(check, '⚠️ Bitte eine vollständige Adresse mit http:// oder https:// eingeben.', 'warn');
+              return false;
+            }
+            wizardCheck(check, 'Prüfe den Server …');
+            try {
+              const s = await window.api.testMusicAssistantConnection({ url, probe: true });
+              // "Token noetig" heisst: Server gefunden – der Token folgt im naechsten Schritt
+              if (!s?.connected && s?.code !== 'auth') {
+                wizardCheck(check, '⚠️ ' + (s?.error || 'Server nicht erreichbar.'), 'warn');
+                return false;
+              }
+            } catch (err) {
+              wizardCheck(check, '⚠️ ' + (err.message || 'Netzwerkfehler'), 'warn');
+              return false;
+            }
+            wizardCheck(check, '');
+            maWizard.prefs.update({ url });
+            return true;
+          },
+        },
+        {
+          label: 'Token',
+          next: 'Prüfen & speichern',
+          onEnter() {
+            $('#musicassistant-wizard-token').placeholder = state.musicassistant?.has_token
+              ? '•••••••• (gespeichert – leer lassen zum Behalten)'
+              : 'Langlebiger Token aus Music Assistant';
+          },
+          async onNext() {
+            const url = maWizard.prefs.read().url || state.musicassistant?.url || '';
+            const tokenInput = $('#musicassistant-wizard-token');
+            const token = tokenInput.value.trim();
+            const check = '#musicassistant-wizard-token-check';
+            wizardCheck(check, 'Prüfe den Zugriff …');
+            try {
+              const s = await window.api.testMusicAssistantConnection({ url, token });
+              if (!s?.connected) {
+                wizardCheck(check, '⚠️ ' + (s?.error || 'Zugriff fehlgeschlagen.'), 'warn');
+                return false;
+              }
+              await window.api.saveMusicAssistantSettings({
+                enabled: true,
+                url,
+                token,
+                userId: state.musicassistant?.user_id || '',
+              });
+              tokenInput.value = '';
+              state.musicassistant = await window.api.getMusicAssistantSettings();
+              state.musicassistantUsers = [];
+              renderMusicAssistantForm();
+              wizardCheck(check, '');
+              return true;
+            } catch (err) {
+              wizardCheck(check, '⚠️ ' + (err.message || 'Speichern fehlgeschlagen'), 'warn');
+              return false;
+            }
+          },
+        },
+        {
+          label: 'Benutzer',
+          next: 'Speichern & weiter',
+          async onEnter() {
+            const check = '#musicassistant-wizard-user-check';
+            const select = $('#musicassistant-wizard-user');
+            select.replaceChildren(new Option('Benutzer werden geladen …', ''));
+            wizardCheck(check, '');
+            try {
+              const users = await window.api.getMusicAssistantUsers();
+              state.musicassistantUsers = Array.isArray(users) ? users : [];
+              renderWizardUserSelect();
+              renderMusicAssistantUsers(state.musicassistantUsers, state.musicassistant?.user_id || '');
+            } catch (err) {
+              select.replaceChildren(new Option('Benutzer konnten nicht geladen werden', ''));
+              wizardCheck(check, '⚠️ ' + (err.message || 'Benutzer konnten nicht geladen werden') + ' Der Token braucht die Berechtigung, Benutzer zu lesen – erstelle ihn mit einem Administrator-Konto.', 'warn');
+            }
+          },
+          async onNext() {
+            const userId = $('#musicassistant-wizard-user').value;
+            const check = '#musicassistant-wizard-user-check';
+            if (!userId) {
+              wizardCheck(check, '⚠️ Bitte wähle deinen Benutzer aus.', 'warn');
+              return false;
+            }
+            try {
+              await window.api.saveMusicAssistantSettings({
+                enabled: true,
+                url: state.musicassistant?.url || '',
+                token: '',
+                userId,
+              });
+              state.musicassistant = await window.api.getMusicAssistantSettings();
+              renderMusicAssistantForm();
+              return true;
+            } catch (err) {
+              wizardCheck(check, '⚠️ ' + (err.message || 'Speichern fehlgeschlagen'), 'warn');
+              return false;
+            }
+          },
+        },
+        { label: 'Fertig', next: 'Fertig', persist: false, onEnter: runMusicAssistantWizardTest },
+      ],
+    });
+    if (!maWizard) return;
+    $('#musicassistant-wizard-user')?.addEventListener('change', renderWizardUserSelect);
+    $('#musicassistant-wizard-retest')?.addEventListener('click', runMusicAssistantWizardTest);
+    $('#musicassistant-wizard-discord')?.addEventListener('click', () => sendWizardDiscordTest('musicassistant'));
+  }
+
   // ---------- Spotify ----------
-  // Ist Spotify noch nicht verbunden, fuehrt ein Assistent in 5 Schritten durch die Einrichtung.
-  // Der Fortschritt der Schritte 1–3 (vor dem Speichern) liegt nur im Browser (localStorage).
-  const SPOTIFY_WIZARD_KEY = 'openweb-spotify-wizard';
+  // Ist Spotify noch nicht verbunden, fuehrt der Assistent in 5 Schritten durch die Einrichtung.
   const SPOTIFY_ID_RE = /^[A-Za-z0-9]{16,64}$/;
   const SPOTIFY_RETURN_MESSAGES = {
     connected: ['✅ Mit Spotify verbunden', false],
@@ -2156,120 +2645,36 @@
     invalid: ['Die Spotify-Anmeldung ist abgelaufen oder ungültig. Bitte erneut verbinden.', true],
     error: ['Spotify hat die Anmeldung abgelehnt. Prüfe Redirect-URI, Client-ID und Client-Secret.', true],
   };
-  const spotifyWizard = { step: 1, returnResult: null };
-
-  function readWizardPrefs() {
-    try { return JSON.parse(localStorage.getItem(SPOTIFY_WIZARD_KEY) || '{}') || {}; } catch { return {}; }
-  }
-  function writeWizardPrefs(prefs) {
-    try { localStorage.setItem(SPOTIFY_WIZARD_KEY, JSON.stringify(prefs)); } catch { /* privat/blockiert: egal */ }
-  }
+  let spotifyWizard = null;
+  let spotifyReturnResult = null;
 
   function spotifyHasCredentials() {
     return !!(state.spotify?.client_id && state.spotify?.has_client_secret);
   }
 
-  // Welche Ansicht? Assistent, solange nicht verbunden (ausser "Manuell einrichten" gewaehlt)
-  function renderSpotifyView() {
-    const wizard = $('#spotify-wizard');
-    const form = $('#spotify-form');
-    if (!wizard || !form) return;
+  function renderSpotifyRedirectCheck() {
     const cfg = state.spotify || {};
-    const prefs = readWizardPrefs();
-    const showWizard = spotifyWizard.step === 5 || (!cfg.connected && !prefs.manual) || spotifyWizard.forced;
-    wizard.hidden = !showWizard;
-    form.hidden = showWizard;
-    if (showWizard) renderSpotifyWizard();
-  }
-
-  // Erster sinnvoller Schritt: Zugangsdaten gespeichert -> Verbinden, sonst gemerkter Fortschritt
-  function initialWizardStep() {
-    // Bereits verbunden: Assistent startet bei Bedarf von vorn (Abschluss-Schritt nur direkt nach dem Verbinden)
-    if (state.spotify?.connected) return 1;
-    if (spotifyHasCredentials()) return 4;
-    const saved = Number(readWizardPrefs().step);
-    return saved >= 1 && saved <= 3 ? saved : 1;
-  }
-
-  function setWizardStep(step) {
-    spotifyWizard.step = Math.min(5, Math.max(1, step));
-    if (spotifyWizard.step <= 3) writeWizardPrefs({ ...readWizardPrefs(), step: spotifyWizard.step });
-    renderSpotifyWizard();
-    if (spotifyWizard.step === 5) runSpotifyWizardTest();
-    const heading = $(`#spotify-wizard .wizard-step[data-step="${spotifyWizard.step}"] h4`);
-    if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus({ preventScroll: true }); }
-  }
-
-  function renderSpotifyWizard() {
-    const cfg = state.spotify || {};
-    const step = spotifyWizard.step;
-
-    $$('#spotify-wizard .wizard-progress li').forEach((li) => {
-      const n = Number(li.dataset.step);
-      li.classList.toggle('current', n === step);
-      li.classList.toggle('done', n < step);
-      const dot = li.querySelector('.wizard-dot');
-      dot.disabled = !(n < step && step !== 5);
-      if (n === step) dot.setAttribute('aria-current', 'step'); else dot.removeAttribute('aria-current');
-      dot.textContent = n < step ? '✓' : String(n);
-    });
-    $$('#spotify-wizard .wizard-step').forEach((sec) => { sec.hidden = Number(sec.dataset.step) !== step; });
-
-    // Schritt 2: Redirect-URI und ihre Pruefung
-    const uri = cfg.redirect_uri || '–';
-    $('#spotify-wizard-redirect').textContent = uri;
-    const check = $('#spotify-wizard-redirect-check');
-    check.className = 'wizard-check';
+    $('#spotify-wizard-redirect').textContent = cfg.redirect_uri || '–';
+    const check = '#spotify-wizard-redirect-check';
     if (cfg.redirect_uri_localhost) {
-      check.textContent = '⚠️ Spotify akzeptiert „localhost“ nicht. Rufe den Admin über 127.0.0.1 auf oder setze APP_URL in der .env auf deine öffentliche Domain.';
-      check.classList.add('is-warn');
+      wizardCheck(check, '⚠️ Spotify akzeptiert „localhost“ nicht. Rufe den Admin über 127.0.0.1 auf oder setze APP_URL in der .env auf deine öffentliche Domain.', 'warn');
     } else if (!cfg.redirect_uri_secure) {
-      check.textContent = '⚠️ Spotify verlangt https. Setze APP_URL in der .env auf deine https-Adresse (z. B. https://links.deine-domain.de) und starte OpenWeb neu.';
-      check.classList.add('is-warn');
+      wizardCheck(check, '⚠️ Spotify verlangt https. Setze APP_URL in der .env auf deine https-Adresse (z. B. https://links.deine-domain.de) und starte OpenWeb neu.', 'warn');
     } else if (!cfg.redirect_uri_configured) {
-      check.textContent = '⚠️ APP_URL ist nicht gesetzt – die Adresse wurde aus dem aktuellen Aufruf abgeleitet. Setze APP_URL in der .env, damit sie sich nicht ändert.';
-      check.classList.add('is-warn');
+      wizardCheck(check, '⚠️ APP_URL ist nicht gesetzt – die Adresse wurde aus dem aktuellen Aufruf abgeleitet. Setze APP_URL in der .env, damit sie sich nicht ändert.', 'warn');
     } else {
-      check.textContent = '✅ Die Adresse kommt aus APP_URL und nutzt https.';
-      check.classList.add('is-ok');
+      wizardCheck(check, '✅ Die Adresse kommt aus APP_URL und nutzt https.', 'ok');
     }
-
-    // Schritt 3: gespeicherte Client-ID vorbelegen (Secret nie)
-    const idInput = $('#spotify-wizard-client-id');
-    if (step === 3 && !idInput.value && cfg.client_id) idInput.value = cfg.client_id;
-    $('#spotify-wizard-client-secret').placeholder = cfg.has_client_secret
-      ? '•••••••• (gespeichert – leer lassen zum Behalten)'
-      : 'Client-Secret aus dem Dashboard';
-
-    // Schritt 4: Fehler nach der Rueckkehr von Spotify
-    const errorBox = $('#spotify-wizard-error');
-    const ret = spotifyWizard.returnResult;
-    const showError = step === 4 && ret && ret !== 'connected';
-    errorBox.hidden = !showError;
-    if (showError) $('#spotify-wizard-error-text').textContent = SPOTIFY_RETURN_MESSAGES[ret]?.[0] || 'Die Anmeldung ist fehlgeschlagen.';
-
-    // Navigation
-    const back = $('#spotify-wizard-back');
-    const next = $('#spotify-wizard-next');
-    const skip = $('#spotify-wizard-skip');
-    back.hidden = step === 1 || step === 5;
-    next.hidden = step === 4;
-    next.textContent = { 1: 'App ist angelegt – weiter', 2: 'Eingetragen – weiter', 3: 'Speichern & weiter', 5: 'Fertig' }[step] || 'Weiter';
-    skip.hidden = step === 5;
-    skip.textContent = cfg.connected ? 'Assistent schließen' : 'Manuell einrichten';
   }
 
-  async function saveWizardCredentials() {
+  async function saveSpotifyWizardCredentials() {
     const idInput = $('#spotify-wizard-client-id');
     const secretInput = $('#spotify-wizard-client-secret');
-    const check = $('#spotify-wizard-cred-check');
+    const check = '#spotify-wizard-cred-check';
     const clientId = idInput.value.trim();
     const clientSecret = secretInput.value.trim();
-    check.className = 'wizard-check';
-
     const fail = (msg, field) => {
-      check.textContent = '⚠️ ' + msg;
-      check.classList.add('is-warn');
+      wizardCheck(check, '⚠️ ' + msg, 'warn');
       field?.focus();
       return false;
     };
@@ -2277,11 +2682,12 @@
     const keepSecret = !clientSecret && state.spotify?.has_client_secret && clientId === state.spotify?.client_id;
     if (!keepSecret && !SPOTIFY_ID_RE.test(clientSecret)) return fail('Das Client-Secret besteht aus 32 Buchstaben und Ziffern – klicke im Dashboard auf „View client secret“ und kopiere es.', secretInput);
     if (clientSecret && clientSecret === clientId) return fail('Client-ID und Client-Secret sind identisch – vermutlich wurde zweimal dasselbe kopiert.', secretInput);
-
     try {
       state.spotify = await window.api.saveSpotifySettings({ enabled: true, clientId, clientSecret });
       secretInput.value = '';
+      wizardCheck(check, '');
       renderSpotifyForm();
+      spotifyReturnResult = null;
       return true;
     } catch (err) {
       return fail(err.message || 'Speichern fehlgeschlagen');
@@ -2300,27 +2706,83 @@
 
   async function runSpotifyWizardTest() {
     const result = $('#spotify-wizard-result');
-    if (!result) return;
-    result.className = 'wizard-check';
-    result.textContent = 'Prüfe die Verbindung …';
+    wizardCheck(result, 'Prüfe die Verbindung …');
     try {
       const s = await window.api.testSpotifyConnection();
       if (s?.connected) {
         const who = s.account ? ` als „${s.account}“` : '';
-        const playing = s.playing
-          ? `Gerade läuft: ${s.title}${s.artist ? ' – ' + s.artist : ''}.`
-          : 'Gerade läuft nichts – starte einen Song auf Spotify und klicke auf „Erneut prüfen“.';
-        result.textContent = `✅ Verbunden${who}. ${playing}`;
-        result.classList.add('is-ok');
+        wizardCheck(result, `✅ Verbunden${who}. ` +
+          describePlaying(s, 'Gerade läuft nichts – starte einen Song auf Spotify und klicke auf „Erneut prüfen“.'), 'ok');
         await loadSpotifySettings(false);
       } else {
-        result.textContent = '⚠️ ' + (s?.error || 'Spotify ist noch nicht verbunden.');
-        result.classList.add('is-warn');
+        wizardCheck(result, '⚠️ ' + (s?.error || 'Spotify ist noch nicht verbunden.'), 'warn');
       }
     } catch (err) {
-      result.textContent = '⚠️ ' + (err.message || 'Netzwerkfehler');
-      result.classList.add('is-warn');
+      wizardCheck(result, '⚠️ ' + (err.message || 'Netzwerkfehler'), 'warn');
     }
+  }
+
+  function initSpotifyWizard() {
+    spotifyWizard = createSetupWizard({
+      name: 'spotify',
+      root: '#spotify-wizard',
+      form: '#spotify-form',
+      startButton: '#spotify-wizard-start-btn',
+      isConfigured: () => !!state.spotify?.connected,
+      firstStep: () => {
+        if (state.spotify?.connected) return 1;
+        if (spotifyHasCredentials()) return 4;
+        return spotifyWizard.savedStep(3);
+      },
+      steps: [
+        { label: 'App anlegen', next: 'App ist angelegt – weiter' },
+        { label: 'Redirect-URI', next: 'Eingetragen – weiter', render: renderSpotifyRedirectCheck },
+        {
+          label: 'Zugangsdaten',
+          next: 'Speichern & weiter',
+          onEnter() {
+            const idInput = $('#spotify-wizard-client-id');
+            if (!idInput.value && state.spotify?.client_id) idInput.value = state.spotify.client_id;
+            $('#spotify-wizard-client-secret').placeholder = state.spotify?.has_client_secret
+              ? '•••••••• (gespeichert – leer lassen zum Behalten)'
+              : 'Client-Secret aus dem Dashboard';
+          },
+          onNext: saveSpotifyWizardCredentials,
+        },
+        {
+          label: 'Verbinden',
+          next: null,
+          persist: false,
+          render() {
+            const ret = spotifyReturnResult;
+            const showError = !!ret && ret !== 'connected';
+            $('#spotify-wizard-error').hidden = !showError;
+            if (showError) $('#spotify-wizard-error-text').textContent = SPOTIFY_RETURN_MESSAGES[ret]?.[0] || 'Die Anmeldung ist fehlgeschlagen.';
+          },
+        },
+        { label: 'Fertig', next: 'Fertig', persist: false, onEnter: runSpotifyWizardTest },
+      ],
+    });
+    if (!spotifyWizard) return;
+    $('#spotify-wizard-copy')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      try {
+        await navigator.clipboard.writeText(state.spotify?.redirect_uri || '');
+        btn.textContent = 'Kopiert ✓';
+      } catch {
+        // Fallback: Text markieren, damit er per Strg+C kopiert werden kann
+        const range = document.createRange();
+        range.selectNodeContents($('#spotify-wizard-redirect'));
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        btn.textContent = 'Markiert – Strg+C';
+      }
+      setTimeout(() => { btn.textContent = 'Kopieren'; }, 2000);
+    });
+    $('#spotify-wizard-connect')?.addEventListener('click', () => startSpotifyLogin($('#spotify-wizard-error-text')));
+    $('#spotify-wizard-retest')?.addEventListener('click', runSpotifyWizardTest);
+    $('#spotify-wizard-discord')?.addEventListener('click', () => sendWizardDiscordTest('spotify'));
   }
 
   function renderSpotifyForm() {
@@ -2348,11 +2810,11 @@
     if (disconnectBtn) disconnectBtn.hidden = !cfg.connected;
   }
 
-  async function loadSpotifySettings(rerenderView = true) {
+  async function loadSpotifySettings(updateView = true) {
     try {
       state.spotify = await window.api.getSpotifySettings();
       renderSpotifyForm();
-      if (rerenderView) renderSpotifyView();
+      if (updateView) spotifyWizard?.updateView();
     } catch (err) {
       console.warn('[admin] Spotify-Settings konnten nicht geladen werden:', err.message);
     }
@@ -2377,73 +2839,8 @@
     const form = $('#spotify-form');
     if (!form || !window.api) return;
     const status = $('#spotify-status');
-    spotifyWizard.returnResult = readSpotifyReturn();
-
-    // ----- Assistent -----
-    $('#spotify-wizard-next')?.addEventListener('click', async (e) => {
-      const btn = e.currentTarget;
-      const step = spotifyWizard.step;
-      if (step === 3) {
-        btn.disabled = true;
-        const ok = await saveWizardCredentials();
-        btn.disabled = false;
-        if (!ok) return;
-        spotifyWizard.returnResult = null;
-      }
-      if (step === 5) {
-        spotifyWizard.step = 1;
-        spotifyWizard.forced = false;
-        writeWizardPrefs({});
-        renderSpotifyView();
-        return;
-      }
-      setWizardStep(step + 1);
-    });
-    $('#spotify-wizard-back')?.addEventListener('click', () => setWizardStep(spotifyWizard.step - 1));
-    $$('#spotify-wizard .wizard-dot').forEach((dot) => dot.addEventListener('click', () => {
-      const target = Number(dot.dataset.goto);
-      if (target < spotifyWizard.step && spotifyWizard.step !== 5) setWizardStep(target);
-    }));
-    $('#spotify-wizard-skip')?.addEventListener('click', () => {
-      spotifyWizard.forced = false;
-      writeWizardPrefs({ ...readWizardPrefs(), manual: true });
-      renderSpotifyView();
-    });
-    $('#spotify-wizard-copy')?.addEventListener('click', async (e) => {
-      const btn = e.currentTarget;
-      try {
-        await navigator.clipboard.writeText(state.spotify?.redirect_uri || '');
-        btn.textContent = 'Kopiert ✓';
-      } catch {
-        // Fallback: Text markieren, damit er per Strg+C kopiert werden kann
-        const range = document.createRange();
-        range.selectNodeContents($('#spotify-wizard-redirect'));
-        const sel = window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
-        btn.textContent = 'Markiert – Strg+C';
-      }
-      setTimeout(() => { btn.textContent = 'Kopieren'; }, 2000);
-    });
-    $('#spotify-wizard-connect')?.addEventListener('click', () => startSpotifyLogin($('#spotify-wizard-error-text')));
-    $('#spotify-wizard-retest')?.addEventListener('click', runSpotifyWizardTest);
-    $('#spotify-wizard-discord')?.addEventListener('click', async (e) => {
-      const btn = e.currentTarget;
-      try {
-        await window.api.testNavidromeDiscordWebhook('spotify');
-        toast('✅ Discord-Test gesendet (prüfe deinen Kanal)');
-      } catch (err) {
-        toast('Discord-Test: ' + (err.message || 'fehlgeschlagen'), true);
-      }
-      btn.blur();
-    });
-    $('#spotify-wizard-start-btn')?.addEventListener('click', () => {
-      writeWizardPrefs({ ...readWizardPrefs(), manual: false });
-      spotifyWizard.forced = true;
-      spotifyWizard.returnResult = null;
-      spotifyWizard.step = initialWizardStep();
-      renderSpotifyView();
-    });
+    spotifyReturnResult = readSpotifyReturn();
+    initSpotifyWizard();
 
     // ----- Formular (manuelle Einrichtung / bereits verbunden) -----
     form.addEventListener('submit', async (e) => {
@@ -2526,15 +2923,14 @@
 
     // Einstellungen laden und passende Ansicht waehlen
     await loadSpotifySettings(false);
-    const ret = spotifyWizard.returnResult;
+    if (!spotifyWizard) return;
+    const ret = spotifyReturnResult;
     if (ret === 'connected') {
       // Direkt nach dem Verbinden: Abschluss-Schritt mit Verbindungstest zeigen
-      setWizardStep(5);
-      renderSpotifyView();
+      spotifyWizard.finish();
     } else {
-      if (ret && !state.spotify?.connected) writeWizardPrefs({ ...readWizardPrefs(), manual: false });
-      spotifyWizard.step = initialWizardStep();
-      renderSpotifyView();
+      if (ret && !state.spotify?.connected && spotifyHasCredentials()) spotifyWizard.reopen(4);
+      spotifyWizard.updateView();
       if (ret && state.spotify?.connected && status) status.textContent = SPOTIFY_RETURN_MESSAGES[ret][0];
     }
   }
@@ -2608,6 +3004,8 @@
       currentTrack = null;
       setState('idle');
       badge.replaceChildren(el('span', { class: 'np-badge-text' }, 'Nichts läuft'));
+      const sourceImg = $('#admin-np-source');
+      if (sourceImg) sourceImg.hidden = true;
       clearMarquee(titleEl);
       titleEl.textContent = 'Momentan läuft nichts';
       clearMarquee(metaEl);
@@ -2627,10 +3025,19 @@
       setState(state);
       const source = MUSIC_SOURCES[track.source];
       const stateText = track.paused ? 'Pausiert' : (track.isRadio ? '📡 LIVE' : 'Spielt');
-      badge.replaceChildren(
-        ...[sourceIcon(track.source, 'np-badge-icon'),
-          el('span', { class: 'np-badge-text' }, source ? `${source.name} · ${stateText}` : stateText)].filter(Boolean)
-      );
+      badge.replaceChildren(el('span', { class: 'np-badge-text' }, source ? `${source.name} · ${stateText}` : stateText));
+      // Logo der Quelle in Titelgroesse vor dem Titel
+      const sourceImg = $('#admin-np-source');
+      if (sourceImg) {
+        if (source) {
+          const src = `/api/icon/dashboardicon/${source.icon}/svg`;
+          if (sourceImg.getAttribute('src') !== src) sourceImg.src = src;
+          sourceImg.title = source.name;
+          sourceImg.hidden = false;
+        } else {
+          sourceImg.hidden = true;
+        }
+      }
       applyMarquee(titleEl, escapeHtml(track.title || 'Unbekannt'));
 
       const parts = [];

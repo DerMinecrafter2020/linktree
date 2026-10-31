@@ -138,7 +138,7 @@ Wenn noch keine Datenbank konfiguriert ist oder noch kein aktiver Admin existier
 
 ## Zugangsdaten und Schlüssel-Backup
 
-Navidrome-Passwort, Music-Assistant-Token, Spotify-Client-Secret und -Anmeldung sowie das SMTP-Passwort werden mit AES-256-GCM verschlüsselt in PostgreSQL gespeichert. `NAVIDROME_ENCRYPTION_KEY` muss dauerhaft gesichert und unverändert erhalten bleiben; ohne passenden Schlüssel sind die bestehenden Zugangsdaten nicht entschlüsselbar.
+Navidrome-Benutzername und -Passwort, Music-Assistant-Token, Spotify-Client-Secret und -Anmeldung sowie das SMTP-Passwort werden mit AES-256-GCM verschlüsselt in PostgreSQL gespeichert. `NAVIDROME_ENCRYPTION_KEY` muss dauerhaft gesichert und unverändert erhalten bleiben; ohne passenden Schlüssel sind die bestehenden Zugangsdaten nicht entschlüsselbar.
 
 Im Admin-Panel unter **Daten → Verschlüsselungsschlüssel sichern** eine Backup-Datei erstellen. Dafür wird eine eigene Wiederherstellungs-Passphrase mit mindestens 16 Zeichen festgelegt. **Backup-Datei und Passphrase getrennt und außerhalb des Servers aufbewahren.** Die regulären JSON-Backups enthalten den Verschlüsselungsschlüssel absichtlich nicht.
 

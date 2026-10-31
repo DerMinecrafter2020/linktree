@@ -6,7 +6,7 @@ require('../lib/paths').loadEnv();
 
 const bcrypt = require('bcrypt');
 const db = require('../lib/db');
-const { encrypt, assertKey } = require('../lib/crypto');
+const { assertKey } = require('../lib/crypto');
 
 async function seed(overrides = {}) {
   const adminEmail = overrides.adminEmail || process.env.ADMIN_EMAIL || 'admin@example.com';
@@ -18,7 +18,7 @@ async function seed(overrides = {}) {
 
   assertKey();
 
-  // Zugangsdaten vor allen DB-Aenderungen verschluesseln: Bei einem fehlenden oder
+  // Schluessel vor allen DB-Aenderungen pruefen (assertKey oben): Bei einem fehlenden oder
   // ungueltigen Schluessel soll das Seeding abbrechen, statt teilweise zu laufen.
   const nav = overrides.navidrome || {};
   const navUrl = (nav.url || process.env.NAVIDROME_URL || '').trim();
@@ -26,7 +26,6 @@ async function seed(overrides = {}) {
   const navPass = (nav.password || process.env.NAVIDROME_PASSWORD || '').trim();
   const navEnabled = !!(navUrl && navUser && navPass);
   const pollInterval = parseInt(process.env.NAVIDROME_POLL_INTERVAL_SEC || '30', 10) || 30;
-  const encryptedPass = navPass ? encrypt(navPass) : null;
 
   const passwordHash = await bcrypt.hash(adminPassword, 12);
 
@@ -111,17 +110,14 @@ async function seed(overrides = {}) {
     console.log('[seed] Default-Links angelegt');
   }
 
-  await db.query(`
-    INSERT INTO navidrome_settings (id, enabled, url, username, password_encrypted, poll_interval_sec)
-    VALUES (1, $1, $2, $3, $4, $5)
-    ON CONFLICT (id) DO UPDATE SET
-      enabled = EXCLUDED.enabled,
-      url = EXCLUDED.url,
-      username = EXCLUDED.username,
-      password_encrypted = COALESCE(EXCLUDED.password_encrypted, navidrome_settings.password_encrypted),
-      poll_interval_sec = EXCLUDED.poll_interval_sec,
-      updated_at = NOW()
-  `, [navEnabled, navUrl || null, navUser || null, encryptedPass, pollInterval]);
+  // Benutzername und Passwort werden verschluesselt gespeichert (lib/navidrome.saveSettings)
+  await require('../lib/navidrome').saveSettings({
+    enabled: navEnabled,
+    url: navUrl || null,
+    username: navUser || null,
+    password: navPass || null,
+    pollIntervalSec: pollInterval,
+  });
   console.log(`[seed] Navidrome-Settings: ${navEnabled ? 'aktiviert' : 'deaktiviert'}`);
 
   return { adminEmail };

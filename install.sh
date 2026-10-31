@@ -603,21 +603,16 @@ cmd_change_navidrome() {
   # Werte als Umgebungsvariablen VOR dem Befehl uebergeben (nach "node -e" waeren es nur Argumente)
   (cd "$APP_DIR" && NAVIDROME_ENABLED="$enabled" NAVIDROME_URL="$url" NAVIDROME_USERNAME="$username" NAVIDROME_PASSWORD="$password" NAVIDROME_POLL="$poll" node -e "
 require('./lib/paths').loadEnv();
-const { encrypt } = require('./lib/crypto');
-const db = require('./lib/db');
+const { saveSettings } = require('./lib/navidrome');
 (async () => {
-  const enc = process.env.NAVIDROME_PASSWORD ? encrypt(process.env.NAVIDROME_PASSWORD) : null;
-  await db.query(\`
-    INSERT INTO navidrome_settings (id, enabled, url, username, password_encrypted, poll_interval_sec)
-    VALUES (1, \$1, \$2, \$3, \$4, \$5)
-    ON CONFLICT (id) DO UPDATE SET
-      enabled = EXCLUDED.enabled,
-      url = EXCLUDED.url,
-      username = EXCLUDED.username,
-      password_encrypted = COALESCE(EXCLUDED.password_encrypted, navidrome_settings.password_encrypted),
-      poll_interval_sec = EXCLUDED.poll_interval_sec,
-      updated_at = NOW()
-  \`, [process.env.NAVIDROME_ENABLED === 'true', process.env.NAVIDROME_URL, process.env.NAVIDROME_USERNAME, enc, parseInt(process.env.NAVIDROME_POLL || '30', 10)]);
+  // Benutzername und Passwort werden verschluesselt gespeichert; leeres Passwort = unveraendert
+  await saveSettings({
+    enabled: process.env.NAVIDROME_ENABLED === 'true',
+    url: process.env.NAVIDROME_URL,
+    username: process.env.NAVIDROME_USERNAME,
+    password: process.env.NAVIDROME_PASSWORD,
+    pollIntervalSec: process.env.NAVIDROME_POLL,
+  });
   console.log('Navidrome-Credentials aktualisiert.');
   process.exit(0);
 })().catch(e => { console.error(e); process.exit(1); });

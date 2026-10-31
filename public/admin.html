@@ -194,9 +194,61 @@
         <div class="card-block">
           <h3>🎵 Navidrome / Subsonic</h3>
           <p>
-            Die Navidrome-Credentials werden <strong>ausschließlich in der PostgreSQL-Datenbank</strong>
-            gespeichert (Passwort verschlüsselt). Sie sind weder im Browser noch in <code>localStorage</code> sichtbar.
+            Die Navidrome-Anmeldedaten werden <strong>ausschließlich verschlüsselt in der PostgreSQL-Datenbank</strong>
+            gespeichert (Benutzername und Passwort). Sie sind weder im Browser noch in <code>localStorage</code> sichtbar.
           </p>
+
+          <!-- Einrichtungsassistent: erscheint, solange Navidrome nicht eingerichtet ist (Logik in js/admin.js) -->
+          <div id="navidrome-wizard" class="setup-wizard" hidden>
+            <ol class="wizard-progress" aria-label="Fortschritt der Einrichtung"></ol>
+
+            <section class="wizard-step" data-step="1" hidden>
+              <h4>Navidrome-Server angeben</h4>
+              <p>Trage die Adresse ein, unter der du Navidrome im Browser öffnest. OpenWeb fragt darüber ab, was du gerade hörst.</p>
+              <div class="form wizard-fields">
+                <label>
+                  <span>Navidrome-Adresse</span>
+                  <input id="navidrome-wizard-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://music.example.com" />
+                </label>
+              </div>
+              <p class="wizard-note">Die Adresse muss <strong>vom OpenWeb-Server aus</strong> erreichbar sein. Läuft Navidrome auf demselben Server, geht auch z. B. <code>http://127.0.0.1:4533</code>.</p>
+              <p class="wizard-check" id="navidrome-wizard-url-check" aria-live="polite"></p>
+            </section>
+
+            <section class="wizard-step" data-step="2" hidden>
+              <h4>Mit deinem Navidrome-Konto anmelden</h4>
+              <p>Nimm das Konto, mit dem du Musik hörst – OpenWeb zeigt nur an, was dieses Konto gerade abspielt.</p>
+              <div class="form wizard-fields">
+                <label>
+                  <span>Benutzername</span>
+                  <input id="navidrome-wizard-username" type="text" autocomplete="off" spellcheck="false" placeholder="dein_user" />
+                </label>
+                <label>
+                  <span>Passwort</span>
+                  <input id="navidrome-wizard-password" type="password" autocomplete="new-password" placeholder="Passwort deines Navidrome-Kontos" />
+                </label>
+              </div>
+              <p class="wizard-note">🔒 Benutzername und Passwort werden verschlüsselt in der Datenbank gespeichert und nie an den Browser zurückgegeben.</p>
+              <p class="wizard-check" id="navidrome-wizard-login-check" aria-live="polite"></p>
+            </section>
+
+            <section class="wizard-step" data-step="3" hidden>
+              <h4>Geschafft!</h4>
+              <p class="wizard-check" id="navidrome-wizard-result" aria-live="polite">Prüfe die Verbindung …</p>
+              <p>Ab jetzt erscheint auf deiner Startseite, was du in Navidrome hörst – mit Navidrome-Logo vor dem Titel. Ist der Discord-Webhook aktiv, werden die Titel auch dort gemeldet.</p>
+              <div class="form-actions wizard-inline-actions">
+                <button type="button" class="btn ghost" id="navidrome-wizard-retest">Erneut prüfen</button>
+                <button type="button" class="btn ghost" id="navidrome-wizard-discord">Discord-Test senden</button>
+              </div>
+            </section>
+
+            <div class="wizard-nav">
+              <button type="button" class="btn ghost wizard-skip">Manuell einrichten</button>
+              <span class="wizard-spacer"></span>
+              <button type="button" class="btn ghost wizard-back">Zurück</button>
+              <button type="button" class="btn primary wizard-next">Weiter</button>
+            </div>
+          </div>
 
           <form id="navidrome-form" class="form">
             <label class="row">
@@ -222,6 +274,7 @@
             </label>
 
             <div class="form-actions">
+              <button type="button" id="navidrome-wizard-start-btn" class="btn ghost">Assistent</button>
               <button type="button" id="navidrome-discord-test-btn" class="btn ghost" title="Testet den Discord Webhook für 'Now Playing' (nutzt URL aus dem Tab Admin)">Discord-Test</button>
               <button type="button" id="navidrome-test-btn" class="btn ghost">Verbindung testen</button>
               <button type="submit" class="btn primary">Speichern</button>
@@ -236,6 +289,72 @@
             Verwende Music Assistant als primären Player. Wenn aktiv und etwas abgespielt wird,
             wird dies vor Spotify und Navidrome angezeigt.
           </p>
+
+          <!-- Einrichtungsassistent: erscheint, solange Music Assistant nicht eingerichtet ist (Logik in js/admin.js) -->
+          <div id="musicassistant-wizard" class="setup-wizard" hidden>
+            <ol class="wizard-progress" aria-label="Fortschritt der Einrichtung"></ol>
+
+            <section class="wizard-step" data-step="1" hidden>
+              <h4>Music-Assistant-Server angeben</h4>
+              <p>Trage die Adresse der Music-Assistant-Weboberfläche ein, z. B. <code>http://192.168.1.100:8095</code>.</p>
+              <div class="form wizard-fields">
+                <label>
+                  <span>Music-Assistant-Adresse</span>
+                  <input id="musicassistant-wizard-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="http://192.168.1.100:8095" />
+                </label>
+              </div>
+              <p class="wizard-note">Die Adresse muss <strong>vom OpenWeb-Server aus</strong> erreichbar sein – also eine Adresse im Netz des Servers, nicht nur von deinem PC.</p>
+              <p class="wizard-check" id="musicassistant-wizard-url-check" aria-live="polite"></p>
+            </section>
+
+            <section class="wizard-step" data-step="2" hidden>
+              <h4>Zugriffstoken eintragen</h4>
+              <ol class="wizard-list">
+                <li>Öffne die Music-Assistant-Weboberfläche und melde dich an.</li>
+                <li>Öffne deine <strong>Profileinstellungen</strong> und erstelle einen <strong>langlebigen Token</strong> (Long-lived token), z. B. mit dem Namen „OpenWeb“.</li>
+                <li>Kopiere den Token und füge ihn hier ein.</li>
+              </ol>
+              <div class="form wizard-fields">
+                <label>
+                  <span>Token</span>
+                  <input id="musicassistant-wizard-token" type="password" autocomplete="new-password" placeholder="Langlebiger Token aus Music Assistant" />
+                </label>
+              </div>
+              <p class="wizard-note">🔒 Der Token wird verschlüsselt in der Datenbank gespeichert. Ältere Music-Assistant-Versionen ohne Anmeldung brauchen keinen Token – dann das Feld leer lassen.</p>
+              <p class="wizard-check" id="musicassistant-wizard-token-check" aria-live="polite"></p>
+            </section>
+
+            <section class="wizard-step" data-step="3" hidden>
+              <h4>Deinen Benutzer auswählen</h4>
+              <p>OpenWeb zeigt nur Wiedergaben auf Playern, die in Music Assistant diesem Benutzer zugewiesen sind. So erscheint nicht, was andere im Haushalt hören.</p>
+              <div class="form wizard-fields">
+                <label>
+                  <span>Music-Assistant-Benutzer</span>
+                  <select id="musicassistant-wizard-user">
+                    <option value="">Benutzer werden geladen …</option>
+                  </select>
+                </label>
+              </div>
+              <p class="wizard-check" id="musicassistant-wizard-user-check" aria-live="polite"></p>
+            </section>
+
+            <section class="wizard-step" data-step="4" hidden>
+              <h4>Geschafft!</h4>
+              <p class="wizard-check" id="musicassistant-wizard-result" aria-live="polite">Prüfe die Verbindung …</p>
+              <p>Ab jetzt erscheint auf deiner Startseite, was auf deinen Playern läuft – mit Music-Assistant-Logo vor dem Titel. Music Assistant hat Vorrang vor Spotify und Navidrome.</p>
+              <div class="form-actions wizard-inline-actions">
+                <button type="button" class="btn ghost" id="musicassistant-wizard-retest">Erneut prüfen</button>
+                <button type="button" class="btn ghost" id="musicassistant-wizard-discord">Discord-Test senden</button>
+              </div>
+            </section>
+
+            <div class="wizard-nav">
+              <button type="button" class="btn ghost wizard-skip">Manuell einrichten</button>
+              <span class="wizard-spacer"></span>
+              <button type="button" class="btn ghost wizard-back">Zurück</button>
+              <button type="button" class="btn primary wizard-next">Weiter</button>
+            </div>
+          </div>
 
           <form id="musicassistant-form" class="form">
             <label class="row">
@@ -260,6 +379,7 @@
             </label>
 
             <div class="form-actions">
+              <button type="button" id="musicassistant-wizard-start-btn" class="btn ghost">Assistent</button>
               <button type="button" id="musicassistant-load-users-btn" class="btn ghost">Benutzer laden</button>
               <button type="submit" class="btn primary">Speichern</button>
             </div>
@@ -276,13 +396,7 @@
           </p>
           <!-- Einrichtungsassistent: erscheint, solange Spotify nicht verbunden ist (Logik in js/admin.js) -->
           <div id="spotify-wizard" class="setup-wizard" hidden>
-            <ol class="wizard-progress" aria-label="Fortschritt der Einrichtung">
-              <li data-step="1"><button type="button" class="wizard-dot" data-goto="1" aria-label="Schritt 1: App anlegen">1</button><span class="wizard-label">App anlegen</span></li>
-              <li data-step="2"><button type="button" class="wizard-dot" data-goto="2" aria-label="Schritt 2: Redirect-URI">2</button><span class="wizard-label">Redirect-URI</span></li>
-              <li data-step="3"><button type="button" class="wizard-dot" data-goto="3" aria-label="Schritt 3: Zugangsdaten">3</button><span class="wizard-label">Zugangsdaten</span></li>
-              <li data-step="4"><button type="button" class="wizard-dot" data-goto="4" aria-label="Schritt 4: Verbinden">4</button><span class="wizard-label">Verbinden</span></li>
-              <li data-step="5"><button type="button" class="wizard-dot" data-goto="5" aria-label="Schritt 5: Fertig">5</button><span class="wizard-label">Fertig</span></li>
-            </ol>
+            <ol class="wizard-progress" aria-label="Fortschritt der Einrichtung"></ol>
 
             <section class="wizard-step" data-step="1" hidden>
               <h4>Spotify-App anlegen</h4>
@@ -348,10 +462,10 @@
             </section>
 
             <div class="wizard-nav">
-              <button type="button" class="btn ghost" id="spotify-wizard-skip">Manuell einrichten</button>
+              <button type="button" class="btn ghost wizard-skip">Manuell einrichten</button>
               <span class="wizard-spacer"></span>
-              <button type="button" class="btn ghost" id="spotify-wizard-back">Zurück</button>
-              <button type="button" class="btn primary" id="spotify-wizard-next">Weiter</button>
+              <button type="button" class="btn ghost wizard-back">Zurück</button>
+              <button type="button" class="btn primary wizard-next">Weiter</button>
             </div>
           </div>
 
@@ -419,7 +533,10 @@
             </div>
             <div class="np-info">
               <span class="np-badge" id="admin-np-badge"><span class="np-badge-text">🎶</span></span>
-              <div class="np-title" id="admin-np-title">Momentan läuft nichts</div>
+              <div class="np-title-row">
+                <img class="np-title-source" id="admin-np-source" alt="" hidden />
+                <div class="np-title" id="admin-np-title">Momentan läuft nichts</div>
+              </div>
               <div class="np-album" id="admin-np-meta">Starte Musik im aktiven Player, um die Vorschau zu sehen.</div>
               <div class="np-progress" id="admin-np-progress">00:00 / 00:00</div>
               <div class="np-progress-line" id="admin-np-progress-line" role="progressbar" aria-label="Wiedergabefortschritt" aria-valuemin="0" aria-valuemax="100">

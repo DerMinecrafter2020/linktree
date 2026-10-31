@@ -562,32 +562,29 @@
       link.href = coverUrl || this.defaultFavicon;
     },
 
-    // Logo der Quelle am Plattenspieler; Name zusaetzlich fuer Screenreader
+    // Logo der Quelle vor dem Titel; Name zusaetzlich fuer Screenreader
     renderSource(source) {
       const wrap = $('#navidrome-player');
-      const badge = wrap?.querySelector('.np-source');
+      const icon = wrap?.querySelector('.np-title-source');
       const label = wrap?.querySelector('.np-source-label');
       const meta = MUSIC_SOURCES[source];
       if (label) label.textContent = meta ? `Quelle: ${meta.name}` : '';
-      if (!badge) return;
+      if (!icon) return;
       if (!meta) {
-        badge.hidden = true;
-        badge.replaceChildren();
-        delete badge.dataset.source;
+        icon.hidden = true;
+        icon.removeAttribute('src');
+        delete icon.dataset.source;
         return;
       }
-      badge.title = meta.name;
-      if (badge.dataset.source !== source) {
-        const img = document.createElement('img');
-        img.src = `/api/icon/dashboardicon/${meta.icon}/svg`;
-        img.alt = '';
-        img.decoding = 'async';
-        img.referrerPolicy = 'no-referrer';
-        img.onerror = () => { badge.hidden = true; };
-        badge.replaceChildren(img);
-        badge.dataset.source = source;
+      icon.title = meta.name;
+      if (icon.dataset.source !== source) {
+        icon.onerror = () => { icon.hidden = true; };
+        icon.decoding = 'async';
+        icon.referrerPolicy = 'no-referrer';
+        icon.src = `/api/icon/dashboardicon/${meta.icon}/svg`;
+        icon.dataset.source = source;
       }
-      badge.hidden = false;
+      icon.hidden = false;
     },
 
     renderTrack(data, state = 'playing') {

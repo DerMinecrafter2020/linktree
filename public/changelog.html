@@ -48,6 +48,17 @@
     <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
 
     <div class="changelog-entry">
+      <h2>2026-10-31 — OpenWeb v3.3.2 (Einrichtungsassistenten für alle Musikquellen)</h2>
+      <ul>
+        <li><strong>Navidrome:</strong> Ist Navidrome noch nicht eingerichtet, führt im Admin unter „Musik“ ein Assistent durch die Einrichtung: Server-Adresse (wird vorab geprüft), Anmeldung (wird vor dem Speichern getestet) und ein abschließender Verbindungstest.</li>
+        <li><strong>Music Assistant:</strong> Neuer Assistent mit Server-Prüfung, Anleitung zum langlebigen Token, Auswahl des eigenen Benutzers (mit Hinweis, wenn ihm keine Player zugewiesen sind) und Abschlusstest.</li>
+        <li><strong>Sicherheit:</strong> Der Navidrome-Benutzername wird jetzt wie Passwort und Music-Assistant-Token verschlüsselt in der Datenbank gespeichert; bestehende Einträge werden beim ersten Zugriff automatisch umgestellt. Das gilt auch für Einrichtung und Änderungen über install.sh.</li>
+        <li><strong>Player:</strong> Das Logo der aktiven Quelle steht jetzt in Titelgröße direkt vor dem Songtitel – auf der Startseite und in der Live-Vorschau im Admin.</li>
+        <li><strong>Admin:</strong> Alle drei Assistenten lassen sich über „Assistent“ jederzeit erneut starten; „Manuell einrichten“ zeigt weiterhin das bisherige Formular. Fehlermeldungen bei der Verbindungsprüfung sind verständlicher.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <h2>2026-10-31 — OpenWeb v3.3.1 (Spotify-Einrichtungsassistent)</h2>
       <ul>
         <li><strong>Spotify:</strong> Ist Spotify noch nicht verbunden, führt im Admin unter „Musik“ ein Assistent in fünf Schritten durch die Einrichtung: App anlegen, Redirect-URI (mit Kopieren-Knopf), Client-ID/-Secret, Verbinden und ein abschließender Verbindungstest.</li>

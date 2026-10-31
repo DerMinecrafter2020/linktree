@@ -63,13 +63,13 @@ lib/
   alert.js                Benachrichtigungen (Webhook / SMTP) bei Login, Passwortwechsel, Backup-Fehler
   backup.js               Tägliche JSON-Backups nach ./backups (Rechte 600)
   maintenance.js          Aufräumen alter Sessions / Klickdaten und Monitor-Messpunkte (30 Tage)
-  navidrome.js            Subsonic-API-Client inkl. Radiosender-Erkennung
-  musicassistant.js       Music-Assistant-API-Client
+  navidrome.js            Subsonic-API-Client inkl. Radiosender-Erkennung; saveSettings/getSettings (Anmeldedaten verschluesselt), testConnection/probeServer
+  musicassistant.js       Music-Assistant-API-Client inkl. testConnection (verstaendliche Fehler + code)
   discord.js              „Now Playing“-Discord-Webhook (Polling alle 10 s)
   analytics.js            User-Agent-/Länder-Parsing für Statistiken
 db/
   migrate.js              Führt db/migrations/*.sql der Reihe nach aus (Tabelle `migrations`)
-  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 019: spotify_settings, music_history.source)
+  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 020: navidrome_settings.username_encrypted)
   seed.js / reset.js      Initialdaten / Datenbank leeren
 public/                   Statische Dateien (werden 1:1 ausgeliefert!)
   index.html, admin.html, login.html, setup.html, changelog.html, impressum.html, datenschutz.html …
@@ -133,7 +133,7 @@ Vorlage: `.env.example`. Die `.env` enthält Secrets → **niemals committen, lo
 | `POSTGRES_PASSWORD` | Docker | Passwort des Postgres-Containers (muss zu `DATABASE_URL` passen) |
 | `SESSION_SECRET` | ja | Zufälliger 64-Hex-Wert, Server startet sonst nicht |
 | `SESSION_MAX_AGE_MS` | – | Session-Dauer (Standard 24 h; „Angemeldet bleiben“ = 30 Tage) |
-| `NAVIDROME_ENCRYPTION_KEY` | ja | 32 Byte Hex – verschlüsselt Navidrome-Passwort, MA-Token und SMTP-Passwort in der DB. Schlüssel-Backup im Admin separat erstellen und Passphrase getrennt aufbewahren. |
+| `NAVIDROME_ENCRYPTION_KEY` | ja | 32 Byte Hex – verschlüsselt Navidrome-Benutzername und -Passwort, MA-Token, Spotify-Client-Secret/-Refresh-Token und SMTP-Passwort in der DB. Schlüssel-Backup im Admin separat erstellen und Passphrase getrennt aufbewahren. |
 | `ADMIN_EMAIL` | – | E-Mail des initialen Admins (Seeding) |
 | `ADMIN_PASSWORD`, `NAVIDROME_PASSWORD` | – | **Nur für das Seeding**, danach aus der `.env` entfernen |
 | `NAVIDROME_URL`, `NAVIDROME_USERNAME`, `NAVIDROME_POLL_INTERVAL_SEC` | – | Initiale Navidrome-Daten (Seeding) |
@@ -228,14 +228,27 @@ Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
   Speicher; ein widerrufener Refresh-Token (`invalid_grant`) trennt die Verbindung. Neue
   Client-ID/-Secret verwerfen die bestehende Anmeldung. Cover nur von `https://i.scdn.co` über
   `/api/status/spotify-cover`; der Spotify-Link (`spotifyUrl`) ist intern und geht nur an Discord.
-- **Spotify-Einrichtungsassistent** (`#spotify-wizard` in `admin.html`, Logik im Spotify-Block von
-  `public/js/admin.js`): erscheint, solange Spotify nicht verbunden ist, sonst das Formular. Schritte:
-  App anlegen → Redirect-URI → Zugangsdaten (speichert mit `enabled: true`) → Verbinden → Abschlusstest.
-  Startschritt: verbunden = Formular, Zugangsdaten gespeichert = 4, sonst gemerkter Schritt 1–3
-  (`localStorage` `openweb-spotify-wizard`, nur Komfort; `manual: true` = „Manuell einrichten“).
-  Rückkehr `/admin?spotify=connected` zeigt Schritt 5, Fehler (`error`/`invalid`/`denied`) Schritt 4
-  mit Hilfe. Die Redirect-Prüfung kommt vom Server (`redirect_uri_configured`/`_secure`/`_localhost`
-  aus `lib/spotify.getRedirectUriStatus`: https Pflicht, http nur für 127.0.0.1/[::1], nie `localhost`).
+- **Einrichtungsassistenten** (Musik-Tab): gemeinsame Logik `createSetupWizard()` in
+  `public/js/admin.js` (Fortschritt, Schritte, Zurück/Weiter, „Manuell einrichten“, „Assistent“-Knopf
+  im Formular). Markup je Dienst: `#<name>-wizard` mit leerer `.wizard-progress` (wird per JS gefüllt),
+  `.wizard-step[data-step]` und `.wizard-nav` (`.wizard-back`/`.wizard-next`/`.wizard-skip`). Der
+  Assistent erscheint, solange `isConfigured()` falsch ist, sonst das Formular; Fortschritt nur in
+  `localStorage` `openweb-<name>-wizard` (Komfort, `manual: true` = Formular).
+  - Navidrome: Server (`POST /settings/navidrome/test` mit `{ url, probe: true }`, ohne Zugangsdaten) →
+    Anmeldung (Test mit `{ url, username, password }` **vor** dem Speichern) → Abschlusstest.
+  - Music Assistant: Server (Probe ohne Token; `code: 'auth'` = Server gefunden) → Token (Test, dann
+    speichern) → Benutzer (Liste aus `/settings/musicassistant/users`) → Abschlusstest
+    (`POST /settings/musicassistant/test`).
+  - Spotify: App anlegen → Redirect-URI → Zugangsdaten (speichert mit `enabled: true`) → Verbinden →
+    Abschlusstest. Rückkehr `/admin?spotify=connected` zeigt den Abschluss, Fehler Schritt 4 mit Hilfe.
+    Redirect-Prüfung vom Server (`lib/spotify.getRedirectUriStatus`: https Pflicht, http nur für
+    127.0.0.1/[::1], nie `localhost`).
+- **Navidrome-Anmeldedaten:** Benutzername (`username_encrypted`) und Passwort (`password_encrypted`)
+  nur verschlüsselt. Schreiben ausschließlich über `lib/navidrome.saveSettings()` (Admin, Seeding,
+  `install.sh change-navidrome`), lesen über `getSettings()` (liefert `username` entschlüsselt; alte
+  Klartext-Werte in `username` werden dabei einmalig verschlüsselt und die Spalte geleert).
+- **Quellen-Logo** steht in Titelgröße vor dem Titel (`.np-title-row` mit `.np-title-source`), auf der
+  Startseite und in der Admin-Vorschau (`#admin-np-source`).
 - Music Assistant: `musicassistant_settings.user_id` bestimmt den Benutzer für „Now Playing“.
   Die Player-Zuordnung stammt aus `player_filter` der Music-Assistant-API; ohne eingeschränkte
   Player-Zuordnung wird vorsichtshalber keine Music-Assistant-Wiedergabe ausgegeben.
@@ -270,8 +283,9 @@ Middleware zählt jede Anfrage (Dauer, 5xx) – sie muss vor allen Routen stehen
    `onclick=`-Attribute. JavaScript immer als eigene Datei unter `public/js/`. Externe Skripte nur
    mit `integrity`-Hash (SRI) und `crossorigin="anonymous"`.
 5. **Secrets:** Passwörter nur als bcrypt-Hash; API-Keys nur gehasht (Klartext wird einmalig
-   angezeigt); Zugangsdaten zu Fremddiensten (Navidrome, Music Assistant, SMTP) nur mit
-   `lib/crypto.encrypt()` speichern und **nie** an den Client zurückgeben. Keine Secrets loggen.
+   angezeigt); Zugangsdaten zu Fremddiensten (Navidrome-Benutzername/-Passwort, Music-Assistant-Token,
+   Spotify, SMTP) nur mit `lib/crypto.encrypt()` speichern und **nie** an den Client zurückgeben
+   (der Navidrome-Benutzername darf im Admin-Formular entschlüsselt angezeigt werden). Keine Secrets loggen.
 6. **Auth-Änderungen:** Sensible Kontoänderungen (TOTP einrichten/deaktivieren, Security Key
    hinzufügen/löschen) verlangen das aktuelle Passwort (`checkCurrentPassword`, im Frontend
    `askPassword()` – nie `prompt()`). Ein aktives TOTP kann nicht ersetzt, nur deaktiviert werden.

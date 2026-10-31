@@ -100,7 +100,8 @@
 
     getNavidromeSettings: () => get('/admin/settings/navidrome'),
     saveNavidromeSettings: (cfg) => post('/admin/settings/navidrome', cfg),
-    testNavidromeConnection: () => post('/admin/settings/navidrome/test'),
+    // Ohne Argument: gespeicherte Werte pruefen; mit { url, username, password } bzw. { url, probe }: ohne Speichern
+    testNavidromeConnection: (candidate) => post('/admin/settings/navidrome/test', candidate || {}),
     testNavidromeDiscordWebhook: (source) => post('/admin/settings/navidrome/discord-test', source ? { source } : {}),
 
     getSpotifySettings: () => get('/admin/settings/spotify'),
@@ -112,6 +113,8 @@
     getMusicAssistantSettings: () => get('/admin/settings/musicassistant'),
     saveMusicAssistantSettings: (cfg) => post('/admin/settings/musicassistant', cfg),
     getMusicAssistantUsers: () => get('/admin/settings/musicassistant/users'),
+    // Ohne Argument: gespeicherte Werte pruefen; mit { url, token }: ohne Speichern
+    testMusicAssistantConnection: (candidate) => post('/admin/settings/musicassistant/test', candidate || {}),
 
     exportData: () => get('/admin/export'),
     importData: (data) => post('/admin/import', data),

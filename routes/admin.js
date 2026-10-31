@@ -17,6 +17,7 @@ const alert = require('../lib/alert');
 const icons = require('../lib/icons');
 const encryptionKeyBackup = require('../lib/encryption-key-backup');
 const { getAvailableUsers: getMusicAssistantUsers } = require('../lib/musicassistant');
+const navidrome = require('../lib/navidrome');
 const webauthnRp = require('../lib/webauthn-rp');
 
 function generateApiKey() {
@@ -754,15 +755,24 @@ router.get('/music-history', async (req, res) => {
 });
 
 // ---------- Navidrome-Settings (Admin) ----------
+// Navidrome-Einstellungen fuer das Admin-Formular: Benutzername entschluesselt, Passwort nie
+async function navidromeSettingsView() {
+  const s = await navidrome.getSettings();
+  if (!s) return { enabled: false, url: '', username: '', poll_interval_sec: 30, has_password: false };
+  return {
+    id: s.id,
+    enabled: !!s.enabled,
+    url: s.url || '',
+    username: s.username || '',
+    poll_interval_sec: s.poll_interval_sec || 30,
+    has_password: !!s.password_encrypted,
+    updated_at: s.updated_at,
+  };
+}
+
 router.get('/settings/navidrome', async (req, res, next) => {
   try {
-    const { rows } = await db.query(`
-      SELECT id, enabled, url, username, poll_interval_sec, updated_at
-      FROM navidrome_settings
-      WHERE id = 1
-      LIMIT 1
-    `);
-    res.json({ ok: true, data: rows[0] || { enabled: false } });
+    res.json({ ok: true, data: await navidromeSettingsView() });
   } catch (err) {
     next(err);
   }
@@ -802,48 +812,16 @@ router.post('/settings/navidrome/discord-test', async (req, res, next) => {
 
 router.post('/settings/navidrome', async (req, res, next) => {
   try {
-    const enabled = !!req.body.enabled;
-    const url = req.body.url ? v.safeUrl(req.body.url) : null;
-    const username = req.body.username ? v.safeText(req.body.username, 120) : null;
-    const pollInterval = Math.min(600, Math.max(5, parseInt(req.body.poll_interval_sec || '30', 10) || 30));
-
-    let encryptedPassword = null;
-    if (req.body.password) {
-      encryptedPassword = encrypt(req.body.password);
-    }
-
-    if (encryptedPassword) {
-      await db.query(`
-        INSERT INTO navidrome_settings (id, enabled, url, username, password_encrypted, poll_interval_sec)
-        VALUES (1, $1, $2, $3, $4, $5)
-        ON CONFLICT (id) DO UPDATE SET
-          enabled = EXCLUDED.enabled,
-          url = EXCLUDED.url,
-          username = EXCLUDED.username,
-          password_encrypted = EXCLUDED.password_encrypted,
-          poll_interval_sec = EXCLUDED.poll_interval_sec,
-          updated_at = NOW()
-      `, [enabled, url, username, encryptedPassword, pollInterval]);
-    } else {
-      await db.query(`
-        INSERT INTO navidrome_settings (id, enabled, url, username, poll_interval_sec)
-        VALUES (1, $1, $2, $3, $4)
-        ON CONFLICT (id) DO UPDATE SET
-          enabled = EXCLUDED.enabled,
-          url = EXCLUDED.url,
-          username = EXCLUDED.username,
-          poll_interval_sec = EXCLUDED.poll_interval_sec,
-          updated_at = NOW()
-      `, [enabled, url, username, pollInterval]);
-    }
-
-    const { rows } = await db.query(`
-      SELECT id, enabled, url, username, poll_interval_sec, updated_at
-      FROM navidrome_settings
-      WHERE id = 1
-      LIMIT 1
-    `);
-    res.json({ ok: true, data: rows[0] });
+    // Benutzername und Passwort werden verschluesselt gespeichert (lib/navidrome.saveSettings);
+    // leeres Passwort = gespeichertes Passwort behalten
+    await navidrome.saveSettings({
+      enabled: !!req.body.enabled,
+      url: req.body.url ? v.safeUrl(req.body.url) : null,
+      username: req.body.username ? v.safeText(req.body.username, 120) : null,
+      password: typeof req.body.password === 'string' ? req.body.password : null,
+      pollIntervalSec: req.body.poll_interval_sec,
+    });
+    res.json({ ok: true, data: await navidromeSettingsView() });
   } catch (err) {
     next(err);
   }
@@ -853,12 +831,12 @@ router.post('/settings/navidrome', async (req, res, next) => {
 router.get('/settings/musicassistant', async (req, res, next) => {
   try {
     const { rows } = await db.query(`
-      SELECT id, enabled, url, user_id, updated_at
+      SELECT id, enabled, url, user_id, updated_at, (COALESCE(token_encrypted, '') <> '') AS has_token
       FROM musicassistant_settings
       WHERE id = 1
       LIMIT 1
     `);
-    res.json({ ok: true, data: rows[0] || { enabled: false } });
+    res.json({ ok: true, data: rows[0] || { enabled: false, has_token: false } });
   } catch (err) {
     next(err);
   }
@@ -915,7 +893,7 @@ router.post('/settings/musicassistant', async (req, res, next) => {
     }
 
     const { rows } = await db.query(`
-      SELECT id, enabled, url, user_id, updated_at
+      SELECT id, enabled, url, user_id, updated_at, (COALESCE(token_encrypted, '') <> '') AS has_token
       FROM musicassistant_settings
       WHERE id = 1
       LIMIT 1
@@ -1104,37 +1082,77 @@ router.post('/settings/spotify/test', async (req, res) => {
   }
 });
 
-router.post('/settings/navidrome/test', async (req, res, next) => {
+// Verbindung pruefen. Mit url/username/password im Body werden diese Werte geprueft, ohne zu
+// speichern (Einrichtungsassistent); ein leeres Passwort nimmt das gespeicherte.
+router.post('/settings/navidrome/test', async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT * FROM navidrome_settings WHERE id = 1 LIMIT 1');
-    const settings = rows[0];
-    if (!settings || !settings.enabled || !settings.url || !settings.username || !settings.password_encrypted) {
-      return res.json({ ok: true, data: { configured: false } });
+    const saved = await navidrome.getSettings() || {};
+    const body = req.body || {};
+    const candidate = body.url !== undefined;
+    const url = candidate ? v.safeUrl(String(body.url || '')) : saved.url;
+    const username = candidate ? v.safeText(String(body.username || ''), 120) : saved.username;
+    let password = candidate && typeof body.password === 'string' && body.password ? body.password : null;
+    if (!password && saved.password_encrypted) password = decrypt(saved.password_encrypted);
+
+    if (!url || !/^https?:\/\//i.test(url)) {
+      return res.json({ ok: true, data: { configured: false, connected: false, error: 'Bitte eine gültige http(s)-Adresse angeben.' } });
     }
+    // Schritt 1 des Assistenten: nur pruefen, ob dort ein Subsonic-Server antwortet (ohne Zugangsdaten)
+    if (candidate && body.probe === true) {
+      const probe = await navidrome.probeServer(url);
+      return res.json({ ok: true, data: { configured: false, connected: probe.ok, error: probe.ok ? undefined : probe.error } });
+    }
+    if (!username || !password) {
+      return res.json({ ok: true, data: { configured: false, connected: false, error: 'Benutzername und Passwort werden benötigt.' } });
+    }
+    const result = await navidrome.testConnection({ url, username, password });
+    if (!result.ok) return res.json({ ok: true, data: { configured: true, connected: false, error: result.error } });
 
-    const password = decrypt(settings.password_encrypted);
-    const salt = crypto.randomBytes(8).toString('hex');
-    const token = crypto.createHash('md5').update(password + salt).digest('hex');
-    const pingUrl = new URL('/rest/ping', settings.url);
-    pingUrl.searchParams.set('u', settings.username);
-    pingUrl.searchParams.set('t', token);
-    pingUrl.searchParams.set('s', salt);
-    pingUrl.searchParams.set('v', '1.13.0');
-    pingUrl.searchParams.set('c', 'openweb');
-    pingUrl.searchParams.set('f', 'json');
-
-    const response = await fetch(pingUrl.toString(), { headers: { Accept: 'application/json' } });
-    const text = await response.text();
-    let json;
-    try { json = JSON.parse(text); } catch { throw new Error('Ungueltige Navidrome-Antwort'); }
-    const status = json['subsonic-response'];
-    if (!status) throw new Error('Keine Subsonic-Antwort');
-    if (status.status === 'failed') throw new Error(status.error?.message || 'Navidrome-Fehler');
-
-    res.json({ ok: true, data: { configured: true, connected: status.status === 'ok' } });
+    const data = { configured: true, connected: true, serverVersion: result.serverVersion, type: result.type };
+    // Bei gespeicherten Werten zusaetzlich zeigen, ob gerade etwas laeuft
+    if (!candidate && saved.enabled) {
+      const track = await navidrome.getNowPlayingUncached();
+      data.playing = !!(track && track.playing);
+      data.title = track?.title || null;
+      data.artist = track?.artist || null;
+    }
+    res.json({ ok: true, data });
   } catch (err) {
     console.error('[admin navidrome/test]', err.message);
-    res.json({ ok: true, data: { configured: false, error: err.message } });
+    res.json({ ok: true, data: { configured: false, connected: false, error: 'Prüfung fehlgeschlagen.' } });
+  }
+});
+
+// Music Assistant pruefen: mit url/token im Body ohne zu speichern (leeres Token = gespeichertes),
+// sonst die gespeicherten Werte inkl. aktueller Wiedergabe des gewaehlten Benutzers.
+router.post('/settings/musicassistant/test', async (req, res) => {
+  try {
+    const ma = require('../lib/musicassistant');
+    const saved = await ma.getSettings() || {};
+    const body = req.body || {};
+    const candidate = body.url !== undefined;
+    const url = candidate ? v.safeUrl(String(body.url || '')) : saved.url;
+    if (!url || !/^https?:\/\//i.test(url)) {
+      return res.json({ ok: true, data: { connected: false, error: 'Bitte eine gültige http(s)-Adresse angeben.' } });
+    }
+    // Schritt 1 des Assistenten (probe): ohne Token pruefen – "Token noetig" heisst, der Server ist da
+    const tokenEncrypted = candidate && body.probe === true
+      ? null
+      : (candidate && typeof body.token === 'string' && body.token ? encrypt(body.token) : (saved.token_encrypted || null));
+    const result = await ma.testConnection({ url, token_encrypted: tokenEncrypted });
+    if (!result.ok) return res.json({ ok: true, data: { connected: false, code: result.code || null, error: result.error } });
+
+    const data = { connected: true, playerCount: result.playerCount };
+    if (!candidate && saved.enabled && saved.user_id) {
+      const track = await ma.getNowPlayingUncached();
+      data.playing = !!(track && track.playing);
+      data.title = track?.title || null;
+      data.artist = track?.artist || null;
+    }
+    res.json({ ok: true, data });
+  } catch (err) {
+    console.error('[admin musicassistant/test]', err.message);
+    res.json({ ok: true, data: { connected: false, error: 'Prüfung fehlgeschlagen.' } });
   }
 });
 

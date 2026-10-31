@@ -1526,6 +1526,7 @@ input[type="checkbox"] {
   .np-player { padding: 10px; gap: 12px; min-width: 0; }
   .np-turntable-wrap { width: 76px; height: 76px; }
   .np-title { font-size: 14px; }
+  #admin-np-player .np-title-row { font-size: 14px; }
   .np-artist { font-size: 12px; }
   .np-progress, .np-album, .np-extra { font-size: 11px; }
   .np-player:hover .np-album, .np-player:hover .np-extra { max-height: 0; opacity: 0; margin-top: 0; }
@@ -1694,6 +1695,18 @@ input[type="checkbox"] {
   background: var(--md-warning-container);
   color: var(--md-on-warning-container);
 }
+/* Titelzeile der Live-Vorschau: Quellen-Logo in Titelgroesse vor dem Titel */
+#admin-np-player .np-title-row { display: flex; align-items: center; gap: 0.4em; min-width: 0; font-size: 16px; }
+#admin-np-player .np-title-row .np-title { flex: 1 1 auto; min-width: 0; }
+#admin-np-player .np-title-source {
+  flex-shrink: 0;
+  width: 1.25em;
+  height: 1.25em;
+  object-fit: contain;
+}
+#admin-np-player .np-title-source[hidden],
+#admin-np-player.idle .np-title-source { display: none; }
+
 /* Quellen-Logo im Status-Chip */
 #admin-np-badge { gap: 6px; }
 #admin-np-badge .np-badge-icon {
@@ -1737,7 +1750,7 @@ input[type="checkbox"] {
 .wizard-progress {
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(var(--wizard-steps, 5), 1fr);
   margin: 0;
   padding: 0;
 }
