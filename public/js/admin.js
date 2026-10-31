@@ -1843,6 +1843,7 @@
     load2faStatus();
 
     loadAlertSettings();
+    bindContactSettings();
     $('#alert-form')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
@@ -1862,6 +1863,7 @@
       try {
         await window.api.saveAlertSettings(payload);
         toast('✅ Alert-Einstellungen gespeichert');
+        loadContactSettings(); // SMTP-Status im Kontaktformular aktualisieren
       } catch (err) { toast('Fehler: ' + err.message, true); }
     });
 
@@ -1870,6 +1872,71 @@
         const res = await window.api.testAlertSettings();
         toast(res.ok ? '✅ Testbenachrichtigung gesendet' : '⚠️ Test konnte nicht gesendet werden', !res.ok);
       } catch (err) { toast('Fehler: ' + err.message, true); }
+    });
+  }
+
+  // ---------- Kontaktformular (Einstellungen) ----------
+  function renderContactStatus(s) {
+    const status = $('#contact-smtp-status');
+    if (!status) return;
+    status.className = 'contact-status';
+    if (!s.smtp_configured) {
+      status.classList.add('warn');
+      status.textContent = '⚠️ SMTP ist noch nicht eingerichtet – trage oben in den Alert-Einstellungen Host, Benutzer und Passwort ein. Bis dahin bleibt das Formular unsichtbar.';
+    } else if (!s.effective_recipient) {
+      status.classList.add('warn');
+      status.textContent = '⚠️ Es fehlt eine Empfänger-Adresse (hier oder in den Alert-Einstellungen).';
+    } else if (!s.enabled) {
+      status.textContent = `SMTP ist bereit. Nachrichten würden an ${s.effective_recipient} gehen – das Formular ist aber noch ausgeschaltet.`;
+    } else {
+      status.classList.add('ok');
+      status.textContent = `✅ Aktiv: Nachrichten gehen an ${s.effective_recipient} (Absender ${s.sender}).`;
+    }
+  }
+
+  async function loadContactSettings() {
+    const form = $('#contact-settings-form');
+    if (!form) return;
+    try {
+      const s = await window.api.getContactSettings();
+      form.enabled.checked = !!s.enabled;
+      form.recipient.value = s.recipient || '';
+      form.recipient.placeholder = s.effective_recipient && !s.recipient ? s.effective_recipient : 'kontakt@example.com';
+      form.intro_text.value = s.intro_text || '';
+      renderContactStatus(s);
+    } catch (err) {
+      const status = $('#contact-smtp-status');
+      if (status) status.textContent = 'Status konnte nicht geladen werden: ' + err.message;
+    }
+  }
+
+  function bindContactSettings() {
+    const form = $('#contact-settings-form');
+    if (!form) return;
+    loadContactSettings();
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const s = await window.api.saveContactSettings({
+          enabled: form.enabled.checked,
+          recipient: form.recipient.value.trim(),
+          intro_text: form.intro_text.value,
+        });
+        renderContactStatus(s);
+        toast(s.enabled && !s.available ? '⚠️ Gespeichert – das Formular erscheint erst, wenn SMTP und Empfänger eingerichtet sind' : '✅ Kontaktformular gespeichert', s.enabled && !s.available);
+      } catch (err) { toast('Fehler: ' + err.message, true); }
+    });
+    $('#contact-test-btn')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try {
+        const res = await window.api.testContactForm();
+        toast(res.ok ? `✅ Testnachricht an ${res.recipient} gesendet` : `⚠️ ${res.error}`, !res.ok);
+      } catch (err) {
+        toast('Fehler: ' + err.message, true);
+      } finally {
+        btn.disabled = false;
+      }
     });
   }
 

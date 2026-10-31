@@ -14,6 +14,7 @@ const bcrypt = require('bcrypt');
 const backup = require('../lib/backup');
 const audit = require('../lib/audit');
 const alert = require('../lib/alert');
+const contact = require('../lib/contact');
 const icons = require('../lib/icons');
 const encryptionKeyBackup = require('../lib/encryption-key-backup');
 const { getAvailableUsers: getMusicAssistantUsers } = require('../lib/musicassistant');
@@ -711,6 +712,37 @@ router.post('/alert-settings/test', async (req, res, next) => {
   try {
     const result = await alert.notify('test', 'Dies ist eine Testbenachrichtigung von OpenWeb.', { time: new Date().toISOString() });
     res.json({ ok: result.sent, results: result.results });
+  } catch (err) { next(err); }
+});
+
+// ---------- Kontaktformular (Versand ueber die SMTP-Daten der Alert-Einstellungen) ----------
+router.get('/settings/contact', async (req, res, next) => {
+  try {
+    res.json({ ok: true, data: await contact.getStatus() });
+  } catch (err) { next(err); }
+});
+
+router.post('/settings/contact', async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const data = await contact.saveSettings({
+      enabled: b.enabled === true,
+      recipient: typeof b.recipient === 'string' ? b.recipient : '',
+      introText: typeof b.intro_text === 'string' ? b.intro_text : '',
+    });
+    await audit.log(req, 'update', 'contact_settings', 1, { enabled: data.enabled });
+    res.json({ ok: true, data });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ ok: false, error: err.message });
+    next(err);
+  }
+});
+
+router.post('/settings/contact/test', async (req, res, next) => {
+  try {
+    const { rows } = await db.query('SELECT name, handle FROM profile WHERE id = 1 LIMIT 1');
+    const result = await contact.sendTest(rows[0]);
+    res.json({ ok: true, data: result });
   } catch (err) { next(err); }
 });
 

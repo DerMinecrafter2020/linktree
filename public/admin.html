@@ -894,6 +894,30 @@
                   </div>
                 </form>
               </div>
+              <div class="card-block" id="contact-card">
+                <h3>✉️ Kontaktformular</h3>
+                <p class="hint">Besucher können dir über einen Knopf auf der Startseite eine Nachricht schreiben. Versendet wird über die SMTP-Daten aus den Alert-Einstellungen oben; „Antworten“ geht direkt an den Absender. Nachrichten werden nicht gespeichert.</p>
+                <p id="contact-smtp-status" class="contact-status" aria-live="polite">Lade Status …</p>
+                <form id="contact-settings-form" class="form">
+                  <label class="row">
+                    <input name="enabled" type="checkbox" />
+                    <span>Kontaktformular auf der Startseite anzeigen</span>
+                  </label>
+                  <label>
+                    <span>Empfänger-E-Mail (leer = Empfänger der Alert-Einstellungen)</span>
+                    <input name="recipient" type="email" maxlength="254" placeholder="kontakt@example.com" />
+                  </label>
+                  <label>
+                    <span>Einleitungstext im Formular (optional)</span>
+                    <textarea name="intro_text" rows="2" maxlength="500" placeholder="z. B. Für Anfragen zu Projekten oder Kooperationen – ich melde mich in der Regel innerhalb von zwei Tagen."></textarea>
+                  </label>
+                  <p class="hint">Bitte die Datenschutzerklärung um einen Abschnitt zum Kontaktformular ergänzen (Name, E-Mail und Nachricht werden zur Beantwortung per E-Mail zugestellt).</p>
+                  <div class="form-actions">
+                    <button type="button" id="contact-test-btn" class="btn ghost">Testnachricht senden</button>
+                    <button type="submit" class="btn primary">Speichern</button>
+                  </div>
+                </form>
+              </div>
             </div>
 
             <div class="sub-tab-panel" id="panel-security">

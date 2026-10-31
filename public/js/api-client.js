@@ -29,6 +29,8 @@
     if (!response.ok || !json.ok) {
       const err = new Error(json.error || `HTTP ${response.status}`);
       err.status = response.status;
+      if (json.field) err.field = json.field; // z. B. Kontaktformular: betroffenes Feld
+      if (json.code) err.code = json.code;
       throw err;
     }
     return json.data;
@@ -86,6 +88,11 @@
 
     getAlertSettings: () => get('/admin/alert-settings'),
     saveAlertSettings: (settings) => post('/admin/alert-settings', settings),
+    getContactSettings: () => get('/admin/settings/contact'),
+    saveContactSettings: (settings) => post('/admin/settings/contact', settings),
+    testContactForm: () => post('/admin/settings/contact/test', {}),
+    getContactToken: () => get('/contact/token'),
+    sendContactMessage: (message) => post('/contact', message),
     testAlertSettings: () => post('/admin/alert-settings/test'),
     getBackups: () => get('/admin/backups'),
     createBackup: () => post('/admin/backups', {}),

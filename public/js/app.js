@@ -417,6 +417,8 @@
       if (profile?.player_progress_style === 'line') populateWaveform($('#np-progress-line'));
       renderProfile(profile);
       buildThemeSwitcher(profile?.allow_visitor_theme !== false);
+      const contactBtn = $('#contact-btn');
+      if (contactBtn) contactBtn.hidden = !(profile?.contact_enabled && profile?.is_public !== false);
       if (profile?.is_public === false) {
         renderPrivateNotice(profile);
       } else {
@@ -713,6 +715,7 @@
     render();
     np.start();
     bindPublicActions();
+    bindContactForm();
     revealAdminShortcut();
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) revealAdminShortcut();
@@ -771,6 +774,128 @@
       a.href = qrImg.src;
       a.download = `qr-${location.hostname}.png`;
       a.click();
+    });
+  }
+
+  // ---------- Kontaktformular ----------
+  // Token vom Server beim Oeffnen holen (Spamschutz: Mindest-Ausfuellzeit, einmalig).
+  // Eingaben bleiben beim Schliessen erhalten, bis die Nachricht gesendet wurde.
+  function bindContactForm() {
+    const btn = $('#contact-btn');
+    const dlg = $('#contact-dialog');
+    const form = $('#contact-form');
+    if (!btn || !dlg || !form) return;
+    const fields = $('#contact-fields', dlg);
+    const intro = $('#contact-intro', dlg);
+    const errorEl = $('#contact-error', dlg);
+    const success = $('#contact-success', dlg);
+    const submit = $('#contact-submit', dlg);
+    const cancel = $('#contact-cancel', dlg);
+    const count = $('#contact-count', dlg);
+    const max = Number(form.message.maxLength) || 5000;
+    let token = null;
+    let sent = false;
+    let busy = false;
+
+    const updateCount = () => {
+      const n = form.message.value.length;
+      count.textContent = `${n.toLocaleString('de-DE')} / ${max.toLocaleString('de-DE')}`;
+      count.classList.toggle('warn', n > max * 0.9);
+    };
+    const clearErrors = () => {
+      errorEl.hidden = true;
+      errorEl.textContent = '';
+      form.querySelectorAll('[aria-invalid="true"]').forEach((f) => f.removeAttribute('aria-invalid'));
+    };
+    const showError = (message, field) => {
+      errorEl.textContent = message;
+      errorEl.hidden = false;
+      const input = field && form.elements[field];
+      if (input) {
+        input.setAttribute('aria-invalid', 'true');
+        input.focus();
+      }
+    };
+    const setBusy = (state) => {
+      busy = state;
+      submit.disabled = state;
+      submit.textContent = state ? 'Wird gesendet …' : 'Senden';
+    };
+    const showSent = (state) => {
+      sent = state;
+      fields.hidden = state;
+      intro.hidden = state || !intro.textContent;
+      success.hidden = !state;
+      submit.hidden = state;
+      cancel.textContent = state ? 'Schließen' : 'Abbrechen';
+    };
+    const close = () => { if (typeof dlg.close === 'function') dlg.close(); else dlg.removeAttribute('open'); };
+
+    async function loadToken() {
+      const data = await window.api.getContactToken();
+      token = data.token;
+      intro.textContent = data.intro_text || '';
+      intro.hidden = sent || !data.intro_text;
+    }
+
+    btn.addEventListener('click', async () => {
+      if (sent) { form.reset(); showSent(false); }
+      clearErrors();
+      updateCount();
+      if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+      form.name.focus();
+      try {
+        await loadToken();
+      } catch (err) {
+        showError(err.status === 429 ? err.message : 'Das Kontaktformular ist gerade nicht erreichbar. Bitte versuche es später erneut.');
+      }
+    });
+    cancel.addEventListener('click', close);
+    form.message.addEventListener('input', updateCount);
+    form.addEventListener('input', (e) => {
+      if (e.target.getAttribute('aria-invalid') === 'true') e.target.removeAttribute('aria-invalid');
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (busy || sent) return;
+      clearErrors();
+      // Kurze Pruefung im Browser (der Server prueft verbindlich)
+      const value = (name) => String(form.elements[name].value || '').trim();
+      if (!value('name')) return showError('Bitte gib deinen Namen an.', 'name');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value('email'))) return showError('Bitte gib eine gültige E-Mail-Adresse an, damit eine Antwort möglich ist.', 'email');
+      if (value('message').length < 10) return showError('Die Nachricht ist zu kurz (mindestens 10 Zeichen).', 'message');
+      if (!form.consent.checked) return showError('Bitte bestätige den Hinweis zum Datenschutz.', 'consent');
+
+      setBusy(true);
+      try {
+        if (!token) await loadToken();
+        await window.api.sendContactMessage({
+          token,
+          name: value('name'),
+          email: value('email'),
+          subject: value('subject'),
+          message: form.message.value,
+          website: form.website.value,
+          consent: form.consent.checked,
+        });
+        token = null;
+        form.reset();
+        updateCount();
+        showSent(true);
+        cancel.focus();
+      } catch (err) {
+        if (err.code === 'token') {
+          // Formular war zu lange offen: neues Token holen, Eingaben bleiben erhalten
+          token = null;
+          try { await loadToken(); } catch { /* Meldung unten reicht */ }
+          showError('Das Formular wurde erneuert. Bitte tippe noch einmal auf „Senden“.');
+        } else {
+          showError(err.message || 'Die Nachricht konnte nicht gesendet werden.', err.field);
+        }
+      } finally {
+        setBusy(false);
+      }
     });
   }
 

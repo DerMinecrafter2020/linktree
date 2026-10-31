@@ -10,6 +10,7 @@ const v = require('../lib/validators');
 const { parseUserAgent, parseCountryCode } = require('../lib/analytics');
 const audit = require('../lib/audit');
 const alert = require('../lib/alert');
+const contact = require('../lib/contact');
 const icons = require('../lib/icons');
 const { visibilityColumns, getNowInBerlin, isLinkVisible, isProfileHiddenFor } = require('../lib/visibility');
 const webauthnRp = require('../lib/webauthn-rp');
@@ -213,7 +214,63 @@ router.get('/profile', requirePublicProfile, async (req, res, next) => {
       theme: 'dark',
       player_progress_style: 'time',
     };
-    res.json({ ok: true, data: profile });
+    // Kontakt-Knopf nur anzeigen, wenn Formular aktiv und SMTP eingerichtet ist
+    res.json({ ok: true, data: { ...profile, contact_enabled: await contact.isAvailable() } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------- Kontaktformular ----------
+// Oeffentlich noetig, damit Besucher schreiben koennen. Schutz: Formular-Token (Mindest-
+// Ausfuellzeit, einmalig), Honeypot, Limit je IP (hier) und gesamt (lib/contact.js).
+// CSRF-Pruefung (Origin) greift fuer POST automatisch. Nachrichten werden nicht gespeichert.
+const CONTACT_IP_MAX = 5;
+const CONTACT_IP_WINDOW_MS = 60 * 60 * 1000;
+const contactByIp = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, r] of contactByIp) if (now >= r.resetAt) contactByIp.delete(ip);
+}, 5 * 60 * 1000).unref();
+
+function contactIpLimit(req, res, next) {
+  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+  const now = Date.now();
+  let record = contactByIp.get(ip);
+  if (!record || now >= record.resetAt) {
+    record = { count: 0, resetAt: now + CONTACT_IP_WINDOW_MS };
+    contactByIp.set(ip, record);
+  }
+  if (record.count >= CONTACT_IP_MAX) {
+    const retryAfter = Math.ceil((record.resetAt - now) / 1000);
+    res.setHeader('Retry-After', retryAfter);
+    return res.status(429).json({ ok: false, error: 'Du hast schon mehrere Nachrichten gesendet. Bitte versuche es später erneut.' });
+  }
+  req.contactLimit = record;
+  next();
+}
+
+router.get('/contact/token', requirePublicProfile, async (req, res, next) => {
+  try {
+    const status = await contact.getStatus();
+    if (!status.available) return res.status(403).json({ ok: false, error: 'Das Kontaktformular ist derzeit nicht verfügbar.' });
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ ok: true, data: { token: contact.issueToken(), intro_text: status.intro_text, limits: contact.LIMITS } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/contact', requirePublicProfile, contactIpLimit, async (req, res, next) => {
+  try {
+    const { rows } = await db.query('SELECT name, handle FROM profile WHERE id = 1 LIMIT 1');
+    const result = await contact.submit(req.body || {}, { profile: rows[0] });
+    // Versuche zaehlen, die bis zum Versand kamen (auch bei SMTP-Fehler), nicht Tippfehler
+    if (result.status === 200 || result.status === 502) req.contactLimit.count += 1;
+    if (!result.ok) {
+      return res.status(result.status).json({ ok: false, error: result.error, field: result.field, code: result.code });
+    }
+    res.json({ ok: true, data: { sent: true } });
   } catch (err) {
     next(err);
   }

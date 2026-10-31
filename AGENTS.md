@@ -65,6 +65,8 @@ lib/
   setup.js                Erkennung/Durchführung des Initial-Setups, schreibt .env
   audit.js                Audit-Log für Admin-Aktionen
   alert.js                Benachrichtigungen (Webhook / SMTP) bei Login, Passwortwechsel, Backup-Fehler
+  mailer.js               SMTP-Versand (nodemailer, Timeouts) fuer Alerts und Kontaktformular; Absender = SMTP-Benutzer
+  contact.js              Kontaktformular: Einstellungen, Formular-Token, Pruefung, Versand (nichts wird gespeichert)
   backup.js               Tägliche JSON-Backups nach ./backups (Rechte 600)
   maintenance.js          Aufräumen alter Sessions / Klickdaten und Monitor-Messpunkte (30 Tage)
   navidrome.js            Subsonic-API-Client inkl. Radiosender-Erkennung; saveSettings/getSettings (Anmeldedaten verschluesselt), testConnection/probeServer
@@ -73,7 +75,7 @@ lib/
   analytics.js            User-Agent-/Länder-Parsing für Statistiken
 db/
   migrate.js              Führt db/migrations/*.sql der Reihe nach aus (Tabelle `migrations`)
-  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 021: instagram_settings)
+  migrations/NNN_*.sql    Schema-Migrationen (fortlaufend nummeriert, nie nachträglich ändern; zuletzt 022: contact_settings)
   seed.js / reset.js      Initialdaten / Datenbank leeren
 public/                   Statische Dateien (werden 1:1 ausgeliefert!)
   index.html, admin.html, login.html, setup.html, changelog.html, impressum.html, datenschutz.html …
@@ -289,6 +291,16 @@ Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
   der Browser-Zeitzone `tz` (nur Namen aus `pg_timezone_names`, sonst UTC); `timeline[].day` kommt
   als Text `YYYY-MM-DD`, nie als DATE (würde in JSON um einen Tag verrutschen).
 
+**Kontaktformular (`lib/contact.js`, Karte in Admin > Einstellungen > Benachrichtigungen):** Knopf
+`#contact-btn` auf der Startseite nur bei `profile.contact_enabled` (`/api/profile`: Formular an, SMTP
+aus `alert_settings` eingerichtet, Empfaenger = `contact_settings.recipient` oder `alert_settings.email_to`).
+Ablauf: `GET /api/contact/token` (signierter Zeitstempel, HMAC mit `SESSION_SECRET`) → `POST /api/contact`
+mit Token, Feldern, `consent: true` und Honeypot `website`. Token fruehestens nach 3 s, hoechstens 2 h alt,
+einmalig. Limits: 5 Versandversuche pro IP und Stunde (`routes/public.js`), 30 pro Stunde gesamt
+(`lib/contact.js`). Besucher-Adresse nur als `Reply-To`, nie als Absender; Betreff ohne Zeilenumbrueche.
+Fehler an Besucher ohne SMTP-Details (502), Admin-Test mit Details. Nachrichten werden nicht gespeichert.
+SMTP-Versand immer ueber `lib/mailer.sendMail()` (nicht direkt nodemailer).
+
 **Ressourcenmonitor (`lib/metrics.js`, Admin-Tab „Monitor“):** Messpunkt alle 10 s, 360 Punkte
 (1 h) nur im Arbeitsspeicher; `GET /api/admin/metrics?since=<ts>` liefert nur neue Punkte. Die
 Middleware zählt jede Anfrage (Dauer, 5xx) – sie muss vor allen Routen stehen.
@@ -329,15 +341,18 @@ gleich); die Werte-Box (`.monitor-tooltip`) wird per `textContent` befüllt.
    öffentliche Clients senden.
 8. **Neue öffentliche Endpunkte** brauchen eine Begründung, Eingabeprüfung und ggf. eigenes
    Rate-Limit. Zustandsändernde Endpunkte sind POST/PATCH/PUT/DELETE (CSRF-Prüfung greift nur dort).
-9. **Proxys auf Fremd-Inhalte** (Cover, Icons) nur mit festem Ziel-Host und festen Content-Types
+9. **E-Mail aus Besuchereingaben** (Kontaktformular): Besucher-Adresse nur als `Reply-To`, Absender
+   immer die eigene SMTP-Adresse, keine Zeilenumbrueche in Headern, keine automatischen Antworten an
+   Besucher-Adressen (sonst Spam-Schleuder).
+10. **Proxys auf Fremd-Inhalte** (Cover, Icons) nur mit festem Ziel-Host und festen Content-Types
    durchreichen; SVGs mit Sandbox-CSP. (Music Assistant: Origin des MA-Servers; Spotify: `i.scdn.co`;
    Instagram-Profilbild: `*.cdninstagram.com`/`*.fbcdn.net`.)
-10. **Keine Dateien mit Secrets oder Debug-Resten** unter `public/` ablegen – alles dort ist öffentlich.
-11. **Link-Sichtbarkeit** (aktiv, Zeitsteuerung, Ablaufdatum, Passwortschutz, „Profil nicht öffentlich“)
+11. **Keine Dateien mit Secrets oder Debug-Resten** unter `public/` ablegen – alles dort ist öffentlich.
+12. **Link-Sichtbarkeit** (aktiv, Zeitsteuerung, Ablaufdatum, Passwortschutz, „Profil nicht öffentlich“)
     immer über `lib/visibility.js` prüfen – auf **jedem** Pfad, der einen Link anzeigt oder auflöst
     (`/api/links`, `/api/public/links`, `/sitemap.xml`, `/go/:slug`, Entsperren, Klick). Jede Abfrage,
     deren Ergebnis `isLinkVisible()` filtert, muss `visibilityColumns()` mitselektieren.
-12. **install.sh** liest die `.env` nie per `source`, sondern als reine Daten (`load_env`, nur
+13. **install.sh** liest die `.env` nie per `source`, sondern als reine Daten (`load_env`, nur
     bekannte Schlüssel). Programmcode gehört `root`; nur `OPENWEB_DATA_DIR` ist für den Dienst
     beschreibbar. Node-Wartungsbefehle laufen als Dienstbenutzer, `git` ohne `safe.directory`/Hooks.
 

@@ -50,6 +50,16 @@
     <p class="subtitle">Alle Änderungen an der OpenWeb Link-in-Bio Seite.</p>
 
     <div class="changelog-entry">
+      <h2>2026-10-31 — OpenWeb v3.6.0 (Kontaktformular)</h2>
+      <ul>
+        <li><strong>Kontaktformular:</strong> Besucher können über einen neuen Briefumschlag-Knopf auf der Startseite eine Nachricht schreiben (Name, E-Mail, optionaler Betreff, Nachricht und Datenschutz-Einwilligung). Die Nachricht kommt per E-Mail über die vorhandenen SMTP-Einstellungen an; mit „Antworten“ geht die Antwort direkt an den Absender. Nachrichten werden nicht gespeichert.</li>
+        <li><strong>Admin:</strong> Unter Einstellungen → Benachrichtigungen lässt sich das Formular ein- und ausschalten, eine eigene Empfänger-Adresse und ein Einleitungstext festlegen und eine Testnachricht senden. Der Knopf erscheint nur, wenn SMTP und Empfänger eingerichtet sind.</li>
+        <li><strong>Spamschutz:</strong> Ohne Captcha – ein unsichtbares Feld für Bots, eine Mindest-Ausfüllzeit, Begrenzungen pro Absender und insgesamt pro Stunde sowie eine Grenze für Links in der Nachricht.</li>
+        <li><strong>E-Mail:</strong> Der SMTP-Versand (auch für Alerts) bricht bei einem nicht antwortenden Mailserver jetzt nach kurzer Zeit ab, statt hängen zu bleiben.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <h2>2026-10-31 — OpenWeb v3.5.0 (Neue Designs: Windows 11, Liquid Glass, Hell)</h2>
       <ul>
         <li><strong>Neue Designs:</strong> „Windows 11“ (Mica-Material, Fluent-Formen und Segoe UI), „Liquid Glass“ (durchscheinendes Glas mit Lichtkanten auf farbigem, sanft bewegtem Hintergrund) und „Hell“. Die Designs ändern nicht nur Farben, sondern auch Material, Ecken, Schatten und Schrift – auf der Startseite, den Unterseiten, im Admin-Bereich und auf der Login-Seite.</li>
