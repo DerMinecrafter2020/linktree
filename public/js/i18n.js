@@ -60,6 +60,9 @@
       'footer.changelog': 'Changelog – was ist neu?',
       'footer.imprint': 'Impressum',
       'footer.privacy': 'Datenschutz',
+      'footer.sponsor': 'Gehostet bei',
+      'footer.sponsorTitle': 'Affiliate-Link zu Nuvine',
+      'footer.ad': 'Anzeige',
 
       'player.label': 'Aktuell gespielter Track',
       'player.loading': 'Lade Player…',
@@ -186,6 +189,9 @@
       'footer.changelog': 'Changelog – what’s new?',
       'footer.imprint': 'Legal notice',
       'footer.privacy': 'Privacy',
+      'footer.sponsor': 'Hosted by',
+      'footer.sponsorTitle': 'Affiliate link to Nuvine',
+      'footer.ad': 'Ad',
 
       'player.label': 'Currently playing track',
       'player.loading': 'Loading player…',
