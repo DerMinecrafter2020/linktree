@@ -1564,23 +1564,12 @@ html.i18n-pending body { visibility: hidden; }
   text-underline-offset: 3px;
 }
 .footer-version:hover { text-decoration-style: solid; }
-/* Affiliate-Hinweis (Nuvine): eigene Zeile, als Werbung gekennzeichnet */
-.footer-sponsor {
+/* Hosting-Hinweis: eigene Zeile unter Impressum/Datenschutz */
+.footer-hosting {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
   font-size: 0.85em;
-}
-.footer-ad {
-  padding: 0 6px;
-  border: 1px solid var(--md-outline-variant);
-  border-radius: var(--md-shape-xs);
-  font-size: 10px;
-  line-height: 16px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  opacity: 0.8;
 }
 /* Touch: groessere Tippflaeche (optisch unveraendert) */
 @media (pointer: coarse) {
