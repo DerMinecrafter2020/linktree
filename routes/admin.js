@@ -1499,11 +1499,19 @@ router.post('/settings/musicassistant/test', async (req, res) => {
     if (!result.ok) return res.json({ ok: true, data: { connected: false, code: result.code || null, error: result.error } });
 
     const data = { connected: true, playerCount: result.playerCount };
-    if (!candidate && saved.enabled && saved.user_id) {
-      const track = await ma.getNowPlayingUncached();
-      data.playing = !!(track && track.playing);
-      data.title = track?.title || null;
-      data.artist = track?.artist || null;
+    if (!candidate) {
+      if (saved.enabled && saved.user_id) {
+        const track = await ma.getNowPlayingUncached();
+        data.playing = !!(track && track.playing);
+        data.title = track?.title || null;
+        data.artist = track?.artist || null;
+      }
+      // Welche Player sieht OpenWeb und warum wird (nichts) angezeigt? Nur Admin, keine Secrets.
+      try {
+        data.diagnosis = await ma.diagnose();
+      } catch (err) {
+        console.warn('[admin musicassistant/test] Diagnose fehlgeschlagen:', err.message);
+      }
     }
     res.json({ ok: true, data });
   } catch (err) {

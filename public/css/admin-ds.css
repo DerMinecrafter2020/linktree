@@ -725,6 +725,22 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ds-accent); wi
 .wizard-check.is-error { background: var(--ds-danger-soft); color: var(--ds-danger-text); }
 .wizard-check.is-ok { color: var(--ds-success-text); }
 
+/* ---------- Music-Assistant-Diagnose ---------- */
+.ma-diagnosis { display: grid; gap: 0.6rem; margin-top: 0.6rem; }
+.ma-diagnosis-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.ma-diagnosis-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  font-size: var(--ds-fs-sm);
+}
+.ma-diagnosis-list .ma-player-name { font-weight: 600; color: var(--ds-text); }
+.ma-diagnosis-list .ma-player-title { flex-basis: 100%; color: var(--ds-muted); }
+
 /* ---------- Unter-Reiter (Einstellungen) ---------- */
 .sub-tabs {
   display: inline-flex;

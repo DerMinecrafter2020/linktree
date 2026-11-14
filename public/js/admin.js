@@ -2406,6 +2406,7 @@
     loadMusicAssistantSettings();
 
     $('#musicassistant-load-users-btn')?.addEventListener('click', loadMusicAssistantUsers);
+    $('#musicassistant-diagnose-btn')?.addEventListener('click', runMusicAssistantDiagnosis);
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -2830,6 +2831,62 @@
     return !!(c.enabled && c.url && c.user_id);
   }
 
+  // Diagnose im Formular: Verbindung, Grund und alle Player, die OpenWeb in Music Assistant sieht
+  const MA_STATE_LABELS = { playing: 'Spielt', paused: 'Pausiert', idle: 'Inaktiv' };
+
+  function renderMusicAssistantDiagnosis(container, s) {
+    container.replaceChildren();
+    container.hidden = false;
+    if (!s?.connected) {
+      container.appendChild(el('p', { class: 'wizard-check is-warn', text: '⚠️ ' + (s?.error || 'Music Assistant ist nicht erreichbar.') }));
+      return;
+    }
+    const d = s.diagnosis;
+    const head = s.playing
+      ? `Verbunden. Gerade angezeigt: ${s.title}${s.artist ? ' – ' + s.artist : ''}.`
+      : `Verbunden. ${d?.message || 'Gerade wird nichts angezeigt.'}`;
+    container.appendChild(el('p', { class: 'wizard-check ' + (s.playing || d?.reason === 'ok' ? 'is-ok' : 'is-warn'), text: head }));
+    if (!d) return;
+
+    const facts = [`${d.players.length} Player sichtbar`, `${d.assignedCount} dem Benutzer zugewiesen`];
+    if (d.assignedMissing) facts.push(`${d.assignedMissing} zugewiesene Player gibt es in Music Assistant nicht (mehr)`);
+    container.appendChild(el('p', { class: 'hint', text: facts.join(' · ') }));
+
+    if (!d.players.length) return;
+    const list = el('ul', { class: 'ma-diagnosis-list' });
+    for (const p of d.players) {
+      const active = p.state === 'playing' || p.state === 'paused';
+      const badges = [
+        el('span', { class: 'badge ' + (p.state === 'playing' ? 'on' : (active ? 'info' : 'off')), text: MA_STATE_LABELS[p.state] || p.state }),
+        el('span', { class: 'badge ' + (p.assigned ? 'on' : (active ? 'warn' : 'off')), text: p.assigned ? 'zugewiesen' : 'nicht zugewiesen' })
+      ];
+      if (!p.available) badges.push(el('span', { class: 'badge warn', text: 'nicht erreichbar' }));
+      if (!p.enabled) badges.push(el('span', { class: 'badge off', text: 'deaktiviert' }));
+      if (p.private) badges.push(el('span', { class: 'badge info', text: 'App/Browser' }));
+      if (p.grouped) badges.push(el('span', { class: 'badge info', text: 'gruppiert' }));
+      const item = el('li', {}, el('span', { class: 'ma-player-name', text: p.name }), ...badges);
+      if (p.title) item.appendChild(el('span', { class: 'ma-player-title', text: p.title }));
+      list.appendChild(item);
+    }
+    container.appendChild(list);
+  }
+
+  async function runMusicAssistantDiagnosis() {
+    const button = $('#musicassistant-diagnose-btn');
+    const container = $('#musicassistant-diagnosis');
+    if (!container) return;
+    if (button) button.disabled = true;
+    container.hidden = false;
+    container.replaceChildren(el('p', { class: 'hint', text: 'Prüfe Music Assistant …' }));
+    try {
+      renderMusicAssistantDiagnosis(container, await window.api.testMusicAssistantConnection());
+    } catch (err) {
+      renderMusicAssistantDiagnosis(container, { connected: false, error: err.message || 'Netzwerkfehler' });
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
   async function runMusicAssistantWizardTest() {
     const result = $('#musicassistant-wizard-result');
     wizardCheck(result, 'Prüfe die Verbindung …');
@@ -2839,7 +2896,8 @@
         const user = state.musicassistantUsers.find((u) => String(u.user_id) === String(state.musicassistant?.user_id));
         const who = user ? ` für „${user.name}“` : '';
         wizardCheck(result, `✅ Verbunden${who}. ` +
-          describePlaying(s, 'Gerade läuft nichts – starte Musik auf einem deiner Player und klicke auf „Erneut prüfen“.'), 'ok');
+          describePlaying(s, s.diagnosis?.message || 'Gerade läuft nichts – starte Musik auf einem deiner Player und klicke auf „Erneut prüfen“.'),
+          s.playing || !s.diagnosis || s.diagnosis.reason === 'ok' || s.diagnosis.reason === 'nothing_playing' ? 'ok' : 'warn');
       } else {
         wizardCheck(result, '⚠️ ' + (s?.error || 'Music Assistant ist nicht erreichbar.'), 'warn');
       }

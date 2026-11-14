@@ -308,6 +308,10 @@ Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
   Abruffehlern gültig; Fehler beim Abruf überbrückt der letzte Stand 15 s, nach 3 Fehlern in Folge
   pausieren Abfragen 20 s. Cover-URLs mit `/imageproxy` werden immer auf die eingetragene MA-Adresse
   umgeschrieben (MA meldet oft eine interne Basis-URL); andere Origins werden nicht abgerufen.
+  Zuordnung gilt auch über `legacy_ids` (zusammengelegte Player). Diagnose: `diagnose()` liefert Grund
+  (`reason`) + sichtbare Player; `POST /api/admin/settings/musicassistant/test` ohne Body gibt sie als
+  `diagnosis` zurück (Admin: Knopf „Verbindung prüfen“). Achtung: `players/all` zeigt über den Token nur
+  Player, die dessen Benutzer sehen darf – nicht zugewiesene Player fehlen dort oft ganz.
 - Die öffentliche Player-Fortschrittsanzeige wird über `profile.player_progress_style` (`time`|`line`;
   `line` zeigt eine fortschrittsgekoppelte Wellenform plus Zeitanzeige) konfiguriert; das Frontend liest sie
   beim Laden über `/api/profile` und übernimmt Änderungen live aus `/api/status/now-playing`.
