@@ -500,6 +500,7 @@
     async tick() {
       try {
         const newTrack = await window.NavidromeAPI.nowPlaying();
+        this.failures = 0;
         this.applyProgressStyle(newTrack?.player_progress_style);
         if (!newTrack || newTrack.playing !== true) {
           this.currentTrack = null;
@@ -525,8 +526,13 @@
         }
       } catch (err) {
         console.warn('[navidrome] poll failed:', err.message);
-        this.currentTrack = null;
-        this.renderIdle();
+        // Einzelne fehlgeschlagene Abfragen (Funkloch, Neustart des Servers) nicht sofort als
+        // "nichts läuft" anzeigen – erst nach drei Fehlschlägen in Folge (~9 s)
+        this.failures = (this.failures || 0) + 1;
+        if (!this.currentTrack || this.failures >= 3) {
+          this.currentTrack = null;
+          this.renderIdle();
+        }
       }
     },
 
@@ -639,6 +645,7 @@
       if (cover) {
         cover.replaceChildren(document.createTextNode('🎵'));
         cover.classList.add('placeholder');
+        delete cover.dataset.coverKey;
       }
       document.title = 'Cornelius Ahner · Links';
       this.updateFavicon(null);
@@ -651,7 +658,9 @@
         link.rel = 'icon';
         document.head.appendChild(link);
       }
-      link.href = coverUrl || this.defaultFavicon;
+      // Nur bei Änderung setzen (sonst lädt der Browser das Bild bei jeder Abfrage neu)
+      const href = coverUrl || this.defaultFavicon;
+      if (link.getAttribute('href') !== href) link.href = href;
     },
 
     // Logo der Quelle vor dem Titel; Name zusaetzlich fuer Screenreader
@@ -694,13 +703,28 @@
 
       const cover = wrap?.querySelector('.np-cover');
       if (cover) {
-        cover.replaceChildren();
-        cover.classList.remove('placeholder');
-        if (data.coverUrl) {
-          cover.appendChild(createIconImg(data.coverUrl, data.title || '', 'np-cover-img'));
+        // Cover nur neu aufbauen, wenn es sich ändert – sonst wurde das Bild bei jeder Abfrage
+        // (alle 3 s) entfernt und neu geladen und flackerte
+        const placeholder = data.isRadio ? '📻' : '🎵';
+        const coverKey = data.coverUrl || `placeholder:${placeholder}`;
+        if (cover.dataset.coverKey !== coverKey) {
+          cover.dataset.coverKey = coverKey;
+          cover.replaceChildren();
+          if (data.coverUrl) {
+            cover.classList.remove('placeholder');
+            const img = createIconImg(data.coverUrl, data.title || '', 'np-cover-img');
+            img.onerror = () => {
+              img.replaceWith(document.createTextNode(placeholder));
+              cover.classList.add('placeholder');
+            };
+            cover.appendChild(img);
+          } else {
+            cover.appendChild(document.createTextNode(placeholder));
+            cover.classList.add('placeholder');
+          }
         } else {
-          cover.appendChild(document.createTextNode(data.isRadio ? '📻' : '🎵'));
-          cover.classList.add('placeholder');
+          const img = cover.querySelector('img');
+          if (img) img.alt = data.title || '';
         }
       }
 

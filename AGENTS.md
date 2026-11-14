@@ -301,7 +301,13 @@ Keine Emojis oder Simple Icons mehr als Link-Icons einführen.
   Startseite und in der Admin-Vorschau (`#admin-np-source`).
 - Music Assistant: `musicassistant_settings.user_id` bestimmt den Benutzer für „Now Playing“.
   Die Player-Zuordnung stammt aus `player_filter` der Music-Assistant-API; ohne eingeschränkte
-  Player-Zuordnung wird vorsichtshalber keine Music-Assistant-Wiedergabe ausgegeben.
+  Player-Zuordnung wird vorsichtshalber keine Music-Assistant-Wiedergabe ausgegeben (in MA selbst
+  heißt ein leerer Filter „alle Player“). Titel/Cover/Position kommen aus `current_media` (Rückfälle:
+  Gruppen-/Sync-Leiter, aktive Queue); unter mehreren Playern gewinnt laufend vor pausiert,
+  `available: false`/`enabled: false` zählen nicht. Die Benutzerliste ist 5 min gecacht und bleibt bei
+  Abruffehlern gültig; Fehler beim Abruf überbrückt der letzte Stand 15 s, nach 3 Fehlern in Folge
+  pausieren Abfragen 20 s. Cover-URLs mit `/imageproxy` werden immer auf die eingetragene MA-Adresse
+  umgeschrieben (MA meldet oft eine interne Basis-URL); andere Origins werden nicht abgerufen.
 - Die öffentliche Player-Fortschrittsanzeige wird über `profile.player_progress_style` (`time`|`line`;
   `line` zeigt eine fortschrittsgekoppelte Wellenform plus Zeitanzeige) konfiguriert; das Frontend liest sie
   beim Laden über `/api/profile` und übernimmt Änderungen live aus `/api/status/now-playing`.

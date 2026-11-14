@@ -52,6 +52,16 @@
     <p class="subtitle changelog-lang-note" data-lang-only="en" lang="en" hidden>The release notes are written in German.</p>
     <div class="changelog-list" lang="de">
     <div class="changelog-entry">
+      <h2>2026-11-14 — OpenWeb v4.0.2 (Music Assistant zuverlässiger)</h2>
+      <ul>
+        <li><strong>Music Assistant – Player-Auswahl:</strong> Sind mehrere zugeordnete Player aktiv, wird jetzt der laufende angezeigt statt eines (oft seit Stunden) pausierten. Nicht erreichbare oder deaktivierte Player mit veraltetem Status werden ignoriert, gruppierte Player zeigen den Titel der Gruppe.</li>
+        <li><strong>Music Assistant – Aussetzer:</strong> Kurze Verbindungsprobleme oder langsame Antworten lassen die Anzeige nicht mehr verschwinden: Der letzte Stand bleibt bis zu 15 Sekunden stehen, das Zeitlimit ist großzügiger, und eine kurzzeitig nicht abrufbare Benutzerliste blendet die Wiedergabe nicht mehr aus. Ist Music Assistant länger nicht erreichbar, bremst das Spotify und Navidrome auf der Startseite nicht mehr aus.</li>
+        <li><strong>Music Assistant – Cover:</strong> Cover werden jetzt immer über die in OpenWeb eingetragene Adresse geladen, auch wenn Music Assistant intern eine andere Adresse meldet (z. B. eine Docker-IP oder den Stream-Port).</li>
+        <li><strong>Music Assistant – Radio:</strong> Radiosender werden als „LIVE“ angezeigt, Titelwechsel landen im Musik-Verlauf und in der Discord-Meldung.</li>
+        <li><strong>Player auf der Startseite und in der Admin-Vorschau:</strong> Das Cover flackert nicht mehr bei jeder Aktualisierung, eine einzelne fehlgeschlagene Abfrage schaltet nicht mehr sofort auf „Nichts läuft“, und der Lauftext in der Vorschau startet nicht mehr alle drei Sekunden neu.</li>
+      </ul>
+    </div>
+    <div class="changelog-entry">
       <h2>2026-11-02 — OpenWeb v4.0.1 (Hosting-Hinweis)</h2>
       <ul>
         <li><strong>Startseite:</strong> Im Footer steht jetzt „Gehostet bei Nuvine“ mit einem als „Anzeige“ gekennzeichneten Affiliate-Link (öffnet in einem neuen Tab).</li>

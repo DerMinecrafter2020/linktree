@@ -3758,6 +3758,7 @@
       }
       cover.classList.add('placeholder');
       cover.replaceChildren();
+      delete cover.dataset.coverKey;
     }
 
     function renderTrack(track) {
@@ -3802,13 +3803,19 @@
       const metaText = parts.join(' · ') + (extra.length ? ' | ' + extra.join(' | ') : '');
       applyMarquee(metaEl, metaText);
 
-      cover.replaceChildren();
-      cover.classList.remove('placeholder');
-      if (track.coverUrl) {
-        const img = el('img', { src: track.coverUrl, alt: track.title || '', class: 'np-cover-img' });
-        cover.appendChild(img);
-      } else {
-        cover.classList.add('placeholder');
+      // Cover nur bei Änderung neu aufbauen (sonst lädt und flackert es bei jeder Abfrage)
+      const coverKey = track.coverUrl || '';
+      if (cover.dataset.coverKey !== coverKey) {
+        cover.dataset.coverKey = coverKey;
+        cover.replaceChildren();
+        cover.classList.remove('placeholder');
+        if (track.coverUrl) {
+          const img = el('img', { src: track.coverUrl, alt: track.title || '', class: 'np-cover-img' });
+          img.addEventListener('error', () => { img.remove(); cover.classList.add('placeholder'); });
+          cover.appendChild(img);
+        } else {
+          cover.classList.add('placeholder');
+        }
       }
 
       lastServerPosition = track.position || 0;
@@ -3871,7 +3878,10 @@
         }
         const previousId = currentTrack ? trackId(currentTrack) : null;
         const newId = trackId(track);
-        if (JSON.stringify(track) !== JSON.stringify(currentTrack)) {
+        // Position aendert sich bei jeder Abfrage – nur bei anderen Daten neu zeichnen
+        // (sonst startete der Lauftext alle 3 s neu und das Cover wurde neu geladen)
+        const comparable = (t) => (t ? JSON.stringify({ ...t, position: undefined }) : '');
+        if (comparable(track) !== comparable(currentTrack)) {
           currentTrack = track;
           renderTrack(track);
         } else {
