@@ -52,6 +52,15 @@
     <p class="subtitle changelog-lang-note" data-lang-only="en" lang="en" hidden>The release notes are written in German.</p>
     <div class="changelog-list" lang="de">
     <div class="changelog-entry">
+      <h2>2026-11-18 — OpenWeb v4.0.5 (Discord-Meldungen zuverlässiger)</h2>
+      <ul>
+        <li><strong>Discord „Es wird ein Lied abgespielt“:</strong> Schlägt das Senden fehl (Verbindungsproblem, Zeitüberschreitung, Discord überlastet oder Rate-Limit), geht die Meldung nicht mehr verloren, sondern wird mit wachsendem Abstand bis zu 15 Minuten lang erneut versucht – mit dem Cover des gemeldeten Titels. Die Meldungen kommen weiterhin komplett vom Server, auch wenn niemand die Seite geöffnet hat.</li>
+        <li><strong>Keine doppelten Meldungen:</strong> Wechselt die Quelle für denselben Titel (z. B. Music Assistant und Navidrome, die Interpreten unterschiedlich schreiben) oder meldet eine Quelle nach einem kurzen Aussetzer noch den vorigen Titel, wird er nicht erneut gepostet. Wird derselbe Titel nach längerer Pause wieder gestartet, kommt dagegen eine neue Meldung.</li>
+        <li><strong>Discord-Test im Admin:</strong> Lehnt Discord die Testnachricht ab (z. B. gelöschter Webhook), zeigt der Test jetzt den Fehler an, statt Erfolg zu melden.</li>
+        <li><strong>Navidrome-Cover:</strong> Das Cover für die Discord-Meldung wird direkt von Navidrome geladen und hängt nicht mehr davon ab, auf welcher Adresse der OpenWeb-Server lauscht.</li>
+      </ul>
+    </div>
+    <div class="changelog-entry">
       <h2>2026-11-14 — OpenWeb v4.0.4 (Hosting-Hinweis)</h2>
       <ul>
         <li><strong>Startseite:</strong> Im Footer steht jetzt „Gehostet bei datalix.de“ mit einem Link zu datalix.de (öffnet in einem neuen Tab). Der bisherige Affiliate-Link samt „Anzeige“-Kennzeichnung entfällt.</li>

@@ -985,8 +985,11 @@ router.post('/settings/navidrome/discord-test', async (req, res, next) => {
     };
 
     const appUrl = process.env.APP_URL ? process.env.APP_URL.replace(/\/$/, '') : null;
-    await sendDiscordWebhook(testTrack, settings.discord_webhook_url, appUrl);
-    
+    const result = await sendDiscordWebhook(testTrack, settings.discord_webhook_url, appUrl);
+    if (!result.ok) {
+      return res.status(502).json({ ok: false, error: `Discord-Fehler: ${result.error}` });
+    }
+
     res.json({ ok: true });
   } catch (err) {
     next(err);

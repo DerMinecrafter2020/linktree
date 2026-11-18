@@ -76,9 +76,9 @@ lib/
   og.js                   Link-Vorschau: Meta-Tags (applyMetaTags), Vorschaubild speichern/pruefen, Crawler-Erkennung, Song-Zeile
   backup.js               Tägliche JSON-Backups nach ./backups (Rechte 600)
   maintenance.js          Aufräumen alter Sessions / Klickdaten und Monitor-Messpunkte (30 Tage)
-  navidrome.js            Subsonic-API-Client inkl. Radiosender-Erkennung; saveSettings/getSettings (Anmeldedaten verschluesselt), testConnection/probeServer
+  navidrome.js            Subsonic-API-Client inkl. Radiosender-Erkennung; saveSettings/getSettings (Anmeldedaten verschluesselt), testConnection/probeServer, fetchCoverArt (Cover-Proxy + Discord)
   musicassistant.js       Music-Assistant-API-Client inkl. testConnection (verstaendliche Fehler + code)
-  discord.js              „Now Playing“-Discord-Webhook (Polling alle 10 s)
+  discord.js              „Now Playing“-Discord-Webhook (Polling alle 10 s, Warteschlange mit Wiederholungen, Schutz vor Doppelmeldungen)
   analytics.js            User-Agent-/Länder-Parsing für Statistiken
 db/
   migrate.js              Führt db/migrations/*.sql der Reihe nach aus (Tabelle `migrations`)
@@ -356,6 +356,17 @@ Canvas (`renderOgImage()` in `public/js/admin.js`, Farben per kurzem Umschalten 
 eigenem Bild (`custom`). Ohne Bild dient das Profilbild (kleine Karte). **Kein SVG als `og:image`** (Discord
 & Co. zeigen es nicht). „Hört gerade“ nur fuer Vorschau-Crawler (`og.isCrawler`), max. 0,8 s Wartezeit.
 Profilbild nie als Data-URL in Meta-Tags/JSON-LD einbetten.
+
+**Discord „Now Playing“ (`lib/discord.js`):** Laeuft nur auf dem Server (Takt per `setTimeout`-Kette alle 10 s, kein
+Ueberlappen, Watchdog 60 s) und haengt nicht an Besuchern der Startseite. Quelle wie ueberall `getActiveTrack()`. Ein neuer
+Titel wird sofort samt Cover zur Nachricht gebaut (Cover nie spaeter nachladen – bei Wiederholungen liefe sonst schon der
+naechste Titel) und in eine Warteschlange (max. 5, FIFO) gelegt. Wiederholt werden Netzwerkfehler, Zeitueberschreitungen
+(15 s), 429 (`Retry-After`/`retry_after`) und 5xx mit Backoff 5 s → 2 min, hoechstens 6 Versuche bzw. 15 min; 400/413 mit
+Anhang sofort ohne Cover, andere 4xx nie. Titel-Schluessel = normalisierter Titel + Menge der Interpreten (`trackKey`, MA
+und Navidrome schreiben Interpreten unterschiedlich); in den letzten 10 min Gemeldetes wird nicht erneut gemeldet (Rueckfall
+auf eine Quelle mit veraltetem Stand). Zuletzt gemeldeter Titel als JSON `{ key, at }` in `LAST_TRACK_FILE` (altes
+Format `Titel::Interpret::Album` wird noch gelesen). Navidrome-Cover ueber `lib/navidrome.fetchCoverArt()`, nicht per
+HTTP an den eigenen Server. Der Admin-Test (`sendDiscordWebhook`) gibt Discord-Fehler als 502 zurueck. Webhook-URL nie loggen.
 
 **Kontaktformular (`lib/contact.js`, Karte in Admin > Einstellungen > Benachrichtigungen):** Knopf
 `#contact-btn` auf der Startseite nur bei `profile.contact_enabled` (`/api/profile`: Formular an, SMTP
